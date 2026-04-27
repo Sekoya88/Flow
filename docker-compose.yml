@@ -1,0 +1,78 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Host 16379 avoids clash with another Redis or tool already bound to :6379 on the machine.
+      - "16379:6379"
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: flow
+      POSTGRES_PASSWORD: flow
+      POSTGRES_DB: flow
+    ports:
+      - "55432:5432"
+    volumes:
+      - flow_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow -d flow"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    environment:
+      FLOW_DATABASE_URL: postgresql://flow:flow@db:5432/flow
+      FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
+      FLOW_OPENAI_API_KEY: ${FLOW_OPENAI_API_KEY:-}
+      # Browser origin is the host port you open (see web ports). Include :3000 for local `npm run dev`.
+      FLOW_CORS_ORIGINS: http://localhost:13000,http://localhost:3000,http://web:3000
+      FLOW_LOG_LEVEL: INFO
+      FLOW_LOG_JSON: "false"
+      FLOW_REDIS_URL: redis://redis:6379/0
+    ports:
+      # Host 18000 avoids clash with another process already bound to 8000 (e.g. local uvicorn).
+      - "18000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build:
+      context: ./services/api
+    command: ["uv", "run", "arq", "flow.infrastructure.queue.worker.WorkerSettings"]
+    environment:
+      FLOW_DATABASE_URL: postgresql://flow:flow@db:5432/flow
+      FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
+      FLOW_OPENAI_API_KEY: ${FLOW_OPENAI_API_KEY:-}
+      FLOW_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_FLOW_API_URL: http://localhost:18000
+    environment:
+      NEXT_PUBLIC_FLOW_API_URL: http://localhost:18000
+    ports:
+      # Host 13000 → container 3000 (Next listens on 3000 inside the image). Avoids clash with another app on host :3000.
+      - "13000:3000"
+    depends_on:
+      - api
+
+volumes:
+  flow_pgdata:
