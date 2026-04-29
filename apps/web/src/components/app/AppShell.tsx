@@ -2,19 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
+  MoreHorizontal,
   ScrollText,
   Settings,
   Sparkles,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import {
   Sheet,
@@ -26,30 +34,36 @@ import {
 import { clearToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const nav = [
+/** Primary strip — Settings moved to account menu to avoid header overlap */
+const primaryNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/onboarding", label: "Start", icon: BookOpen },
   { href: "/run", label: "Run", icon: MessageSquare },
   { href: "/knowledge", label: "Knowledge", icon: ScrollText },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+  { href: "/onboarding", label: "Start", icon: BookOpen },
+] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const settingsActive = path === "/settings" || path.startsWith("/settings/");
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto grid w-full max-w-3xl grid-cols-[auto_1fr_auto] items-center gap-2 px-5 py-3.5">
-          <FlowLogo href="/dashboard" variant="header" />
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
+          <div className="shrink-0">
+            <FlowLogo href="/dashboard" variant="header" />
+          </div>
 
           <nav
-            className="hidden min-w-0 flex-nowrap items-center justify-center gap-0.5 md:flex"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden py-0.5 md:flex [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             aria-label="Main"
           >
-            {nav.map(({ href, label, icon: Icon }) => {
+            {primaryNav.map(({ href, label, icon: Icon }) => {
               const active = path === href || path.startsWith(href + "/");
               return (
                 <Link
@@ -57,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors lg:px-2.5 lg:text-[13px]",
                     active
                       ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
@@ -70,22 +84,64 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
               aria-label="Open command palette (⌘K)"
-              onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }))}
-              className="hidden items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground/60 hover:bg-muted/60 hover:text-muted-foreground transition-colors md:flex"
+              onClick={() =>
+                document.dispatchEvent(
+                  new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
+                )
+              }
+              className="hidden items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-muted/60 hover:text-muted-foreground lg:flex"
             >
               <span>Search</span>
-              <kbd className="font-mono">⌘K</kbd>
+              <kbd className="font-mono text-[10px] opacity-90">⌘K</kbd>
             </button>
             <ThemeToggle />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "hidden h-9 gap-1.5 px-2 font-normal md:inline-flex",
+                  settingsActive && "border-flow-brand/40 bg-muted/50",
+                )}
+                aria-label="Account menu"
+              >
+                <MoreHorizontal className="h-4 w-4 opacity-80" aria-hidden />
+                <span className="hidden lg:inline">Account</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[11rem]">
+                <DropdownMenuItem
+                  onClick={() => {
+                    router.push("/settings");
+                  }}
+                  className="gap-2"
+                >
+                  <Settings className="h-4 w-4" aria-hidden />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => {
+                    clearToken();
+                    window.location.href = "/login";
+                  }}
+                  className="gap-2"
+                >
+                  <LogOut className="h-4 w-4" aria-hidden />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "icon" }),
-                  "shrink-0 text-muted-foreground md:hidden",
+                  "shrink-0 md:hidden",
                 )}
                 aria-label="Open menu"
               >
@@ -96,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <SheetTitle>Navigate</SheetTitle>
                 </SheetHeader>
                 <nav className="flex flex-col gap-0.5 p-4" aria-label="Main mobile">
-                  {nav.map(({ href, label, icon: Icon }) => {
+                  {primaryNav.map(({ href, label, icon: Icon }) => {
                     const active = path === href || path.startsWith(href + "/");
                     return (
                       <Link
@@ -116,31 +172,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       </Link>
                     );
                   })}
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                      settingsActive
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                    )}
+                  >
+                    <Settings className="h-4 w-4 opacity-80" aria-hidden />
+                    Settings
+                  </Link>
+                  <button
+                    type="button"
+                    className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      clearToken();
+                      window.location.href = "/login";
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                    Log out
+                  </button>
                 </nav>
               </SheetContent>
             </Sheet>
-
-            <button
-              type="button"
-              aria-label="Log out"
-              onClick={() => {
-                clearToken();
-                window.location.href = "/login";
-              }}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "sm" }),
-                "shrink-0 gap-1.5 text-muted-foreground",
-              )}
-            >
-              <LogOut className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Log out</span>
-            </button>
           </div>
         </div>
       </header>
 
       <main className="relative flex-1 animate-fade-in">
-        <div className="mx-auto w-full max-w-4xl px-5 py-12 md:px-8 md:py-16">{children}</div>
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-14 lg:px-8">{children}</div>
       </main>
 
       <footer className="relative mt-auto border-t border-border/40 py-4 text-center text-[10px] uppercase tracking-wide text-muted-foreground/60">

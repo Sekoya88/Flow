@@ -35,7 +35,7 @@ export default function RootLayout({
           <div className="relative flex min-h-full flex-1 flex-col">
             <div className="pointer-events-none absolute inset-0 flow-grain opacity-60" aria-hidden />
             <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-primary/5 to-transparent"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[min(42vh,28rem)] flow-ambient-mesh"
               aria-hidden
             />
             <div className="relative z-0 flex min-h-full flex-1 flex-col">{children}</div>

@@ -210,6 +210,41 @@
     backdrop-filter: blur(20px) saturate(1.2);
     border: 1px solid oklch(from var(--flow-brand) l c h / 0.2);
   }
+
+  /** Ambient mesh — uses --flow-brand hue; works in light & dark */
+  .flow-ambient-mesh {
+    background:
+      radial-gradient(ellipse 130% 90% at 50% -25%, oklch(from var(--flow-brand) l c h / 0.22), transparent 58%),
+      radial-gradient(ellipse 55% 45% at 95% 5%, oklch(0.55 0.1 264 / 0.14), transparent 52%),
+      radial-gradient(ellipse 50% 40% at 5% 15%, oklch(0.48 0.08 230 / 0.12), transparent 48%);
+  }
+
+  .dark .flow-ambient-mesh {
+    background:
+      radial-gradient(ellipse 130% 90% at 50% -25%, oklch(from var(--flow-brand) l c h / 0.28), transparent 58%),
+      radial-gradient(ellipse 55% 45% at 95% 5%, oklch(0.42 0.12 264 / 0.18), transparent 52%),
+      radial-gradient(ellipse 50% 40% at 5% 15%, oklch(0.38 0.1 240 / 0.14), transparent 48%);
+  }
+
+  /** Hero strip: subtle brand gradient border + fill */
+  .flow-hero-surface {
+    @apply relative overflow-hidden rounded-2xl border border-border/70 bg-card/60 shadow-sm backdrop-blur-sm;
+    background-image:
+      linear-gradient(
+        135deg,
+        oklch(from var(--card) l c h / 0.92) 0%,
+        oklch(from var(--flow-brand) calc(l * 0.85) calc(c * 0.35) h / 0.08) 100%
+      );
+  }
+
+  .dark .flow-hero-surface {
+    background-image:
+      linear-gradient(
+        135deg,
+        oklch(from var(--card) l c h / 0.88) 0%,
+        oklch(from var(--flow-brand) calc(l * 0.45) calc(c * 0.5) h / 0.14) 100%
+      );
+  }
 }
 
 @layer base {
