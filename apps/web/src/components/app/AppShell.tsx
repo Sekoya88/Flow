@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
+  Brain,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -13,6 +14,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Workflow,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -39,6 +41,8 @@ const primaryNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/run", label: "Run", icon: MessageSquare },
   { href: "/knowledge", label: "Knowledge", icon: ScrollText },
+  { href: "/memory", label: "Memory", icon: Brain },
+  { href: "/agents", label: "Agents", icon: Workflow },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;

@@ -8,7 +8,7 @@ Agent platform: **FastAPI** (LangGraph deer-flow pipeline, asyncpg, JWT, SSE), *
 |------|------|
 | `apps/web/` | Next.js frontend |
 | `services/api/` | Python package `flow` — REST API, migrations (`migrations/`), Alembic (`alembic.ini`) |
-| `docker-compose.yml` | `db`, `redis`, `api`, `worker`, `web` |
+| `docker-compose.yml` | `db`, `redis`, `qdrant`, `api`, `worker`, `web` |
 
 ## Where to run commands (important)
 
@@ -31,8 +31,10 @@ docker compose up --build
 Minimum useful stack without the Next image:
 
 ```bash
-docker compose up --build db redis api worker web
+docker compose up --build db redis qdrant api worker web
 ```
+
+If you disable agentic RAG and omit Qdrant, you can still run `docker compose up --build db redis api worker web` and omit `FLOW_QDRANT_URL` / `FLOW_AGENTIC_RAG_ENABLED` on the API/worker (see `.env.example`).
 
 ### Published ports (host → container)
 
@@ -41,9 +43,46 @@ docker compose up --build db redis api worker web
 | **http://localhost:13000** | `web` → :3000 | UI (avoid clash with another app on **:3000**) |
 | **http://localhost:18000**/docs | `api` → :8000 | OpenAPI |
 | **localhost:55432** | `db` → Postgres :5432 | See [PostgreSQL](#postgresql-local-connection) |
+| **localhost:16333** | `qdrant` → HTTP :6333 | Hybrid vector index for optional **agentic RAG** (`FLOW_QDRANT_URL`) |
 | **localhost:16379** | `redis` → :6379 | Host port avoids clash if something else uses **:6379** |
 
-Inside Compose, services talk on the Docker network: `postgresql://flow:flow@db:5432/flow`, `redis://redis:6379/0`.
+Inside Compose, services talk on the Docker network: `postgresql://flow:flow@db:5432/flow`, `redis://redis:6379/0`, API/worker use `FLOW_QDRANT_URL=http://qdrant:6333` when agentic RAG is enabled.
+
+### Agentic RAG (optional)
+
+When **`FLOW_AGENTIC_RAG_ENABLED=true`** and **`FLOW_QDRANT_URL`** points at Qdrant (Compose sets both on `api`/`worker`), deer-flow **worker** retrieval uses a LangGraph pipeline (supervisor routing, Qdrant hybrid RRF + BM25 sparse, LLM grader, query rewrite, optional Tavily fallback). Knowledge ingest **dual-writes** chunks to Postgres and Qdrant. Audit rows land in **`rag_query_history`** / **`rag_citations`** (after migration `0003`). Without those env vars, retrieval stays **pgvector-only** as before.
+
+Smoke from repo root with Compose up:
+
+1. Set `FLOW_OPENAI_API_KEY`, optionally `FLOW_TAVILY_API_KEY`.
+2. `docker compose up --build`
+3. Add knowledge via API so chunks sync to Qdrant; run an execution with retrieve enabled.
+
+Host URL when Qdrant is mapped on **16333**: `FLOW_QDRANT_URL=http://localhost:16333` (local API/worker against Compose Qdrant).
+
+### Logs & LangSmith
+
+- **`docker compose logs -f api worker`** — structlog console output with **`service=flow-api`** / **`service=flow-worker`** and agentic events (`agentic_rag.supervisor`, `agentic_rag.retrieve`, …). Compose enables **`FLOW_LOG_FORCE_COLORS=true`** so logs stay readable without a TTY.
+- **LangSmith** (optional): in `.env` at repo root (Compose substitutes into containers):
+
+```bash
+FLOW_LANGSMITH_TRACING=true
+FLOW_LANGSMITH_API_KEY=lsv2_pt_...   # from https://smith.langchain.com → Settings → API keys
+FLOW_LANGSMITH_PROJECT=flow-local
+# EU hosted Smith only:
+# FLOW_LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
+```
+
+Restart `api` and `worker` after changing these. Traces cover LangChain/LangGraph calls (deer-flow + agentic RAG subgraph).
+
+### Quick sanity checks
+
+```bash
+cd /path/to/Flow   # repo root
+docker compose ps
+curl -s http://localhost:18000/health
+docker compose logs -f api worker   # expect lifespan.started, worker.started, then agentic_rag.* on runs
+```
 
 **Execution SSE:** the Run flow uses a short-lived `stream_jwt` query param where possible so the session JWT is not logged in URLs.
 

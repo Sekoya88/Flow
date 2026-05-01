@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,6 +16,7 @@ type Prefs = { preferences: { key: string; value: unknown; updated_at: string }[
 
 export default function SettingsPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const [prefs, setPrefs] = useState<Prefs["preferences"]>([]);
   const [key, setKey] = useState("style");
   const [val, setVal] = useState('{"tone":"concise"}');
@@ -25,8 +26,12 @@ export default function SettingsPage() {
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
   useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     if (!getToken()) {
-      router.replace("/login");
+      routerRef.current.replace("/login");
       return;
     }
     setLoadingPrefs(true);
@@ -37,7 +42,7 @@ export default function SettingsPage() {
         setLoadErr(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
       })
       .finally(() => setLoadingPrefs(false));
-  }, [router]);
+  }, []);
 
   async function save() {
     setSaveErr(null);

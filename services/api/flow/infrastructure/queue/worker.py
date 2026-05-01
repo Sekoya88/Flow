@@ -1,18 +1,30 @@
-from __future__ import annotations
+# LangSmith / worker: set tracing env before any LangChain import.
+from flow.config import get_settings
+from flow.infrastructure.observability.langsmith import configure_langsmith
+
+configure_langsmith(get_settings())
 
 from uuid import UUID
 
 import arq
 
 from flow.application.execution_runner import run_deer_execution
-from flow.config import get_settings
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
+from flow.infrastructure.observability.logging import configure_logging, get_logger
+
+logger = get_logger(__name__)
 
 
 async def startup(ctx: dict) -> None:
     settings = get_settings()
+    configure_logging(
+        level=settings.log_level,
+        json_output=settings.log_json,
+        service="flow-worker",
+        force_colors=settings.log_force_colors,
+    )
     pool = await create_pool(settings)
     checkpoint_pool = build_checkpoint_pool(settings.database_url)
     await checkpoint_pool.open()
@@ -21,6 +33,7 @@ async def startup(ctx: dict) -> None:
     ctx["stream_hub"] = stream_hub
     ctx["checkpoint_pool"] = checkpoint_pool
     ctx["settings"] = settings
+    logger.info("worker.started", redis="configured")
 
 
 async def shutdown(ctx: dict) -> None:

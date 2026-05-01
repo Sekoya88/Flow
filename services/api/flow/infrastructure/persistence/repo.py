@@ -265,17 +265,20 @@ class FlowRepository:
 
     async def insert_chunk(
         self, source_id: UUID, chunk_index: int, content: str, embedding: list[float]
-    ) -> None:
-        await self._pool.execute(
+    ) -> int:
+        row = await self._pool.fetchrow(
             """
             INSERT INTO knowledge_chunks (source_id, chunk_index, content, embedding)
             VALUES ($1, $2, $3, $4::vector)
+            RETURNING id
             """,
             source_id,
             chunk_index,
             content,
             _vec_literal(embedding),
         )
+        assert row is not None
+        return int(row["id"])
 
     async def search_knowledge(
         self, workspace_id: UUID, embedding: list[float], limit: int = 5

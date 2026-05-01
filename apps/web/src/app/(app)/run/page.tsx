@@ -111,22 +111,45 @@ const TOOL_ROWS: { key: keyof ToolFlags; title: string; desc: string }[] = [
   },
 ];
 
+const TRACE_MAX_LINES = 500;
+const TRACE_TRUNC = 2800;
+const TOKEN_TRACE_TRUNC = 480;
+
+function truncateTraceText(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}… (+${s.length - max} chars)`;
+}
+
+function formatTracePayload(payload: unknown): string {
+  try {
+    return truncateTraceText(JSON.stringify(payload, null, 2), TRACE_TRUNC);
+  } catch {
+    return truncateTraceText(String(payload), TRACE_TRUNC);
+  }
+}
+
+type SseEvent = {
+  kind: string;
+  node?: string;
+  answer?: string;
+  text?: string;
+  message?: string;
+  confidence?: number;
+  payload?: { node?: string; partial?: unknown };
+};
+
 export default function RunPage() {
   const router = useRouter();
-  const token = useMemo(() => getToken(), []);
+  const routerRef = useRef(router);
 
-  // Zustand store
-  const { setNode, appendToken, reset, setActiveExecution, activeExecutionId } = useStore((s) => ({
-    setNode: s.setNode,
-    appendToken: s.appendToken,
-    reset: s.reset,
-    setActiveExecution: s.setActiveExecution,
-    activeExecutionId: s.activeExecutionId,
-  }));
-  const { inspectorOpen, setInspectorOpen } = useStore((s) => ({
-    inspectorOpen: s.inspectorOpen,
-    setInspectorOpen: s.setInspectorOpen,
-  }));
+  // Per-field selectors — object selectors return a new ref each render and pin Zustand in a loop.
+  const setNode = useStore((s) => s.setNode);
+  const appendToken = useStore((s) => s.appendToken);
+  const reset = useStore((s) => s.reset);
+  const setActiveExecution = useStore((s) => s.setActiveExecution);
+  const activeExecutionId = useStore((s) => s.activeExecutionId);
+  const inspectorOpen = useStore((s) => s.inspectorOpen);
+  const setInspectorOpen = useStore((s) => s.setInspectorOpen);
 
   const [wsId, setWsId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -148,14 +171,20 @@ export default function RunPage() {
   const [agentRenameDraft, setAgentRenameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [traceLines, setTraceLines] = useState<string[]>([]);
+  const traceBottomRef = useRef<HTMLDivElement>(null);
 
   const prefsDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeAgent = useMemo(() => agents.find((x) => x.id === agentId), [agents, agentId]);
   const activeAgentLabel = useMemo(() => agentDisplayName(activeAgent), [activeAgent]);
 
   useEffect(() => {
-    if (!token) {
-      router.replace("/login");
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
+    if (!getToken()) {
+      routerRef.current.replace("/login");
       return;
     }
     setLoadingBoot(true);
@@ -190,7 +219,7 @@ export default function RunPage() {
         setLoadErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Failed to load workspace or agents.");
       })
       .finally(() => setLoadingBoot(false));
-  }, [router, token]);
+  }, []);
 
   const onSelectAgent = useCallback((id: string) => {
     setAgentId(id);
@@ -201,7 +230,7 @@ export default function RunPage() {
   }, [agents]);
 
   useEffect(() => {
-    if (!wsId || !token) return;
+    if (!wsId || !getToken()) return;
     void apiFetch<{ executions: ExecRow[] }>(`/api/v1/workspaces/${wsId}/executions?limit=25`).then(
       (r) => setExecutions(r.executions),
       () => setExecutions([]),
@@ -210,7 +239,7 @@ export default function RunPage() {
       (r) => setKnowledgeCount(Array.isArray(r.sources) ? r.sources.length : 0),
       () => setKnowledgeCount(null),
     );
-  }, [wsId, token, lastExecutionId]);
+  }, [wsId, lastExecutionId]);
 
   useEffect(() => {
     setAgentRenameDraft((activeAgent?.name ?? "").trim());
@@ -224,6 +253,18 @@ export default function RunPage() {
     }, 500);
     return () => { if (prefsDebounce.current) clearTimeout(prefsDebounce.current); };
   }, [wsId, agentId, message, tools]);
+
+  const appendTrace = useCallback((line: string) => {
+    const stamp = new Date().toISOString().slice(11, 23);
+    setTraceLines((prev) => {
+      const row = `[${stamp}] ${line}`;
+      const next = [...prev, row];
+      return next.length > TRACE_MAX_LINES ? next.slice(-TRACE_MAX_LINES) : next;
+    });
+    queueMicrotask(() => {
+      traceBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+  }, []);
 
   async function saveAgentDisplayName() {
     if (!agentId || !agentRenameDraft.trim()) return;
@@ -262,9 +303,10 @@ export default function RunPage() {
   }
 
   async function run() {
-    if (!agentId || !token) return;
+    if (!agentId || !getToken()) return;
     setRunning(true);
     reset();
+    setTraceLines([]);
     setLastExecutionId(null);
     setFeedbackMsg(null);
     const apiBase = getApiBase();
@@ -275,6 +317,7 @@ export default function RunPage() {
       });
       const eid = res.execution_id;
       setActiveExecution(eid);
+      appendTrace(`execute accepted · execution_id=${eid}`);
       // Seed planner as "thinking" immediately
       setNode("planner", { status: "thinking" });
       track("run_started", { agent_id: agentId, execution_id: eid });
@@ -284,17 +327,12 @@ export default function RunPage() {
         { method: "POST" },
       );
       const url = `${apiBase}/api/v1/executions/${eid}/stream?stream_jwt=${encodeURIComponent(stream_jwt)}`;
+      appendTrace("SSE · connecting…");
       const es = new EventSource(url);
 
       es.onmessage = (ev) => {
         try {
-          const data = JSON.parse(ev.data) as {
-            kind: string;
-            node?: string;
-            answer?: string;
-            text?: string;
-            message?: string;
-          };
+          const data = JSON.parse(ev.data) as SseEvent;
 
           if (data.kind === "node_update" && data.node) {
             // Mark previous nodes done, current as streaming
@@ -302,14 +340,21 @@ export default function RunPage() {
             const idx = prev.indexOf(data.node);
             if (idx > 0) setNode(prev[idx - 1], { status: "done" });
             setNode(data.node, { status: "streaming" });
+            appendTrace(`node_update · ${data.node}\n${formatTracePayload(data.payload ?? {})}`);
           } else if (data.kind === "token" && data.text) {
+            appendTrace(`token · ${data.node ?? "?"}\n${truncateTraceText(data.text, TOKEN_TRACE_TRUNC)}`);
             appendToken(data.text);
           } else if (data.kind === "final" && data.answer) {
+            appendTrace(
+              `final · confidence=${data.confidence ?? "?"}\n${truncateTraceText(data.answer, TRACE_TRUNC)}`,
+            );
             appendToken(data.answer);
             setNode("synthesizer", { status: "done" });
           } else if (data.kind === "error") {
+            appendTrace(`error · ${data.message ?? "unknown"}`);
             setNode("synthesizer", { status: "error" });
           } else if (data.kind === "done") {
+            appendTrace("done · stream closed");
             es.close();
             setRunning(false);
             setActiveExecution(null);
@@ -324,17 +369,19 @@ export default function RunPage() {
             }
           }
         } catch {
-          // non-JSON line — ignore
+          appendTrace("SSE · non-JSON line skipped");
         }
       };
 
       es.onerror = () => {
+        appendTrace("SSE · connection error (closed or network)");
         es.close();
         setRunning(false);
         setActiveExecution(null);
         setNode("synthesizer", { status: "error" });
       };
     } catch (e) {
+      appendTrace(`run failed · ${e instanceof ApiError ? `${e.status}: ${e.body}` : String(e)}`);
       setRunning(false);
       setActiveExecution(null);
       track("run_failed", { agent_id: agentId });
@@ -461,12 +508,29 @@ export default function RunPage() {
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
               Connection details
             </summary>
-            <p className="mt-3 text-muted-foreground text-xs leading-relaxed">
-              Live output uses Server-Sent Events with{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">Last-Event-ID</code>{" "}
-              reconnect. API base:{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">{getApiBase()}</code>
-            </p>
+            <div className="mt-3 space-y-3 text-muted-foreground text-xs leading-relaxed">
+              <p>
+                Live output uses Server-Sent Events with{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
+                  Last-Event-ID
+                </code>{" "}
+                reconnect. API base:{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
+                  {getApiBase()}
+                </code>
+              </p>
+              <div>
+                <p className="mb-2 font-medium text-foreground">Live trace (graph updates · tokens · final)</p>
+                <ScrollArea className="h-52 rounded-md border border-border/80 bg-background/80">
+                  <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-snug text-foreground/90">
+                    {traceLines.length === 0
+                      ? "Nothing yet — open this panel and run a message to stream node state (chain-of-thought style), tokens, and errors here."
+                      : traceLines.join("\n\n")}
+                    <div ref={traceBottomRef} aria-hidden className="h-px w-full shrink-0" />
+                  </pre>
+                </ScrollArea>
+              </div>
+            </div>
           </details>
         </header>
 

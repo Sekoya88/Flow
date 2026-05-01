@@ -134,6 +134,7 @@ function SourceDetailDrawer({
 
 export default function KnowledgePage() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const fileRef = useRef<HTMLInputElement>(null);
   const [wsId, setWsId] = useState<string | null>(null);
   const [title, setTitle] = useState("Notes");
@@ -162,8 +163,12 @@ export default function KnowledgePage() {
   }, []);
 
   useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     if (!getToken()) {
-      router.replace("/login");
+      routerRef.current.replace("/login");
       return;
     }
     setLoadingWs(true);
@@ -181,7 +186,7 @@ export default function KnowledgePage() {
         setListErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load workspace.");
       })
       .finally(() => setLoadingWs(false));
-  }, [router, loadSources]);
+  }, [loadSources]);
 
   async function ingest() {
     if (!wsId) return;

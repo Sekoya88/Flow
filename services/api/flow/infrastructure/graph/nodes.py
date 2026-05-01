@@ -52,15 +52,30 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
     repo = FlowRepository(ctx.pool)
     rag_bits: list[str] = []
     mem_bits: list[str] = []
+    settings = ctx.settings
+    use_agentic = bool(
+        tools["retrieve"]
+        and ctx.openai_api_key
+        and settings
+        and settings.agentic_rag_enabled
+        and settings.qdrant_url
+        and settings.qdrant_url.strip()
+    )
     if ctx.openai_api_key and (tools["retrieve"] or tools["long_term_memory"]):
         try:
             q_emb = (await emb_svc.embed_texts(api_key=ctx.openai_api_key, texts=[user_text]))[0]
             if tools["retrieve"]:
                 try:
+                    if use_agentic:
+                        from flow.infrastructure.agentic_rag.pipeline import run_agentic_retrieval
+
+                        rag_bits = (await run_agentic_retrieval(ctx, user_text))[0]
+                    else:
+                        rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=4)
+                        rag_bits = [r["content"] for r in rows]
+                except Exception:
                     rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=4)
                     rag_bits = [r["content"] for r in rows]
-                except Exception:
-                    pass
             if tools["long_term_memory"]:
                 try:
                     mrows = await repo.search_memories(

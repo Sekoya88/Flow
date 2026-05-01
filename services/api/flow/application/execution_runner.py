@@ -49,13 +49,42 @@ async def run_deer_execution(
         openai_api_key=settings.openai_api_key,
         agent_config=cfg,
         anthropic_api_key=settings.anthropic_api_key,
+        execution_id=execution_id,
+        settings=settings,
     )
     graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
-    config = {"configurable": {"thread_id": str(execution_id)}}
+    config: dict[str, Any] = {
+        "configurable": {"thread_id": str(execution_id)},
+        "metadata": {
+            "execution_id": str(execution_id),
+            "agent_id": str(agent_id),
+            "workspace_id": str(workspace_id),
+            "user_id": str(user_id),
+        },
+        "tags": ["flow", "deer-flow"],
+        "run_name": f"flow-exec-{execution_id}",
+    }
     initial: dict[str, Any] = {"messages": [HumanMessage(content=user_message)]}
 
+    debug_chunks = settings.log_level.strip().upper() == "DEBUG"
     try:
+        logger.info(
+            "execution.started",
+            execution_id=str(execution_id),
+            workspace_id=str(workspace_id),
+            agent_id=str(agent_id),
+        )
         async for mode, chunk in graph.astream(initial, config, stream_mode=["updates", "messages"]):
+            if debug_chunks:
+                preview = repr(chunk)
+                if len(preview) > 800:
+                    preview = preview[:800] + "…"
+                logger.debug(
+                    "execution.stream_chunk",
+                    execution_id=str(execution_id),
+                    mode=mode,
+                    chunk_preview=preview,
+                )
             if mode == "updates":
                 for node_name, partial in chunk.items():
                     payload = _json_safe({"node": node_name, "partial": partial})
@@ -84,6 +113,12 @@ async def run_deer_execution(
         await repo.insert_event(execution_id, "final", {"answer": str(answer), "confidence": confidence})
         stream_hub.publish(execution_id, {"kind": "final", "answer": str(answer), "confidence": confidence})
         await repo.complete_execution(execution_id, "completed", None)
+        logger.info(
+            "execution.completed",
+            execution_id=str(execution_id),
+            confidence=confidence,
+            answer_chars=len(str(answer)),
+        )
 
         # Save episodic memory: 1-sentence run summary
         if answer and settings.openai_api_key:
@@ -97,7 +132,7 @@ async def run_deer_execution(
             except Exception:
                 pass  # episodic save is best-effort
     except Exception as exc:
-        logger.exception("execution.failed", execution_id=str(execution_id))
+        logger.exception("execution.failed", execution_id=str(execution_id), error=str(exc))
         await repo.insert_event(execution_id, "error", {"message": str(exc)})
         stream_hub.publish(execution_id, {"kind": "error", "message": str(exc)})
         await repo.complete_execution(execution_id, "failed", str(exc))

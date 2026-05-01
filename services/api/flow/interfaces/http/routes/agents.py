@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from flow.config import Settings, get_settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import AgentCreateIn, AgentPatchIn, ExecuteIn
@@ -64,12 +63,10 @@ async def list_agents(
 
 @router.post("/agents/{agent_id}/execute")
 async def execute_agent(
-    request: Request,
     agent_id: UUID,
     body: ExecuteIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     ws_rows = await repo.list_workspaces_for_user(user_id)
     allowed_ws = {r["id"] for r in ws_rows}
@@ -84,7 +81,7 @@ async def execute_agent(
     eid = await repo.create_execution(agent_id, workspace_id, body.message)
     raw_cfg = agent["config"]
     agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
-    request.app.state.stream_hub.register(eid)
+    # SSE uses Redis pub/sub per execution id — no hub registration needed.
     from flow.infrastructure.queue.client import enqueue_execution
 
     await enqueue_execution(

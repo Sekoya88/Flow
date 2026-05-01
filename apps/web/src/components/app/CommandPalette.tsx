@@ -11,6 +11,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Workflow,
 } from "lucide-react";
 import { FlowMark } from "@/components/brand/FlowLogo";
 
@@ -20,6 +21,7 @@ const ITEMS = [
   { id: "knowledge", label: "Knowledge", href: "/knowledge", icon: ScrollText, section: "Navigate" },
   { id: "proposals", label: "Proposals", href: "/proposals", icon: Sparkles, section: "Navigate" },
   { id: "memory", label: "Memory", href: "/memory", icon: Brain, section: "Navigate" },
+  { id: "agents", label: "Agent graphs", href: "/agents", icon: Workflow, section: "Navigate" },
   { id: "settings", label: "Settings", href: "/settings", icon: Settings, section: "Navigate" },
   { id: "onboarding", label: "Setup guide", href: "/onboarding", icon: BookOpen, section: "Help" },
 ];

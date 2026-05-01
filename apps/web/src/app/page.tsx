@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HomeLanding } from "@/components/marketing/HomeLanding";
 import { getToken } from "@/lib/auth";
 
 export default function Home() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     if (getToken()) {
-      router.replace("/dashboard");
+      routerRef.current.replace("/dashboard");
       return;
     }
     setReady(true);
-  }, [router]);
+  }, []);
 
   if (!ready) {
     return (

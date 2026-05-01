@@ -41,6 +41,7 @@ async def create_knowledge(
         workspace_id=body.workspace_id,
         title=body.title,
         body=body.body,
+        settings=settings,
     )
     return {"id": str(sid)}
 
@@ -74,6 +75,7 @@ async def upload_knowledge_file(
         workspace_id=workspace_id,
         title=title,
         body=text,
+        settings=settings,
     )
     return {"id": str(sid), "title": title}
 

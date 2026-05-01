@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -77,6 +77,7 @@ const POSTGRES_MODEL: { table: string; columns: string[] }[] = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const [data, setData] = useState<Summary | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function DashboardPage() {
 
   const load = useCallback(() => {
     if (!getToken()) {
-      router.replace("/login");
+      routerRef.current.replace("/login");
       return;
     }
     setLoading(true);
@@ -103,6 +104,10 @@ export default function DashboardPage() {
         setErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load dashboard");
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    routerRef.current = router;
   }, [router]);
 
   useEffect(() => {

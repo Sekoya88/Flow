@@ -39,6 +39,9 @@ dependencies = [
   "langchain-anthropic>=0.3.22",
   "langchain-ollama>=0.3.10",
   "e2b-code-interpreter>=2.6.0",
+  "qdrant-client>=1.12,<2",
+  "fastembed>=0.4,<1",
+  "tavily-python>=0.5,<1",
 ]
 
 [project.optional-dependencies]
@@ -66,3 +69,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# LangSmith must run before any LangChain/LangGraph import chain (arq/worker imports).
+"flow/infrastructure/queue/worker.py" = ["E402"]

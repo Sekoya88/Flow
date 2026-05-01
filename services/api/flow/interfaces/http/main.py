@@ -5,12 +5,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from flow.config import get_settings
+from flow.infrastructure.observability.langsmith import configure_langsmith
+
+configure_langsmith(get_settings())
+
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from flow.config import get_settings
 from flow.infrastructure.db.migrate import run_migrations
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
@@ -42,7 +47,12 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    configure_logging(level=settings.log_level, json_output=settings.log_json)
+    configure_logging(
+        level=settings.log_level,
+        json_output=settings.log_json,
+        service="flow-api",
+        force_colors=settings.log_force_colors,
+    )
     setup_tracing(otlp_endpoint=settings.otel_endpoint)
     setup_sentry(dsn=settings.sentry_dsn)
 

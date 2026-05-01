@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, ExternalLink, Eye, Loader2, Sparkles, XCircle } from "lucide-react";
@@ -69,6 +69,7 @@ function statusConfig(status: string) {
 
 export default function ProposalsPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const [rows, setRows] = useState<ProposalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -90,12 +91,16 @@ export default function ProposalsPage() {
   }, []);
 
   useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     if (!getToken()) {
-      router.replace("/login");
+      routerRef.current.replace("/login");
       return;
     }
     void load();
-  }, [router, load]);
+  }, [load]);
 
   async function act(id: string, status: "approved" | "rejected") {
     setActionId(id);

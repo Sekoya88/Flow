@@ -1,4 +1,15 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "16333:6333"
+      - "16334:6334"
+    volumes:
+      - flow_qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:
@@ -26,7 +37,12 @@ services:
     build:
       context: ./services/api
       dockerfile: Dockerfile
+    env_file:
+      - .env
+    tty: true
+    stdin_open: true
     environment:
+      PYTHONUNBUFFERED: "1"
       FLOW_DATABASE_URL: postgresql://flow:flow@db:5432/flow
       FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
       FLOW_OPENAI_API_KEY: ${FLOW_OPENAI_API_KEY:-}
@@ -34,7 +50,16 @@ services:
       FLOW_CORS_ORIGINS: http://localhost:13000,http://localhost:3000,http://web:3000
       FLOW_LOG_LEVEL: INFO
       FLOW_LOG_JSON: "false"
+      FLOW_LOG_FORCE_COLORS: "true"
       FLOW_REDIS_URL: redis://redis:6379/0
+      FLOW_QDRANT_URL: http://qdrant:6333
+      FLOW_QDRANT_COLLECTION: flow_knowledge
+      FLOW_AGENTIC_RAG_ENABLED: "true"
+      FLOW_TAVILY_API_KEY: ${FLOW_TAVILY_API_KEY:-}
+      FLOW_LANGSMITH_TRACING: ${FLOW_LANGSMITH_TRACING:-true}
+      FLOW_LANGSMITH_API_KEY: ${FLOW_LANGSMITH_API_KEY:-}
+      FLOW_LANGSMITH_PROJECT: ${FLOW_LANGSMITH_PROJECT:-flow-docker}
+      FLOW_LANGSMITH_ENDPOINT: ${FLOW_LANGSMITH_ENDPOINT:-}
     ports:
       # Host 18000 avoids clash with another process already bound to 8000 (e.g. local uvicorn).
       - "18000:8000"
@@ -43,20 +68,40 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      qdrant:
+        condition: service_started
 
   worker:
     build:
       context: ./services/api
+    env_file:
+      - .env
+    tty: true
+    stdin_open: true
     command: ["uv", "run", "arq", "flow.infrastructure.queue.worker.WorkerSettings"]
     environment:
+      PYTHONUNBUFFERED: "1"
       FLOW_DATABASE_URL: postgresql://flow:flow@db:5432/flow
       FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
       FLOW_OPENAI_API_KEY: ${FLOW_OPENAI_API_KEY:-}
+      FLOW_LOG_LEVEL: INFO
+      FLOW_LOG_JSON: "false"
+      FLOW_LOG_FORCE_COLORS: "true"
       FLOW_REDIS_URL: redis://redis:6379/0
+      FLOW_QDRANT_URL: http://qdrant:6333
+      FLOW_QDRANT_COLLECTION: flow_knowledge
+      FLOW_AGENTIC_RAG_ENABLED: "true"
+      FLOW_TAVILY_API_KEY: ${FLOW_TAVILY_API_KEY:-}
+      FLOW_LANGSMITH_TRACING: ${FLOW_LANGSMITH_TRACING:-true}
+      FLOW_LANGSMITH_API_KEY: ${FLOW_LANGSMITH_API_KEY:-}
+      FLOW_LANGSMITH_PROJECT: ${FLOW_LANGSMITH_PROJECT:-flow-docker}
+      FLOW_LANGSMITH_ENDPOINT: ${FLOW_LANGSMITH_ENDPOINT:-}
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      qdrant:
         condition: service_started
     restart: unless-stopped
 
@@ -76,3 +121,4 @@ services:
 
 volumes:
   flow_pgdata:
+  flow_qdrant_data:

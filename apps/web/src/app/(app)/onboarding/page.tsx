@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, Check, Circle, Loader2, Sparkles } from "lucide-react";
@@ -74,6 +74,7 @@ function saveDone(s: Set<string>) {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -83,8 +84,12 @@ export default function OnboardingPage() {
   }, []);
 
   useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     if (!getToken()) {
-      router.replace("/login");
+      routerRef.current.replace("/login");
       return;
     }
     setLoading(true);
@@ -97,7 +102,7 @@ export default function OnboardingPage() {
         setErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load account.");
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, []);
 
   const allDone = useMemo(() => STEPS.every((s) => done.has(s.id)), [done]);
 
