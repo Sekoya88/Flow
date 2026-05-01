@@ -33,7 +33,7 @@ export default function RootLayout({
       <body className={`${inter.className} flex min-h-full flex-col bg-background antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <div className="relative flex min-h-full flex-1 flex-col">
-            <div className="pointer-events-none absolute inset-0 flow-grain opacity-60" aria-hidden />
+            <div className="pointer-events-none absolute inset-0 flow-grain opacity-[0.22]" aria-hidden />
             <div
               className="pointer-events-none absolute inset-x-0 top-0 h-[min(42vh,28rem)] flow-ambient-mesh"
               aria-hidden

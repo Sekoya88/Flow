@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[90rem] items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
           <div className="shrink-0">
             <FlowLogo href="/dashboard" variant="header" />
           </div>
@@ -208,11 +208,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="relative flex-1 animate-fade-in">
-        <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-14 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-[90rem] px-4 py-10 sm:px-6 md:py-14 lg:px-8">{children}</div>
       </main>
 
       <footer className="relative mt-auto border-t border-border/40 py-4 text-center text-[10px] uppercase tracking-wide text-muted-foreground/60">
-        Flow · agent workspace
+        <span>Flow · agent workspace</span>
+        <span
+          className="mt-2 block font-mono text-[9px] font-normal normal-case tracking-normal text-flow-brand/90"
+          title="Present when this shell build includes the cyan-accent layout refresh"
+        >
+          Shell 90rem · teal accent · trace concise/run
+        </span>
       </footer>
     </div>
   );

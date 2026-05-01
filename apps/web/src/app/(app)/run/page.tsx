@@ -27,6 +27,7 @@ import { FlowGraph } from "@/components/flow/FlowGraph";
 import { TokenStream } from "@/components/flow/TokenStream";
 import { AgentTimeline, type ExecRow } from "@/components/flow/AgentTimeline";
 import { MemoryDrawer } from "@/components/flow/MemoryDrawer";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
@@ -111,6 +112,24 @@ const TOOL_ROWS: { key: keyof ToolFlags; title: string; desc: string }[] = [
   },
 ];
 
+const TRACE_VERBOSE_KEY = "flow.run.traceVerbose";
+
+function loadTraceVerbose(): boolean {
+  try {
+    return localStorage.getItem(TRACE_VERBOSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistTraceVerbose(verbose: boolean) {
+  try {
+    localStorage.setItem(TRACE_VERBOSE_KEY, verbose ? "1" : "0");
+  } catch {
+    /* quota */
+  }
+}
+
 const TRACE_MAX_LINES = 500;
 const TRACE_TRUNC = 2800;
 const TOKEN_TRACE_TRUNC = 480;
@@ -131,6 +150,7 @@ function formatTracePayload(payload: unknown): string {
 type SseEvent = {
   kind: string;
   node?: string;
+  summary?: string;
   answer?: string;
   text?: string;
   message?: string;
@@ -173,6 +193,8 @@ export default function RunPage() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [traceLines, setTraceLines] = useState<string[]>([]);
   const traceBottomRef = useRef<HTMLDivElement>(null);
+  const [traceVerbose, setTraceVerbose] = useState(false);
+  const traceVerboseRef = useRef(false);
 
   const prefsDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeAgent = useMemo(() => agents.find((x) => x.id === agentId), [agents, agentId]);
@@ -181,6 +203,16 @@ export default function RunPage() {
   useEffect(() => {
     routerRef.current = router;
   }, [router]);
+
+  useEffect(() => {
+    const v = loadTraceVerbose();
+    traceVerboseRef.current = v;
+    setTraceVerbose(v);
+  }, []);
+
+  useEffect(() => {
+    traceVerboseRef.current = traceVerbose;
+  }, [traceVerbose]);
 
   useEffect(() => {
     if (!getToken()) {
@@ -254,7 +286,8 @@ export default function RunPage() {
     return () => { if (prefsDebounce.current) clearTimeout(prefsDebounce.current); };
   }, [wsId, agentId, message, tools]);
 
-  const appendTrace = useCallback((line: string) => {
+  const appendTraceLine = useCallback((line: string | null) => {
+    if (line === null) return;
     const stamp = new Date().toISOString().slice(11, 23);
     setTraceLines((prev) => {
       const row = `[${stamp}] ${line}`;
@@ -264,6 +297,12 @@ export default function RunPage() {
     queueMicrotask(() => {
       traceBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
+  }, []);
+
+  const onTraceVerboseChange = useCallback((checked: boolean) => {
+    traceVerboseRef.current = checked;
+    setTraceVerbose(checked);
+    persistTraceVerbose(checked);
   }, []);
 
   async function saveAgentDisplayName() {
@@ -317,7 +356,7 @@ export default function RunPage() {
       });
       const eid = res.execution_id;
       setActiveExecution(eid);
-      appendTrace(`execute accepted · execution_id=${eid}`);
+      appendTraceLine(`execute accepted · execution_id=${eid}`);
       // Seed planner as "thinking" immediately
       setNode("planner", { status: "thinking" });
       track("run_started", { agent_id: agentId, execution_id: eid });
@@ -327,34 +366,44 @@ export default function RunPage() {
         { method: "POST" },
       );
       const url = `${apiBase}/api/v1/executions/${eid}/stream?stream_jwt=${encodeURIComponent(stream_jwt)}`;
-      appendTrace("SSE · connecting…");
+      appendTraceLine("SSE · connecting…");
       const es = new EventSource(url);
 
       es.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data) as SseEvent;
+          const verbose = traceVerboseRef.current;
 
           if (data.kind === "node_update" && data.node) {
-            // Mark previous nodes done, current as streaming
             const prev = ["planner", "worker", "synthesizer"];
             const idx = prev.indexOf(data.node);
             if (idx > 0) setNode(prev[idx - 1], { status: "done" });
             setNode(data.node, { status: "streaming" });
-            appendTrace(`node_update · ${data.node}\n${formatTracePayload(data.payload ?? {})}`);
+            appendTraceLine(
+              verbose
+                ? `node_update · ${data.node}\n${formatTracePayload(data.payload ?? {})}`
+                : `graph · ${data.summary ?? data.node}`,
+            );
           } else if (data.kind === "token" && data.text) {
-            appendTrace(`token · ${data.node ?? "?"}\n${truncateTraceText(data.text, TOKEN_TRACE_TRUNC)}`);
+            if (verbose) {
+              appendTraceLine(
+                `token · ${data.node ?? "?"}\n${truncateTraceText(data.text, TOKEN_TRACE_TRUNC)}`,
+              );
+            }
             appendToken(data.text);
           } else if (data.kind === "final" && data.answer) {
-            appendTrace(
-              `final · confidence=${data.confidence ?? "?"}\n${truncateTraceText(data.answer, TRACE_TRUNC)}`,
+            appendTraceLine(
+              verbose
+                ? `final · confidence=${data.confidence ?? "?"}\n${truncateTraceText(data.answer, TRACE_TRUNC)}`
+                : `final · ${data.answer.length} chars · confidence ${data.confidence ?? "?"}`,
             );
             appendToken(data.answer);
             setNode("synthesizer", { status: "done" });
           } else if (data.kind === "error") {
-            appendTrace(`error · ${data.message ?? "unknown"}`);
+            appendTraceLine(`error · ${data.message ?? "unknown"}`);
             setNode("synthesizer", { status: "error" });
           } else if (data.kind === "done") {
-            appendTrace("done · stream closed");
+            appendTraceLine("done · stream closed");
             es.close();
             setRunning(false);
             setActiveExecution(null);
@@ -369,19 +418,19 @@ export default function RunPage() {
             }
           }
         } catch {
-          appendTrace("SSE · non-JSON line skipped");
+          appendTraceLine(traceVerboseRef.current ? "SSE · non-JSON line skipped" : "SSE · skipped frame");
         }
       };
 
       es.onerror = () => {
-        appendTrace("SSE · connection error (closed or network)");
+        appendTraceLine("SSE · connection error (closed or network)");
         es.close();
         setRunning(false);
         setActiveExecution(null);
         setNode("synthesizer", { status: "error" });
       };
     } catch (e) {
-      appendTrace(`run failed · ${e instanceof ApiError ? `${e.status}: ${e.body}` : String(e)}`);
+      appendTraceLine(`run failed · ${e instanceof ApiError ? `${e.status}: ${e.body}` : String(e)}`);
       setRunning(false);
       setActiveExecution(null);
       track("run_failed", { agent_id: agentId });
@@ -464,14 +513,10 @@ export default function RunPage() {
       <MemoryDrawer open={memoryOpen} onOpenChange={setMemoryOpen} workspaceId={wsId} agentId={agentId} />
 
       <div className="mx-auto w-full max-w-4xl space-y-10 pb-8">
-        <header className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <h1 className="font-heading text-3xl font-semibold tracking-tight">Run</h1>
-              <p className="max-w-2xl text-muted-foreground text-[15px] leading-relaxed">
-                Send a message to your workspace agent. Watch the graph execute step by step.
-              </p>
-            </div>
+        <FlowPageHeader
+          title="Run"
+          description="Send a message to your workspace agent. Watch the graph execute step by step."
+          actions={
             <Button
               variant="outline"
               size="sm"
@@ -482,57 +527,75 @@ export default function RunPage() {
               <Brain className="h-3.5 w-3.5 opacity-80" aria-hidden />
               Memory
             </Button>
-          </div>
+          }
+          meta={
+            <>
+              {knowledgeCount !== null ? (
+                <Badge variant="secondary" className="h-7 rounded-full px-3">
+                  Workspace sources: {knowledgeCount}
+                </Badge>
+              ) : null}
+              <Link
+                href="/knowledge"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex h-7")}
+              >
+                Manage knowledge
+              </Link>
+            </>
+          }
+        />
 
-          <div className="flex flex-wrap items-center gap-2">
-            {knowledgeCount !== null ? (
-              <Badge variant="secondary" className="h-7 rounded-full px-3">
-                Workspace sources: {knowledgeCount}
-              </Badge>
-            ) : null}
-            <Link
-              href="/knowledge"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex h-7")}
-            >
-              Manage knowledge
-            </Link>
-          </div>
+        <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-6 shadow-sm backdrop-blur-sm">
+          <FlowGraph className="mx-auto w-full max-w-sm" />
+        </div>
 
-          {/* Live FlowGraph */}
-          <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-6 backdrop-blur-sm">
-            <FlowGraph className="mx-auto w-full max-w-sm" />
-          </div>
-
-          <details className="group rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
-            <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-foreground outline-none [&::-webkit-details-marker]:hidden">
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-              Connection details
-            </summary>
-            <div className="mt-3 space-y-3 text-muted-foreground text-xs leading-relaxed">
-              <p>
-                Live output uses Server-Sent Events with{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
-                  Last-Event-ID
-                </code>{" "}
-                reconnect. API base:{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
-                  {getApiBase()}
-                </code>
-              </p>
-              <div>
-                <p className="mb-2 font-medium text-foreground">Live trace (graph updates · tokens · final)</p>
-                <ScrollArea className="h-52 rounded-md border border-border/80 bg-background/80">
-                  <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-snug text-foreground/90">
-                    {traceLines.length === 0
-                      ? "Nothing yet — open this panel and run a message to stream node state (chain-of-thought style), tokens, and errors here."
-                      : traceLines.join("\n\n")}
-                    <div ref={traceBottomRef} aria-hidden className="h-px w-full shrink-0" />
-                  </pre>
-                </ScrollArea>
+        <details className="group rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-foreground outline-none [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            Connection details · trace
+          </summary>
+          <div className="mt-3 space-y-3 text-muted-foreground text-xs leading-relaxed">
+            <p>
+              Live output uses Server-Sent Events with{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
+                Last-Event-ID
+              </code>{" "}
+              reconnect. API base:{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
+                {getApiBase()}
+              </code>
+            </p>
+            <p className="text-[11px]">
+              <strong className="text-foreground">LangSmith</strong> traces graph nodes when{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">LANGCHAIN_API_KEY</code> is set; API logs stay at
+              INFO unless <code className="rounded bg-muted px-1 py-0.5 font-mono">LOG_LEVEL=DEBUG</code>.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="mb-0 font-medium text-foreground">Live trace</p>
+              <div className="flex items-center gap-2">
+                <span className={cn(!traceVerbose && "text-foreground")}>Concise</span>
+                <Switch
+                  checked={traceVerbose}
+                  onCheckedChange={onTraceVerboseChange}
+                  aria-label="Verbose SSE trace"
+                />
+                <span className={cn(traceVerbose && "text-foreground")}>Verbose</span>
               </div>
             </div>
-          </details>
-        </header>
+            <p className="text-[11px] text-muted-foreground">
+              Concise: graph steps (server summaries), lifecycle, final size — no per-token lines. Verbose: raw node
+              payloads and tokens.
+            </p>
+            <ScrollArea className="h-52 rounded-md border border-border/80 bg-background/80">
+              <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-snug text-foreground/90">
+                {traceLines.length === 0
+                  ? "Run a message — concise mode shows pipeline checkpoints only; toggle verbose for full SSE payloads."
+                  : traceLines.join("\n\n")}
+                <div ref={traceBottomRef} aria-hidden className="h-px w-full shrink-0" />
+              </pre>
+            </ScrollArea>
+          </div>
+        </details>
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           <div className="flex flex-col gap-10">

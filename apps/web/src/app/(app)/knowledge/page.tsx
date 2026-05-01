@@ -23,6 +23,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Me = { workspaces: { id: string }[] };
 
@@ -257,20 +258,19 @@ export default function KnowledgePage() {
         />
       )}
 
-      <header className="space-y-2">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Knowledge</h1>
-        <p className="max-w-2xl text-muted-foreground text-[15px] leading-relaxed">
-          Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content
-          manually.
-        </p>
-        <Link
-          href="/run"
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex w-fit items-center gap-1.5")}
-        >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          Back to Run
-        </Link>
-      </header>
+      <FlowPageHeader
+        title="Knowledge"
+        description="Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content manually."
+        meta={
+          <Link
+            href="/run"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex w-fit items-center gap-1.5")}
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            Back to Run
+          </Link>
+        }
+      />
 
       {listErr ? (
         <Alert variant="destructive">

@@ -26,6 +26,32 @@ def _json_safe(obj: Any) -> Any:
         return str(obj)
 
 
+def _summarize_node_partial(node_name: str, partial: Any) -> str:
+    """Short line for SSE / concise UI. Full graph state remains in stored payload."""
+    if partial is None:
+        return f"{node_name} · —"
+    if not isinstance(partial, dict):
+        return f"{node_name} · update"
+    tags: list[str] = []
+    if isinstance(partial.get("plan"), str) and partial["plan"].strip():
+        tags.append("plan")
+    if partial.get("worker_output") is not None:
+        tags.append("worker output")
+    if partial.get("answer") is not None:
+        tags.append("answer")
+    msgs = partial.get("messages")
+    n_msg = len(msgs) if isinstance(msgs, list) else 0
+    if n_msg:
+        tags.append(f"+{n_msg} msg")
+        last = msgs[-1]
+        blob = getattr(last, "content", None)
+        if blob is None and isinstance(last, dict):
+            blob = last.get("content")
+        if isinstance(blob, str) and "```python" in blob:
+            tags.append("sandbox")
+    return f"{node_name} · " + (" · ".join(tags) if tags else "state")
+
+
 async def run_deer_execution(
     *,
     pool: asyncpg.Pool,
@@ -91,7 +117,12 @@ async def run_deer_execution(
                     await repo.insert_event(execution_id, "node_update", payload)
                     stream_hub.publish(
                         execution_id,
-                        {"kind": "node_update", "node": node_name, "payload": payload},
+                        {
+                            "kind": "node_update",
+                            "node": node_name,
+                            "summary": _summarize_node_partial(node_name, partial),
+                            "payload": payload,
+                        },
                     )
             elif mode == "messages":
                 msg_chunk, metadata = chunk
@@ -117,8 +148,8 @@ async def run_deer_execution(
             "execution.completed",
             execution_id=str(execution_id),
             confidence=confidence,
-            answer_chars=len(str(answer)),
         )
+        logger.debug("execution.completed.detail", answer_chars=len(str(answer)))
 
         # Save episodic memory: 1-sentence run summary
         if answer and settings.openai_api_key:

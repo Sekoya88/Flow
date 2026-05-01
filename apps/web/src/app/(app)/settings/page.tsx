@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Prefs = { preferences: { key: string; value: unknown; updated_at: string }[] };
 
@@ -66,10 +67,10 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground text-sm">User preferences merged into agent runs.</p>
-      </div>
+      <FlowPageHeader
+        title="Settings"
+        description="User preferences merged into agent runs."
+      />
       {loadErr ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />

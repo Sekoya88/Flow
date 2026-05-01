@@ -37,7 +37,7 @@ def configure_langsmith(settings: Settings) -> None:
         or _strip_env_quotes((os.getenv("LANGCHAIN_API_KEY") or "").strip())
     )
     if not key:
-        log.info("langsmith.disabled", reason="no_api_key")
+        log.debug("langsmith.disabled", reason="no_api_key")
         return
 
     tracing = settings.langsmith_tracing
@@ -47,7 +47,7 @@ def configure_langsmith(settings: Settings) -> None:
     elif lt in ("1", "true", "yes"):
         tracing = True
     if not tracing:
-        log.info("langsmith.disabled", reason="tracing_disabled")
+        log.debug("langsmith.disabled", reason="tracing_disabled")
         return
 
     os.environ["LANGCHAIN_TRACING_V2"] = "true"

@@ -11,7 +11,7 @@ type PublicHeaderProps = {
 export function PublicHeader({ auth }: PublicHeaderProps) {
   return (
     <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3.5">
+      <div className="mx-auto flex max-w-[90rem] items-center gap-3 px-5 py-3.5 sm:px-8">
         <FlowLogo href="/" variant="header" subtitle="Runs · memory · tools" />
         <div className="flex flex-1 justify-end gap-2">
           {auth === "login" ? (

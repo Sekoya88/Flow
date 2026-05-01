@@ -92,11 +92,11 @@
   --sidebar-accent-foreground: oklch(0.16 0.02 264);
   --sidebar-border: oklch(0.9 0.008 264);
   --sidebar-ring: oklch(0.16 0.02 264);
-  --flow-brand: oklch(0.50 0.18 240);
-  --flow-idle: oklch(0.55 0.05 240);
+  --flow-brand: oklch(0.52 0.14 200);
+  --flow-idle: oklch(0.55 0.06 200);
   --flow-thinking: oklch(0.55 0.18 75);
-  --flow-streaming: oklch(0.52 0.18 160);
-  --flow-done: oklch(0.50 0.20 145);
+  --flow-streaming: oklch(0.52 0.16 195);
+  --flow-done: oklch(0.50 0.18 165);
   --flow-error: oklch(0.48 0.24 25);
   --ease-current: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-eddy: cubic-bezier(0.65, 0, 0.35, 1);
@@ -139,11 +139,11 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.26 0.012 264);
   --sidebar-ring: oklch(0.82 0.01 264);
-  --flow-brand: oklch(0.62 0.16 240);
-  --flow-idle: oklch(0.70 0.04 240);
+  --flow-brand: oklch(0.62 0.14 200);
+  --flow-idle: oklch(0.70 0.06 200);
   --flow-thinking: oklch(0.72 0.14 75);
-  --flow-streaming: oklch(0.74 0.16 160);
-  --flow-done: oklch(0.68 0.18 145);
+  --flow-streaming: oklch(0.72 0.15 195);
+  --flow-done: oklch(0.68 0.16 165);
   --flow-error: oklch(0.60 0.22 25);
 }
 

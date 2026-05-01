@@ -10,6 +10,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Me = { workspaces: { id: string; name: string }[] };
 
@@ -128,16 +129,12 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 pb-8">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-primary">
-          <BookOpen className="h-8 w-8 opacity-90" aria-hidden />
-        </div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Get started</h1>
-        <p className="text-muted-foreground text-[15px] leading-relaxed">
-          Short checklist to go from empty workspace to a grounded run. Progress is stored in this browser only.
-        </p>
-        {err ? <p className="text-destructive text-sm">{err}</p> : null}
-      </div>
+      <FlowPageHeader
+        leading={<BookOpen className="h-8 w-8 text-primary opacity-90" aria-hidden />}
+        title="Get started"
+        description="Short checklist to go from empty workspace to a grounded run. Progress is stored in this browser only."
+      />
+      {err ? <p className="text-destructive text-sm">{err}</p> : null}
 
       <Card className="shadow-sm">
         <CardHeader>

@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlowMarkAnimated } from "@/components/brand/FlowLogo";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -152,30 +153,28 @@ export default function DashboardPage() {
       {/* Hero */}
       <section className="flow-hero-surface p-6 sm:p-8">
         <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-flow-brand/15 blur-3xl dark:bg-flow-brand/25" aria-hidden />
-        <header className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-xl space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="border-flow-brand/35 bg-flow-brand/10 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
-              >
-                Workspace
-              </Badge>
-            </div>
-            <h1 className="font-heading text-3xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-pretty text-muted-foreground">
-              Workspace overview and what lives in Postgres today — agents, runs, knowledge, and
-              curator proposals.
-            </p>
-          </div>
-          <Link
-            href="/run"
-            className={cn(buttonVariants({ size: "lg" }), "relative shrink-0 gap-2 shadow-sm")}
-          >
-            <MessageSquare className="h-4 w-4" aria-hidden />
-            Run agent
-          </Link>
-        </header>
+        <FlowPageHeader
+          className="relative border-0 pb-0"
+          eyebrow={
+            <Badge
+              variant="outline"
+              className="border-flow-brand/35 bg-flow-brand/10 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
+              Workspace
+            </Badge>
+          }
+          title="Dashboard"
+          description="Workspace overview and what lives in Postgres today — agents, runs, knowledge, and curator proposals."
+          actions={
+            <Link
+              href="/run"
+              className={cn(buttonVariants({ size: "lg" }), "relative shrink-0 gap-2 shadow-sm")}
+            >
+              <MessageSquare className="h-4 w-4" aria-hidden />
+              Run agent
+            </Link>
+          }
+        />
       </section>
 
       {/* Stat tiles */}

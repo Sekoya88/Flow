@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiFetch } from "@/lib/api";
@@ -147,16 +148,11 @@ export default function MemoryPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
-      <header className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Brain className="h-8 w-8 text-flow-brand opacity-90" aria-hidden />
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Memory</h1>
-        </div>
-        <p className="max-w-2xl text-muted-foreground text-[15px] leading-relaxed">
-          Episodic summaries are captured after successful runs. Semantic entries are stored vectors you add below (or
-          promoted from high-quality feedback).
-        </p>
-      </header>
+      <FlowPageHeader
+        leading={<Brain className="h-8 w-8 opacity-90" aria-hidden />}
+        title="Memory"
+        description="Episodic summaries are captured after successful runs. Semantic entries are stored vectors you add below (or promoted from high-quality feedback)."
+      />
 
       <Card>
         <CardHeader className="space-y-4">

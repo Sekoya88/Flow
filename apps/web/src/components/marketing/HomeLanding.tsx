@@ -25,9 +25,9 @@ export function HomeLanding() {
     <div className="flex min-h-screen flex-col">
       <PublicHeader />
       <main className="relative flex-1 animate-fade-in">
-        <section className="mx-auto max-w-xl px-5 pt-10 text-center md:pt-14">
+        <section className="mx-auto max-w-2xl px-5 pt-10 text-center md:max-w-3xl md:pt-14">
           <div
-            className="mx-auto mb-6 flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-border bg-card/60 shadow-md ring-1 ring-white/10 backdrop-blur-sm animate-slide-up"
+            className="flow-hero-surface mx-auto mb-6 flex h-14 w-14 items-center justify-center overflow-hidden animate-slide-up"
             aria-hidden
           >
             <FlowMark size={40} className="text-foreground" />
@@ -37,8 +37,8 @@ export function HomeLanding() {
             Run agents with clarity
           </h1>
           <p className="mb-8 animate-slide-up text-sm leading-relaxed text-muted-foreground md:text-[15px] [animation-delay:120ms]">
-            Guided runs, memory, and RAG — same structural patterns as lucis-agent: max-width column, grain, sticky
-            frosted header, and footer.
+            Guided runs, workspace memory, and RAG — calm surfaces, grain, and a cyan-forward stream accent so live
+            execution reads as motion, not noise.
           </p>
 
           <div className="flex flex-col items-center justify-center gap-3 animate-slide-up sm:flex-row [animation-delay:180ms]">

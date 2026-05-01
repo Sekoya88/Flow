@@ -18,6 +18,7 @@ import {
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Me = { workspaces: { id: string; name: string }[] };
 
@@ -142,19 +143,16 @@ export default function AgentsGraphPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8 pb-10">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <FlowPageHeader
+        eyebrow={
           <Badge variant="outline" className="gap-1 font-mono text-[10px] uppercase tracking-wide">
             <Workflow className="h-3 w-3" aria-hidden />
             Topology
           </Badge>
-        </div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Agent graphs</h1>
-        <p className="max-w-3xl text-muted-foreground text-[15px] leading-relaxed">
-          Explore the LangGraph templates your workspace agents use and the agentic RAG retrieval subgraph (Qdrant +
-          supervisor loop). Pan and zoom the canvas — Obsidian-style linked nodes.
-        </p>
-      </header>
+        }
+        title="Agent graphs"
+        description="Explore the LangGraph templates your workspace agents use and the agentic RAG retrieval subgraph (Qdrant + supervisor loop). Pan and zoom the canvas — Obsidian-style linked nodes."
+      />
 
       <Card className="border-border/80 shadow-sm">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

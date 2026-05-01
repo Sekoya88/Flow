@@ -30,6 +30,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type ProposalRow = {
   id: string;
@@ -127,22 +128,20 @@ export default function ProposalsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-8 animate-fade-in">
-      <header className="space-y-1">
-        <div className="flex items-center gap-3">
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Proposals</h1>
-          {pending.length > 0 && (
+      <FlowPageHeader
+        title="Proposals"
+        titleSuffix={
+          pending.length > 0 ? (
             <Badge
               variant="outline"
               className="h-6 rounded-full border-[var(--color-flow-thinking)]/40 bg-[var(--color-flow-thinking)]/10 px-2.5 text-xs text-[var(--color-flow-thinking)]"
             >
               {pending.length} pending
             </Badge>
-          )}
-        </div>
-        <p className="text-muted-foreground text-[15px] leading-relaxed">
-          Curator suggestions from low run scores. Review the text, then approve or reject.
-        </p>
-      </header>
+          ) : null
+        }
+        description="Curator suggestions from low run scores. Review the text, then approve or reject."
+      />
 
       {/* Detail sheet */}
       <Sheet open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
