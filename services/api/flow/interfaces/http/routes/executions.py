@@ -6,7 +6,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
 
 from flow.config import Settings
 from flow.infrastructure.auth.jwt_utils import create_stream_token
@@ -93,13 +92,16 @@ async def approve_execution(
     # Re-enqueue so the worker picks up and resumes from the interrupt point
     from flow.infrastructure.queue.client import get_arq_pool
     arq = await get_arq_pool()
+    raw_cfg = row["agent_config"]
+    agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
     await arq.enqueue_job(
-        "task_run_deer_execution",
+        "run_deer_execution",
         str(execution_id),
         str(row["workspace_id"]),
         str(row["agent_id"]),
         str(user_id),
         "",  # user_message empty — state already has messages
+        agent_config,
     )
 
     return {"ok": True, "execution_id": str(execution_id)}

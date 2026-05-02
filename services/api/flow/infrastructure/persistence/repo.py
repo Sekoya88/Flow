@@ -154,7 +154,8 @@ class FlowRepository:
     async def get_execution_for_user(self, execution_id: UUID, user_id: UUID) -> asyncpg.Record | None:
         return await self._pool.fetchrow(
             """
-            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message, e.created_at
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message, e.created_at,
+                   a.config AS agent_config
             FROM executions e
             JOIN agents a ON a.id = e.agent_id
             JOIN workspace_members m ON m.workspace_id = a.workspace_id
