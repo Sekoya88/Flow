@@ -63,6 +63,7 @@ def test_extract_url_strips_nav(monkeypatch):
     class FakeResp:
         status_code = 200
         text = html
+        def raise_for_status(self): pass
 
     import httpx
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: FakeResp())
@@ -70,3 +71,18 @@ def test_extract_url_strips_nav(monkeypatch):
     result = extract_url_content("https://example.com")
     assert "Main content here" in result
     assert "Skip me" not in result
+
+
+def test_extract_url_raises_on_http_error(monkeypatch):
+    import httpx
+    from flow.infrastructure.ingestion.extractors import extract_url_content
+
+    class FakeErrorResp:
+        status_code = 404
+        text = "Not Found"
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("404", request=None, response=None)
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: FakeErrorResp())
+    with pytest.raises(httpx.HTTPStatusError):
+        extract_url_content("https://example.com/missing")
