@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage
 from flow.config import Settings
 from flow.infrastructure.auth.jwt_utils import create_stream_token
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.infrastructure.queue.jobs import DEER_EXECUTION_JOB
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep, get_stream_sse_user
 
 router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
@@ -94,7 +95,7 @@ async def approve_execution(
     from flow.infrastructure.queue.client import get_arq_pool
     arq = await get_arq_pool()
     await arq.enqueue_job(
-        "task_run_deer_execution",
+        DEER_EXECUTION_JOB,
         str(execution_id),
         str(row["workspace_id"]),
         str(row["agent_id"]),

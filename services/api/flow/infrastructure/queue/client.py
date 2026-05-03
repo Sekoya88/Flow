@@ -6,6 +6,7 @@ import arq
 from arq import ArqRedis
 
 from flow.config import get_settings
+from flow.infrastructure.queue.jobs import DEER_EXECUTION_JOB
 
 _pool: ArqRedis | None = None
 
@@ -36,7 +37,7 @@ async def enqueue_execution(
 ) -> None:
     pool = await get_arq_pool()
     await pool.enqueue_job(
-        "run_deer_execution",
+        DEER_EXECUTION_JOB,
         str(execution_id),
         str(workspace_id),
         str(agent_id),
