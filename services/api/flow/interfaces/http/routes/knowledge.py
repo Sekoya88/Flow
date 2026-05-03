@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Annotated
 from uuid import UUID
 
@@ -78,7 +79,10 @@ async def upload_knowledge_file(
             status_code=400,
             detail=f"allowed types: {', '.join(ALLOWED_SUFFIXES)}",
         )
-    text = await asyncio.to_thread(_extract_text, raw, name)
+    try:
+        text = await asyncio.to_thread(_extract_text, raw, name)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"could not extract text: {exc}") from exc
     if not text.strip():
         raise HTTPException(status_code=422, detail="could not extract text from file")
     title = Path(name).stem or "upload"
@@ -113,7 +117,6 @@ async def crawl_url(
         raise HTTPException(status_code=422, detail=f"could not fetch url: {exc}") from exc
     if not text.strip():
         raise HTTPException(status_code=422, detail="no extractable text found at url")
-    from urllib.parse import urlparse
     title = urlparse(url).netloc or url[:60]
     sid = await ingest_document(
         repo=repo,
