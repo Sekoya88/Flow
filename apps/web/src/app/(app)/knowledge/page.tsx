@@ -148,6 +148,8 @@ export default function KnowledgePage() {
   const [listErr, setListErr] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [crawling, setCrawling] = useState(false);
 
   const loadSources = useCallback(async (id: string) => {
     setLoadingSources(true);
@@ -229,6 +231,26 @@ export default function KnowledgePage() {
     }
   }
 
+  async function crawl() {
+    if (!wsId || !urlInput.trim()) return;
+    setMsg(null);
+    setCrawling(true);
+    try {
+      await apiFetch("/api/v1/knowledge/crawl", {
+        method: "POST",
+        json: { workspace_id: wsId, url: urlInput.trim() },
+      });
+      setUrlInput("");
+      await loadSources(wsId);
+      setMsg("URL indexed.");
+      track("knowledge_crawl", { workspace_id: wsId });
+    } catch (e) {
+      setMsg(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+    } finally {
+      setCrawling(false);
+    }
+  }
+
   if (loadingWs) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -292,15 +314,15 @@ export default function KnowledgePage() {
           <CardTitle className="text-lg">Upload file</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
             <code className="text-foreground/80">.txt</code>, <code className="text-foreground/80">.md</code>,{" "}
-            <code className="text-foreground/80">.mdx</code>, or <code className="text-foreground/80">.csv</code> — max
-            512KB. Requires OpenAI key on the API for embeddings.
+            <code className="text-foreground/80">.pdf</code>, <code className="text-foreground/80">.docx</code> — max
+            20MB. Requires OpenAI key on the API for embeddings.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 px-6">
           <input
             ref={fileRef}
             type="file"
-            accept=".txt,.md,.mdx,.csv,text/plain,text/markdown"
+            accept=".txt,.md,.mdx,.csv,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
           />
@@ -322,6 +344,43 @@ export default function KnowledgePage() {
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="gap-6 py-6 shadow-sm">
+        <CardHeader className="px-6">
+          <CardTitle className="text-lg">Add from URL</CardTitle>
+          <CardDescription className="text-[13px] leading-relaxed">
+            Paste a web page URL — Flow fetches and indexes the main content.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 px-6">
+          <div className="flex gap-2">
+            <Input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://example.com/article"
+              className="flex-1 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void crawl();
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!wsId || !urlInput.trim() || crawling}
+              onClick={() => void crawl()}
+            >
+              {crawling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Fetching…
+                </>
+              ) : (
+                "Add URL"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
