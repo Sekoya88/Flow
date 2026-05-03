@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
 
 from flow.application.knowledge_service import ingest_document
 from flow.config import Settings, get_settings
@@ -14,8 +15,8 @@ from flow.interfaces.http.schemas import KnowledgeCreateIn
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
-MAX_UPLOAD_BYTES = 512_000
-ALLOWED_SUFFIXES = (".txt", ".md", ".mdx", ".csv")
+MAX_UPLOAD_BYTES = 20_000_000  # 20 MB
+ALLOWED_SUFFIXES = (".txt", ".md", ".mdx", ".csv", ".pdf", ".docx")
 
 
 async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowRepository) -> None:
@@ -23,6 +24,17 @@ async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowReposit
     allowed = {r["id"] for r in ws_rows}
     if workspace_id not in allowed:
         raise HTTPException(status_code=403, detail="workspace not allowed")
+
+
+def _extract_text(raw: bytes, filename: str) -> str:
+    lower = filename.lower()
+    if lower.endswith(".pdf"):
+        from flow.infrastructure.ingestion.extractors import extract_pdf
+        return extract_pdf(raw)
+    if lower.endswith(".docx"):
+        from flow.infrastructure.ingestion.extractors import extract_docx
+        return extract_docx(raw)
+    return raw.decode("utf-8", errors="replace")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -59,16 +71,50 @@ async def upload_knowledge_file(
         raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for embeddings")
     raw = await file.read()
     if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="file too large (max 512KB)")
+        raise HTTPException(status_code=413, detail="file too large (max 20MB)")
     name = (file.filename or "upload").strip()
-    lower = name.lower()
-    if not any(lower.endswith(s) for s in ALLOWED_SUFFIXES):
+    if not any(name.lower().endswith(s) for s in ALLOWED_SUFFIXES):
         raise HTTPException(
             status_code=400,
             detail=f"allowed types: {', '.join(ALLOWED_SUFFIXES)}",
         )
-    text = raw.decode("utf-8", errors="replace")
+    text = await asyncio.to_thread(_extract_text, raw, name)
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="could not extract text from file")
     title = Path(name).stem or "upload"
+    sid = await ingest_document(
+        repo=repo,
+        openai_api_key=settings.openai_api_key,
+        workspace_id=workspace_id,
+        title=title,
+        body=text,
+        settings=settings,
+    )
+    return {"id": str(sid), "title": title}
+
+
+@router.post("/crawl", status_code=status.HTTP_201_CREATED)
+async def crawl_url(
+    workspace_id: Annotated[UUID, Body()],
+    url: Annotated[str, Body()],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    await _assert_workspace(user_id, workspace_id, repo)
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for embeddings")
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="url must start with http:// or https://")
+    from flow.infrastructure.ingestion.extractors import extract_url_content
+    try:
+        text = await asyncio.to_thread(extract_url_content, url)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"could not fetch url: {exc}") from exc
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="no extractable text found at url")
+    from urllib.parse import urlparse
+    title = urlparse(url).netloc or url[:60]
     sid = await ingest_document(
         repo=repo,
         openai_api_key=settings.openai_api_key,
