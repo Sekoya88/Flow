@@ -148,8 +148,10 @@ export default function KnowledgePage() {
   const [listErr, setListErr] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState("");
   const [crawling, setCrawling] = useState(false);
+  const [crawlMsg, setCrawlMsg] = useState<string | null>(null);
 
   const loadSources = useCallback(async (id: string) => {
     setLoadingSources(true);
@@ -213,7 +215,7 @@ export default function KnowledgePage() {
 
   async function onPickFile(f: File | null) {
     if (!f || !wsId) return;
-    setMsg(null);
+    setUploadMsg(null);
     setUploading(true);
     try {
       const fd = new FormData();
@@ -221,10 +223,10 @@ export default function KnowledgePage() {
       fd.set("file", f);
       await apiFetch("/api/v1/knowledge/upload", { method: "POST", body: fd });
       await loadSources(wsId);
-      setMsg(`Uploaded "${f.name}".`);
+      setUploadMsg(`Uploaded "${f.name}".`);
       track("knowledge_upload", { workspace_id: wsId, filename: f.name });
     } catch (e) {
-      setMsg(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+      setUploadMsg(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -233,7 +235,7 @@ export default function KnowledgePage() {
 
   async function crawl() {
     if (!wsId || !urlInput.trim()) return;
-    setMsg(null);
+    setCrawlMsg(null);
     setCrawling(true);
     try {
       await apiFetch("/api/v1/knowledge/crawl", {
@@ -242,10 +244,10 @@ export default function KnowledgePage() {
       });
       setUrlInput("");
       await loadSources(wsId);
-      setMsg("URL indexed.");
+      setCrawlMsg("URL indexed.");
       track("knowledge_crawl", { workspace_id: wsId });
     } catch (e) {
-      setMsg(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+      setCrawlMsg(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
     } finally {
       setCrawling(false);
     }
@@ -344,6 +346,7 @@ export default function KnowledgePage() {
               </>
             )}
           </Button>
+          {uploadMsg ? <p className="text-muted-foreground text-sm">{uploadMsg}</p> : null}
         </CardContent>
       </Card>
 
@@ -362,7 +365,7 @@ export default function KnowledgePage() {
               placeholder="https://example.com/article"
               className="flex-1 text-sm"
               onKeyDown={(e) => {
-                if (e.key === "Enter") void crawl();
+                if (e.key === "Enter" && wsId && urlInput.trim() && !crawling) void crawl();
               }}
             />
             <Button
@@ -381,6 +384,7 @@ export default function KnowledgePage() {
               )}
             </Button>
           </div>
+          {crawlMsg ? <p className="text-muted-foreground text-sm">{crawlMsg}</p> : null}
         </CardContent>
       </Card>
 
