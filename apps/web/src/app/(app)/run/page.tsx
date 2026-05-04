@@ -27,6 +27,7 @@ import { FlowGraph } from "@/components/flow/FlowGraph";
 import { TokenStream } from "@/components/flow/TokenStream";
 import { AgentTimeline, type ExecRow } from "@/components/flow/AgentTimeline";
 import { MemoryDrawer } from "@/components/flow/MemoryDrawer";
+import { CitationsPanel, type CitationSource } from "@/components/flow/CitationsPanel";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
@@ -194,6 +195,7 @@ export default function RunPage() {
   const [traceLines, setTraceLines] = useState<string[]>([]);
   const traceBottomRef = useRef<HTMLDivElement>(null);
   const [traceVerbose, setTraceVerbose] = useState(false);
+  const [citations, setCitations] = useState<CitationSource[]>([]);
   const traceVerboseRef = useRef(false);
 
   const prefsDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -348,6 +350,7 @@ export default function RunPage() {
     setTraceLines([]);
     setLastExecutionId(null);
     setFeedbackMsg(null);
+    setCitations([]);
     const apiBase = getApiBase();
     try {
       const res = await apiFetch<{ execution_id: string }>(`/api/v1/agents/${agentId}/execute`, {
@@ -402,6 +405,8 @@ export default function RunPage() {
           } else if (data.kind === "error") {
             appendTraceLine(`error · ${data.message ?? "unknown"}`);
             setNode("synthesizer", { status: "error" });
+          } else if (data.kind === "citations" && Array.isArray((data as { payload?: unknown }).payload)) {
+            setCitations((data as { payload: CitationSource[] }).payload);
           } else if (data.kind === "done") {
             appendTraceLine("done · stream closed");
             es.close();
@@ -648,6 +653,11 @@ export default function RunPage() {
                     />
                   </div>
                 </ScrollArea>
+                {citations.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border/40 px-4 pb-4">
+                    <CitationsPanel citations={citations} />
+                  </div>
+                )}
               </CardContent>
             </Card>
 
