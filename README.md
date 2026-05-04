@@ -1,186 +1,161 @@
 # Flow
 
-Agent platform: **FastAPI** (LangGraph deer-flow pipeline, asyncpg, JWT, SSE), **Redis + ARQ** for background execution jobs, **PostgreSQL + pgvector**, and **Next.js** (App Router, Tailwind v4, shadcn-style UI). Docker Compose for local dev.
+Personal second brain and agent platform. Upload PDFs and documents, ask questions, get cited answers. Built on **FastAPI** (LangGraph pipeline, asyncpg, JWT, SSE), **Redis + ARQ** for background jobs, **PostgreSQL + pgvector**, and **Next.js** (App Router, Tailwind v4).
+
+## What you can do today
+
+- **Upload documents** — PDF, .docx, .md, .txt up to 20 MB
+- **Crawl URLs** — paste a web page, Flow extracts and indexes the main content
+- **Ask questions** — streamed answers with inline `[1]` `[2]` citation markers
+- **See sources** — click any citation to expand the exact chunk from your document
+- **Feedback loop** — 👍/👎 on answers; negative feedback improves future retrievals
+- **Onboarding wizard** — guided first-run that gets you from signup to first answer in under 2 minutes
+
+---
 
 ## Monorepo layout
 
 | Path | Role |
 |------|------|
 | `apps/web/` | Next.js frontend |
-| `services/api/` | Python package `flow` — REST API, migrations (`migrations/`), Alembic (`alembic.ini`) |
+| `services/api/` | Python package `flow` — REST API, LangGraph agents, migrations |
 | `docker-compose.yml` | `db`, `redis`, `qdrant`, `api`, `worker`, `web` |
-
-## Where to run commands (important)
-
-**`docker compose`** must run from the **repository root** (folder containing `docker-compose.yml`, `apps/`, `services/`).
-
-Check: `ls docker-compose.yml apps/web services/api` lists all three.
 
 ---
 
 ## Quick start (Docker)
 
 ```bash
-cd /path/to/Flow    # your clone root
+cd /path/to/Flow
 cp .env.example .env
-# optional: export FLOW_OPENAI_API_KEY=sk-... for real LLM runs
-
+# Add your OpenAI key for embeddings + LLM answers:
+# FLOW_OPENAI_API_KEY=sk-...
 docker compose up --build
 ```
 
-Minimum useful stack without the Next image:
+| Host URL | Service |
+| -------- | ------- |
+| **<http://localhost:13000>** | UI |
+| **<http://localhost:18000/docs>** | API (OpenAPI) |
+| `localhost:55432` | Postgres |
+| `localhost:16379` | Redis |
+| `localhost:16333` | Qdrant (optional agentic RAG) |
+
+---
+
+## First run walkthrough
+
+1. Open **<http://localhost:13000>** → register
+2. Onboarding wizard: choose **"Ask questions about my documents"** → upload a PDF
+3. Go to **Run** → type a question → get a streamed answer with cited sources
+4. Click a `[1]` citation → see the exact document chunk the answer came from
+5. Rate the answer → low scores feed back into the retrieval grader
+
+---
+
+## Knowledge ingestion
+
+### Via the UI (`/knowledge`)
+
+- **Upload file** — drag/click to pick PDF, .md, .txt, .docx (max 20 MB)
+- **Add from URL** — paste any `https://` URL, Flow strips nav/footer and indexes the article body
+- **Add from text** — paste raw markdown or plain text directly
+
+### Via the API
 
 ```bash
-docker compose up --build db redis qdrant api worker web
+# File upload
+curl -X POST http://localhost:18000/api/v1/knowledge/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "workspace_id=$WID" \
+  -F "file=@/path/to/doc.pdf"
+
+# URL crawl
+curl -X POST http://localhost:18000/api/v1/knowledge/crawl \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"workspace_id\": \"$WID\", \"url\": \"https://example.com/article\"}"
 ```
 
-If you disable agentic RAG and omit Qdrant, you can still run `docker compose up --build db redis api worker web` and omit `FLOW_QDRANT_URL` / `FLOW_AGENTIC_RAG_ENABLED` on the API/worker (see `.env.example`).
+Both return `{ "id": "<source_id>", "title": "..." }`. The source appears immediately in the sources list; chunk count updates as embedding finishes.
 
-### Published ports (host → container)
+---
 
-| Host | Service | Notes |
-|------|---------|--------|
-| **http://localhost:13000** | `web` → :3000 | UI (avoid clash with another app on **:3000**) |
-| **http://localhost:18000**/docs | `api` → :8000 | OpenAPI |
-| **localhost:55432** | `db` → Postgres :5432 | See [PostgreSQL](#postgresql-local-connection) |
-| **localhost:16333** | `qdrant` → HTTP :6333 | Hybrid vector index for optional **agentic RAG** (`FLOW_QDRANT_URL`) |
-| **localhost:16379** | `redis` → :6379 | Host port avoids clash if something else uses **:6379** |
+## Running agents (`/run`)
 
-Inside Compose, services talk on the Docker network: `postgresql://flow:flow@db:5432/flow`, `redis://redis:6379/0`, API/worker use `FLOW_QDRANT_URL=http://qdrant:6333` when agentic RAG is enabled.
+Select an agent, type a message, hit **Run**. The LangGraph pipeline streams:
 
-### Agentic RAG (optional)
-
-When **`FLOW_AGENTIC_RAG_ENABLED=true`** and **`FLOW_QDRANT_URL`** points at Qdrant (Compose sets both on `api`/`worker`), deer-flow **worker** retrieval uses a LangGraph pipeline (supervisor routing, Qdrant hybrid RRF + BM25 sparse, LLM grader, query rewrite, optional Tavily fallback). Knowledge ingest **dual-writes** chunks to Postgres and Qdrant. Audit rows land in **`rag_query_history`** / **`rag_citations`** (after migration `0003`). Without those env vars, retrieval stays **pgvector-only** as before.
-
-Smoke from repo root with Compose up:
-
-1. Set `FLOW_OPENAI_API_KEY`, optionally `FLOW_TAVILY_API_KEY`.
-2. `docker compose up --build`
-3. Add knowledge via API so chunks sync to Qdrant; run an execution with retrieve enabled.
-
-Host URL when Qdrant is mapped on **16333**: `FLOW_QDRANT_URL=http://localhost:16333` (local API/worker against Compose Qdrant).
-
-### Logs & LangSmith
-
-- **`docker compose logs -f api worker`** — structlog console output with **`service=flow-api`** / **`service=flow-worker`** and agentic events (`agentic_rag.supervisor`, `agentic_rag.retrieve`, …). Compose enables **`FLOW_LOG_FORCE_COLORS=true`** so logs stay readable without a TTY.
-- **LangSmith** (optional): in `.env` at repo root (Compose substitutes into containers):
-
-```bash
-FLOW_LANGSMITH_TRACING=true
-FLOW_LANGSMITH_API_KEY=lsv2_pt_...   # from https://smith.langchain.com → Settings → API keys
-FLOW_LANGSMITH_PROJECT=flow-local
-# EU hosted Smith only:
-# FLOW_LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
+```text
+planner → worker (RAG + memory) → synthesizer → citations SSE event
 ```
 
-Restart `api` and `worker` after changing these. Traces cover LangChain/LangGraph calls (deer-flow + agentic RAG subgraph).
+Worker retrieves up to 8 knowledge chunks (pgvector cosine), numbers them `[1]…[N]`, and instructs the LLM to cite inline. Synthesizer emits a `citations` SSE frame that the frontend uses to render the **Sources** panel below the answer.
 
-### Quick sanity checks
+**Tools per agent** (configurable in Run page):
 
-```bash
-cd /path/to/Flow   # repo root
-docker compose ps
-curl -s http://localhost:18000/health
-docker compose logs -f api worker   # expect lifespan.started, worker.started, then agentic_rag.* on runs
-```
+| Tool | Effect |
+| ---- | ------ |
+| Knowledge search | Enable pgvector retrieval |
+| Long-term memory | Recall past run summaries |
+| Sandbox | Execute Python code blocks |
 
-**Execution SSE:** the Run flow uses a short-lived `stream_jwt` query param where possible so the session JWT is not logged in URLs.
+---
+
+## Feedback loop
+
+After each run, rate the answer (slider 0–100%). Scores below 50% automatically insert an **agent negative** — a record of the query that produced a poor result. The worker grader uses top-5 negatives as few-shot examples to avoid repeating similar bad retrievals.
 
 ---
 
 ## PostgreSQL (local connection)
 
-Credentials are fixed in `docker-compose.yml` for dev:
-
-| Field | Value |
-|-------|--------|
-| Host | `localhost` (from your Mac/host), or hostname `db` from another container |
-| Port | **55432** (mapped from container `5432`) |
-| User | `flow` |
-| Password | `flow` |
-| Database | `flow` |
-
-**Connection URL (tools on the host — TablePlus, DBeaver, `psql`):**
-
 ```text
 postgresql://flow:flow@localhost:55432/flow
 ```
 
-**CLI (`psql`)** — start DB first (`docker compose up -d db`):
-
-```bash
-psql "postgresql://flow:flow@localhost:55432/flow"
-```
-
-**From inside the Compose network** (e.g. one-off container): host is `db`, port `5432`:
-
-```text
-postgresql://flow:flow@db:5432/flow
-```
-
-**Migrations:** on API startup, Alembic runs `upgrade head`. Manual run from repo root:
-
-```bash
-( cd services/api && FLOW_DATABASE_URL=postgresql://flow:flow@localhost:55432/flow uv run alembic upgrade head )
-```
-
-Alembic uses **psycopg v3** (`postgresql+psycopg://`); bare `postgresql://` URLs are normalized in `migrations/env.py`.
+Migrations run automatically on API startup via Alembic.
 
 ---
 
-## Worker (`arq`)
-
-The `worker` service runs **ARQ** jobs (e.g. `run_deer_execution`). For queued runs to complete, **`worker` must be up** alongside `api`, `db`, and `redis`.
-
----
-
-## Dev without Docker (API + Next on the host)
-
-Keep Postgres (and optionally Redis) in Docker:
+## Dev without Docker
 
 ```bash
+# Keep DB + Redis in Docker
 docker compose up -d db redis
+
 export FLOW_DATABASE_URL=postgresql://flow:flow@localhost:55432/flow
 export FLOW_REDIS_URL=redis://localhost:16379/0
 export FLOW_JWT_SECRET=$(openssl rand -hex 32)
-cd services/api && uv sync --extra dev && uv run uvicorn flow.interfaces.http.main:app --reload --host 0.0.0.0 --port 8000
-```
+export FLOW_OPENAI_API_KEY=sk-...
 
-If Redis is mapped on **16379** (default in this repo), use `FLOW_REDIS_URL` as above. If you use a local Redis on **6379**, use `redis://localhost:6379/0`.
+cd services/api && uv sync --extra dev
+uv run uvicorn flow.interfaces.http.main:app --reload --port 8000
 
-Second terminal (from repo root):
-
-```bash
+# Second terminal
 cd apps/web && npm install && npm run dev
-```
-
-Next → **http://localhost:3000**. Point the web app at the API via `apps/web/.env.local`:
-
-- API in Docker on the host: `NEXT_PUBLIC_FLOW_API_URL=http://localhost:18000`
-- Local uvicorn only: `NEXT_PUBLIC_FLOW_API_URL=http://localhost:8000`
-
-Set `FLOW_CORS_ORIGINS` to include `http://localhost:3000` (and `http://localhost:13000` if needed).
-
----
-
-## Optional: tests + web build before full compose
-
-From **repository root**:
-
-```bash
-docker compose up -d db
-( cd services/api && uv sync --extra dev && uv run python -m pytest tests/ -q )
-( cd apps/web && npm ci && npm run build )
-docker compose up --build
+# → http://localhost:3000
+# Set apps/web/.env.local: NEXT_PUBLIC_FLOW_API_URL=http://localhost:8000
 ```
 
 ---
 
-## API image only
+## Agentic RAG (optional)
+
+When `FLOW_AGENTIC_RAG_ENABLED=true` and `FLOW_QDRANT_URL` is set, retrieval uses a LangGraph sub-pipeline (supervisor routing, Qdrant hybrid RRF + BM25, LLM grader, query rewrite, optional Tavily fallback). Knowledge ingest dual-writes to Postgres and Qdrant. Without these env vars, retrieval falls back to pgvector-only.
+
+---
+
+## Tests
 
 ```bash
-docker build -t flow-api -f services/api/Dockerfile services/api
+# Unit + offline tests (no DB needed)
+cd services/api && uv run pytest tests/ -v --ignore=tests/test_health.py
+
+# Full suite (requires Postgres on 55432)
+docker compose up -d db && uv run pytest tests/ -v
 ```
+
+---
 
 ## License
 
