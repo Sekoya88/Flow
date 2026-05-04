@@ -13,6 +13,23 @@ from flow.interfaces.http.schemas import FeedbackIn
 
 router = APIRouter(prefix="/api/v1/executions", tags=["feedback"])
 
+NEGATIVE_SCORE_THRESHOLD = 0.5
+
+
+async def _maybe_insert_negative(
+    *,
+    repo: FlowRepository,
+    execution_id: UUID,
+    workspace_id: UUID,
+    agent_id: UUID,
+    user_message: str,
+    score: float,
+) -> None:
+    if score >= NEGATIVE_SCORE_THRESHOLD:
+        return
+    content = f"Query: {user_message[:300]}\n[rated {score:.0%} — poor quality]"
+    await repo.insert_agent_negative(workspace_id, agent_id, content, source="feedback")
+
 
 @router.post("/{execution_id}/feedback")
 async def post_feedback(
@@ -35,5 +52,13 @@ async def post_feedback(
         execution_id=execution_id,
         score=body.score,
         openai_api_key=settings.openai_api_key,
+    )
+    await _maybe_insert_negative(
+        repo=repo,
+        execution_id=execution_id,
+        workspace_id=wid,
+        agent_id=row["agent_id"],
+        user_message=row["user_message"] or "",
+        score=body.score,
     )
     return {"ok": True, "proposal_id": str(pid) if pid else None}
