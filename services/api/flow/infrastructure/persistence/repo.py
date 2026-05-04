@@ -285,7 +285,9 @@ class FlowRepository:
     ) -> list[asyncpg.Record]:
         return await self._pool.fetch(
             """
-            SELECT kc.content, kc.embedding <=> $1::vector AS dist
+            SELECT kc.id, kc.chunk_index, kc.content,
+                   ks.id AS source_id, ks.title AS source_title,
+                   kc.embedding <=> $1::vector AS dist
             FROM knowledge_chunks kc
             JOIN knowledge_sources ks ON ks.id = kc.source_id
             WHERE ks.workspace_id = $2

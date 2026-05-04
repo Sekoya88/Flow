@@ -51,6 +51,7 @@ def _last_human_text(state: FlowGraphState) -> str:
 async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bool]):
     repo = FlowRepository(ctx.pool)
     rag_bits: list[str] = []
+    rag_sources: list[dict] = []
     mem_bits: list[str] = []
     settings = ctx.settings
     use_agentic = bool(
@@ -71,11 +72,29 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
 
                         rag_bits = (await run_agentic_retrieval(ctx, user_text))[0]
                     else:
-                        rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=4)
+                        rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=8)
                         rag_bits = [r["content"] for r in rows]
+                        rag_sources = [
+                            {
+                                "source_id": str(r["source_id"]),
+                                "title": r["source_title"],
+                                "chunk_index": r["chunk_index"],
+                                "preview": r["content"][:200],
+                            }
+                            for r in rows
+                        ]
                 except Exception:
-                    rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=4)
+                    rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=8)
                     rag_bits = [r["content"] for r in rows]
+                    rag_sources = [
+                        {
+                            "source_id": str(r["source_id"]),
+                            "title": r["source_title"],
+                            "chunk_index": r["chunk_index"],
+                            "preview": r["content"][:200],
+                        }
+                        for r in rows
+                    ]
             if tools["long_term_memory"]:
                 try:
                     mrows = await repo.search_memories(
@@ -86,7 +105,7 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
                     pass
         except Exception:
             pass
-    return rag_bits, mem_bits
+    return rag_bits, rag_sources, mem_bits
 
 
 # ---------------------------------------------------------------------------
@@ -126,34 +145,40 @@ def make_worker(ctx: GraphContext):
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             plan = state.get("plan") or ""
             user_text = _last_human_text(state)
-            rag_bits, mem_bits = await _rag_and_memory(ctx, user_text, tools)
+            rag_bits, rag_sources, mem_bits = await _rag_and_memory(ctx, user_text, tools)
             prefs = await repo.get_preferences(ctx.user_id)
             pref_lines = [f"{r['key']}: {r['value']}" for r in prefs[:20]]
 
-            # Include agent negatives to avoid past mistakes
             neg_rows = await repo.list_agent_negatives(ctx.workspace_id, ctx.agent_id, limit=5)
             neg_bits = [r["content"] for r in neg_rows]
 
-            rag_block = "\n---\n".join(rag_bits) or "(knowledge RAG disabled or no hits)"
+            numbered_snippets = "\n\n".join(
+                f"[{i + 1}] {chunk}" for i, chunk in enumerate(rag_bits)
+            ) or "(knowledge RAG disabled or no hits)"
             mem_block = "\n---\n".join(mem_bits) or "(long-term memory off or no hits)"
             pref_block = "\n".join(pref_lines) or "(no user preferences)"
             neg_block = "\n".join(f"- {n}" for n in neg_bits) or "(none)"
 
             llm = _get_llm(ctx)
             if llm is None:
-                body = f"RAG:\n{rag_block}\n\nMemories:\n{mem_block}\n\nUser prefs:\n{pref_block}\n\nPlan:\n{plan}"
-                return {"worker_output": body[:8000], "messages": [AIMessage(content=f"[worker]\n{body[:4000]}")]}
+                body = f"RAG:\n{numbered_snippets}\n\nMemories:\n{mem_block}\n\nUser prefs:\n{pref_block}\n\nPlan:\n{plan}"
+                return {
+                    "worker_output": body[:8000],
+                    "rag_sources": rag_sources,
+                    "messages": [AIMessage(content=f"[worker]\n{body[:4000]}")],
+                }
 
             out = await llm.ainvoke([
                 SystemMessage(content=(
                     "You are a worker node. Use the plan, user message, retrieved snippets, "
                     "long-term memories, and preferences. Produce structured research notes. "
+                    "Reference knowledge snippets by their [N] number when relevant. "
                     "If user asks to run code, output a single fenced python block.\n\n"
                     f"Known mistakes to avoid:\n{neg_block}"
                 )),
                 HumanMessage(content=(
                     f"User message:\n{user_text}\n\nPlan:\n{plan}\n\n"
-                    f"Preferences:\n{pref_block}\n\nRetrieved knowledge:\n{rag_block}\n\n"
+                    f"Preferences:\n{pref_block}\n\nRetrieved knowledge (cite as [N]):\n{numbered_snippets}\n\n"
                     f"Long-term memories:\n{mem_block}"
                 )),
             ])
@@ -167,7 +192,11 @@ def make_worker(ctx: GraphContext):
                 text = f"{text}\n\n[sandbox]\n{result}"
             elif not tools["sandbox"] and "```python" in text:
                 text = f"{text}\n\n[sandbox disabled in agent tools — code not executed]"
-            return {"worker_output": text, "messages": [AIMessage(content=f"[worker]\n{text[:6000]}")]}
+            return {
+                "worker_output": text,
+                "rag_sources": rag_sources,
+                "messages": [AIMessage(content=f"[worker]\n{text[:6000]}")],
+            }
 
     return worker
 
@@ -181,6 +210,7 @@ def make_synthesizer(ctx: GraphContext):
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             plan = state.get("plan") or ""
             notes = state.get("worker_output") or ""
+            rag_sources = state.get("rag_sources") or []
             llm = _get_llm(ctx)
             if llm is None:
                 answer = (
@@ -188,11 +218,21 @@ def make_synthesizer(ctx: GraphContext):
                     f"Configure the key to enable full LLM. Plan (stub): {plan[:500]}"
                 )
                 return {"answer": answer, "confidence": 0.5, "messages": [AIMessage(content=answer)]}
+
+            citation_instruction = ""
+            if rag_sources:
+                citation_instruction = (
+                    "\n\nWhen the answer draws on retrieved knowledge, add inline citation markers "
+                    "like [1] or [2] where relevant. The numbers correspond to the snippets the "
+                    "worker received, numbered starting from 1."
+                )
+
             out = await llm.ainvoke([
                 SystemMessage(content=(
                     "You are the synthesizer. Write the final concise answer. "
                     "Then on a new line write exactly: CONFIDENCE: <float 0.0-1.0> "
                     "where the float reflects how confident you are in the answer completeness."
+                    + citation_instruction
                 )),
                 HumanMessage(content=f"Plan:\n{plan}\n\nWorker notes:\n{notes}"),
             ])
@@ -206,7 +246,11 @@ def make_synthesizer(ctx: GraphContext):
                     confidence = max(0.0, min(1.0, float(parts[1].strip().split()[0])))
                 except (ValueError, IndexError):
                     pass
-            return {"answer": answer, "confidence": confidence, "messages": [AIMessage(content=answer)]}
+            return {
+                "answer": answer,
+                "confidence": confidence,
+                "messages": [AIMessage(content=answer)],
+            }
 
     return synthesizer
 
@@ -227,7 +271,7 @@ def make_researcher(ctx: GraphContext):
             prior = state.get("research_notes") or ""
             critique = state.get("critique") or ""
             iterations = state.get("research_iterations", 0)
-            rag_bits, mem_bits = await _rag_and_memory(ctx, user_text, tools)
+            rag_bits, _rag_src, mem_bits = await _rag_and_memory(ctx, user_text, tools)
 
             rag_block = "\n---\n".join(rag_bits) or "(no knowledge hits)"
             mem_block = "\n---\n".join(mem_bits) or "(no memory hits)"

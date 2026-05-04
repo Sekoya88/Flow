@@ -27,3 +27,4 @@ class FlowGraphState(TypedDict, total=False):
     # human-in-loop fields
     requires_approval: bool
     approved: bool
+    rag_sources: list[dict]  # [{"source_id": str, "title": str, "chunk_index": int, "preview": str}]
