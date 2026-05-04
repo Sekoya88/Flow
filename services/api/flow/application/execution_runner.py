@@ -143,6 +143,12 @@ async def run_deer_execution(
 
         await repo.insert_event(execution_id, "final", {"answer": str(answer), "confidence": confidence})
         stream_hub.publish(execution_id, {"kind": "final", "answer": str(answer), "confidence": confidence})
+
+        rag_sources = values.get("rag_sources") or []
+        if rag_sources:
+            await repo.insert_event(execution_id, "citations", {"citations": rag_sources})
+            stream_hub.publish(execution_id, {"kind": "citations", "payload": rag_sources})
+
         await repo.complete_execution(execution_id, "completed", None)
         logger.info(
             "execution.completed",
