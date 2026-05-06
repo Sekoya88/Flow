@@ -633,6 +633,72 @@ class FlowRepository:
         assert row is not None
         return row["id"]
 
+    # ------------------------------------------------------------------
+    # Agent schedules
+    # ------------------------------------------------------------------
+
+    async def create_agent_schedule(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        user_id: UUID,
+        cron_expr: str,
+        prompt_template: str,
+        delivery_type: str = "none",
+        delivery_target: str | None = None,
+    ) -> UUID:
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO agent_schedules
+                (workspace_id, agent_id, user_id, cron_expr, prompt_template, delivery_type, delivery_target)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+            """,
+            workspace_id, agent_id, user_id, cron_expr, prompt_template, delivery_type, delivery_target,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def list_agent_schedules(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            """
+            SELECT s.*, a.name AS agent_name
+            FROM agent_schedules s
+            JOIN agents a ON a.id = s.agent_id
+            WHERE s.workspace_id = $1 AND s.user_id = $2
+            ORDER BY s.created_at DESC
+            """,
+            workspace_id, user_id,
+        )
+
+    async def list_enabled_schedules(self) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            "SELECT * FROM agent_schedules WHERE enabled = true"
+        )
+
+    async def update_schedule_enabled(self, schedule_id: UUID, enabled: bool) -> None:
+        await self._pool.execute(
+            "UPDATE agent_schedules SET enabled = $1 WHERE id = $2",
+            enabled, schedule_id,
+        )
+
+    async def update_schedule_last_run(self, schedule_id: UUID) -> None:
+        await self._pool.execute(
+            "UPDATE agent_schedules SET last_run_at = now() WHERE id = $1",
+            schedule_id,
+        )
+
+    async def delete_agent_schedule(self, schedule_id: UUID, workspace_id: UUID) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM agent_schedules WHERE id = $1 AND workspace_id = $2",
+            schedule_id, workspace_id,
+        )
+        return result == "DELETE 1"
+
     async def list_agent_negatives(
         self,
         workspace_id: UUID,

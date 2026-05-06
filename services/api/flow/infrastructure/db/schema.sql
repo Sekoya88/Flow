@@ -124,3 +124,20 @@ CREATE TABLE IF NOT EXISTS reasoning_patterns (
 
 CREATE INDEX IF NOT EXISTS ix_reasoning_patterns_lookup
     ON reasoning_patterns (workspace_id, agent_id);
+
+CREATE TABLE IF NOT EXISTS agent_schedules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    agent_id UUID NOT NULL REFERENCES agents (id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    cron_expr TEXT NOT NULL DEFAULT '0 8 * * *',
+    prompt_template TEXT NOT NULL DEFAULT 'Summarize the latest AI research papers from today.',
+    delivery_type TEXT NOT NULL DEFAULT 'none' CHECK (delivery_type IN ('none', 'webhook')),
+    delivery_target TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    last_run_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_agent_schedules_workspace
+    ON agent_schedules (workspace_id, enabled);
