@@ -54,6 +54,7 @@ async def task_run_deer_execution(
     user_id: str,
     user_message: str,
     agent_config: dict,
+    schedule_id: str | None = None,
 ) -> None:
     import structlog
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -82,6 +83,7 @@ async def task_run_deer_execution(
             user_id=UUID(user_id),
             user_message=user_message,
             agent_config=agent_config,
+            schedule_id=schedule_id,
         )
     finally:
         structlog.contextvars.unbind_contextvars(

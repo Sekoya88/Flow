@@ -33,6 +33,35 @@ def _get_llm_for_judge(settings):
         return None
 
 
+async def _get_schedule_delivery(pool, schedule_id: str) -> dict | None:
+    """Fetch delivery config for a schedule. Returns None on any failure."""
+    try:
+        from uuid import UUID as _UUID
+        row = await pool.fetchrow(
+            "SELECT delivery_type, delivery_target FROM agent_schedules WHERE id = $1",
+            _UUID(schedule_id),
+        )
+        if row:
+            return {"type": row["delivery_type"], "target": row["delivery_target"]}
+    except Exception:
+        pass
+    return None
+
+
+async def _fire_webhook(url: str, execution_id: str, agent_id: str, answer: str) -> None:
+    """POST execution result to webhook URL. Best-effort."""
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(url, json={
+                "execution_id": execution_id,
+                "agent_id": agent_id,
+                "answer": answer,
+            })
+    except Exception as exc:
+        logger.warning("webhook delivery failed: %s", exc)
+
+
 def _json_safe(obj: Any) -> Any:
     try:
         json.dumps(obj)
@@ -81,6 +110,7 @@ async def run_deer_execution(
     user_id: UUID,
     user_message: str,
     agent_config: dict[str, Any] | None = None,
+    schedule_id: str | None = None,
 ) -> None:
     repo = FlowRepository(pool)
     cfg = dict(agent_config) if isinstance(agent_config, dict) else {}
@@ -170,6 +200,18 @@ async def run_deer_execution(
             stream_hub.publish(execution_id, {"kind": "citations", "payload": rag_sources})
 
         await repo.complete_execution(execution_id, "completed", None)
+
+        # Webhook delivery for scheduled runs
+        if schedule_id:
+            _delivery = await _get_schedule_delivery(pool, schedule_id)
+            if _delivery and _delivery["type"] == "webhook" and _delivery["target"]:
+                await _fire_webhook(
+                    url=_delivery["target"],
+                    execution_id=str(execution_id),
+                    agent_id=str(agent_id),
+                    answer=str(answer)[:4000],
+                )
+
         _duration_ms = int((_time.monotonic() - _t_start) * 1000)
         _log_banner(
             logger,
