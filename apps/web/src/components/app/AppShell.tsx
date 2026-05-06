@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
   Brain,
+  CalendarClock,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -44,6 +45,7 @@ const primaryNav = [
   { href: "/memory", label: "Memory", icon: Brain },
   { href: "/agents", label: "Agents", icon: Workflow },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
+  { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 
