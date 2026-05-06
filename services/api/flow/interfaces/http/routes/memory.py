@@ -80,3 +80,17 @@ async def get_tiered_memories(
             for r in semantic_rows
         ],
     }
+
+
+@router.delete("/episodic/{memory_id}")
+async def delete_episodic_memory(
+    memory_id: UUID,
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    await _assert_workspace(user_id, workspace_id, repo)
+    deleted = await repo.delete_episodic_memory(memory_id, workspace_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="memory not found")
+    return {"deleted": True}
