@@ -12,7 +12,7 @@ export type TraceNode = {
 
 export type TraceToolCall = {
   tool: string;
-  duration_ms: number;
+  duration_ms: number | null;
   status: "success" | "error";
   input: string;
   output: string;
@@ -64,14 +64,15 @@ export function ExecutionTimeline({ trace }: { trace: ExecutionTrace }) {
       {/* Gantt bars */}
       <div className="space-y-2">
         {nodes.map((node, i) => {
-          const pct =
-            total > 0 && node.duration_ms !== null
-              ? Math.max(4, (node.duration_ms / total) * 100)
-              : 20;
           const offset =
             total > 0
               ? (nodes.slice(0, i).reduce((s, n) => s + (n.duration_ms ?? 0), 0) / total) * 100
               : 0;
+          const remaining = Math.max(0, 100 - offset);
+          const pct =
+            total > 0 && node.duration_ms !== null
+              ? Math.min(Math.max(4, (node.duration_ms / total) * 100), remaining)
+              : Math.min(20, remaining);
           const color = NODE_COLORS[node.name] ?? "bg-slate-500/80";
 
           return (
