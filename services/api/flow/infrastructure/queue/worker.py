@@ -9,6 +9,7 @@ from uuid import UUID
 import arq
 
 from flow.application.execution_runner import run_deer_execution
+from flow.application.scheduler import scheduler_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
@@ -90,6 +91,7 @@ async def task_run_deer_execution(
 
 class WorkerSettings:
     functions = [arq.func(task_run_deer_execution, name="run_deer_execution")]
+    cron_jobs = [arq.cron(scheduler_tick, minute=set(range(60)), run_at_startup=False)]
     on_startup = startup
     on_shutdown = shutdown
     # Concrete RedisSettings required: arq passes __dict__ values to Worker and does not resolve @property.
