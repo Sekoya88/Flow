@@ -36,12 +36,19 @@ type Schedule = {
 type AgentRow = { id: string; name: string };
 
 export default function SchedulesPage() {
-  const workspaceId = useStore((s) => s.workspaceId);
+  const workspaces = useStore((s) => s.workspaces);
+  const workspaceId = workspaces[0]?.id ?? null;
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    agent_id: string;
+    cron_expr: string;
+    prompt_template: string;
+    delivery_type: string;
+    delivery_target: string;
+  }>({
     agent_id: "",
     cron_expr: "0 8 * * *",
     prompt_template: "Summarize the latest AI research papers from today.",
@@ -139,7 +146,7 @@ export default function SchedulesPage() {
                 <Label>Agent</Label>
                 <Select
                   value={form.agent_id}
-                  onValueChange={(v) => setForm((f) => ({ ...f, agent_id: v }))}
+                  onValueChange={(v) => setForm((f) => ({ ...f, agent_id: v ?? "" }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select agent" />
@@ -176,7 +183,7 @@ export default function SchedulesPage() {
                 <Label>Delivery</Label>
                 <Select
                   value={form.delivery_type}
-                  onValueChange={(v) => setForm((f) => ({ ...f, delivery_type: v }))}
+                  onValueChange={(v) => setForm((f) => ({ ...f, delivery_type: v ?? "none" }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
