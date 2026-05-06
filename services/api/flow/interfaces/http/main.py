@@ -38,6 +38,7 @@ from flow.interfaces.http.routes import (
     preferences,
     proposals,
     tools,
+    trace,
     workspaces,
 )
 
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router)
     app.include_router(meta.router)
     app.include_router(tools.router)
+    app.include_router(trace.router)
     return app
 
 
