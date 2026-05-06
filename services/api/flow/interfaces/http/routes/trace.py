@@ -48,7 +48,7 @@ async def get_execution_trace(
                 "tool": payload.get("tool", "unknown"),
                 "duration_ms": payload.get("duration_ms", 0),
                 "status": payload.get("status", "success"),
-                "input": payload.get("input", {}),
+                "input": str(payload.get("input", ""))[:500],
                 "output": str(payload.get("output", ""))[:500],
             })
 
