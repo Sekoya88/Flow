@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -80,7 +81,17 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
                 ) : (
                   <ul className="space-y-3">
                     {episodic.map((m) => (
-                      <MemoryCard key={m.id} entry={m} tier="episodic" />
+                      <MemoryCard
+                        key={m.id}
+                        entry={m}
+                        tier="episodic"
+                        onDelete={async () => {
+                          await apiFetch(`/api/v1/memory/episodic/${m.id}?workspace_id=${workspaceId}`, {
+                            method: "DELETE",
+                          });
+                          setEpisodic((prev) => prev.filter((x) => x.id !== m.id));
+                        }}
+                      />
                     ))}
                   </ul>
                 )}
@@ -110,17 +121,37 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
   );
 }
 
-function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "semantic" }) {
+function MemoryCard({
+  entry,
+  tier,
+  onDelete,
+}: {
+  entry: MemoryEntry;
+  tier: "episodic" | "semantic";
+  onDelete?: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <li
       className={cn(
-        "rounded-lg border p-3 text-xs leading-relaxed",
+        "group relative rounded-lg border p-3 text-xs leading-relaxed",
         tier === "semantic"
           ? "border-flow-done/30 bg-flow-done/5"
           : "border-border/60 bg-muted/20",
       )}
     >
-      <p className="text-foreground/80">{entry.content}</p>
+      <p className="pr-6 text-foreground/80">{entry.content}</p>
       {entry.created_at ? (
         <time
           dateTime={entry.created_at}
@@ -132,6 +163,16 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
           })}
         </time>
       ) : null}
+      {onDelete && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-30"
+          aria-label="Delete memory"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
     </li>
   );
 }
