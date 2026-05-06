@@ -54,21 +54,38 @@ async def task_run_deer_execution(
     user_message: str,
     agent_config: dict,
 ) -> None:
+    import structlog
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    checkpointer = AsyncPostgresSaver(ctx["checkpoint_pool"])
-    await run_deer_execution(
-        pool=ctx["pool"],
-        settings=ctx["settings"],
-        stream_hub=ctx["stream_hub"],
-        checkpointer=checkpointer,
-        execution_id=UUID(execution_id),
-        workspace_id=UUID(workspace_id),
-        agent_id=UUID(agent_id),
-        user_id=UUID(user_id),
-        user_message=user_message,
-        agent_config=agent_config,
+    template = (
+        agent_config.get("template")
+        or (agent_config.get("graph") or {}).get("template", "unknown")
+        or "unknown"
     )
+    structlog.contextvars.bind_contextvars(
+        execution_id=execution_id,
+        agent_id=agent_id,
+        workspace_id=workspace_id,
+        template=template,
+    )
+    try:
+        checkpointer = AsyncPostgresSaver(ctx["checkpoint_pool"])
+        await run_deer_execution(
+            pool=ctx["pool"],
+            settings=ctx["settings"],
+            stream_hub=ctx["stream_hub"],
+            checkpointer=checkpointer,
+            execution_id=UUID(execution_id),
+            workspace_id=UUID(workspace_id),
+            agent_id=UUID(agent_id),
+            user_id=UUID(user_id),
+            user_message=user_message,
+            agent_config=agent_config,
+        )
+    finally:
+        structlog.contextvars.unbind_contextvars(
+            "execution_id", "agent_id", "workspace_id", "template"
+        )
 
 
 class WorkerSettings:
