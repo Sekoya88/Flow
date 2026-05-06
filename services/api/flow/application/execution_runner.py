@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time as _time
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +15,11 @@ from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
 
 logger = get_logger(__name__)
+
+
+def _log_banner(log, event: str, **kw) -> None:
+    """Emit a structured log entry used as a visual execution delimiter in Docker logs."""
+    log.info(event, **kw)
 
 
 def _json_safe(obj: Any) -> Any:
@@ -77,6 +83,7 @@ async def run_deer_execution(
         anthropic_api_key=settings.anthropic_api_key,
         execution_id=execution_id,
         settings=settings,
+        stream_hub=stream_hub,
     )
     graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
     config: dict[str, Any] = {
@@ -93,12 +100,14 @@ async def run_deer_execution(
     initial: dict[str, Any] = {"messages": [HumanMessage(content=user_message)]}
 
     debug_chunks = settings.log_level.strip().upper() == "DEBUG"
+    _t_start = _time.monotonic()
+    _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
     try:
-        logger.info(
-            "execution.started",
-            execution_id=str(execution_id),
-            workspace_id=str(workspace_id),
-            agent_id=str(agent_id),
+        _log_banner(
+            logger,
+            "execution.start ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            template=_template,
+            message_chars=len(user_message),
         )
         async for mode, chunk in graph.astream(initial, config, stream_mode=["updates", "messages"]):
             if debug_chunks:
@@ -150,12 +159,15 @@ async def run_deer_execution(
             stream_hub.publish(execution_id, {"kind": "citations", "payload": rag_sources})
 
         await repo.complete_execution(execution_id, "completed", None)
-        logger.info(
-            "execution.completed",
-            execution_id=str(execution_id),
-            confidence=confidence,
+        _duration_ms = int((_time.monotonic() - _t_start) * 1000)
+        _log_banner(
+            logger,
+            "execution.done  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            duration_ms=_duration_ms,
+            confidence=round(confidence, 3),
+            answer_chars=len(str(answer)),
+            template=_template,
         )
-        logger.debug("execution.completed.detail", answer_chars=len(str(answer)))
 
         # Save episodic memory: 1-sentence run summary
         if answer and settings.openai_api_key:
@@ -169,7 +181,14 @@ async def run_deer_execution(
             except Exception:
                 pass  # episodic save is best-effort
     except Exception as exc:
-        logger.exception("execution.failed", execution_id=str(execution_id), error=str(exc))
+        _duration_ms = int((_time.monotonic() - _t_start) * 1000)
+        logger.error(
+            "execution.failed ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            duration_ms=_duration_ms,
+            error=str(exc),
+            template=_template,
+            exc_info=True,
+        )
         await repo.insert_event(execution_id, "error", {"message": str(exc)})
         stream_hub.publish(execution_id, {"kind": "error", "message": str(exc)})
         await repo.complete_execution(execution_id, "failed", str(exc))
