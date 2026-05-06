@@ -116,6 +116,17 @@ TEMPLATES: dict[str, GraphSpec] = {
         entry="researcher",
     ),
 
+    "tool-agent": GraphSpec(
+        template="tool-agent",
+        nodes=["planner", "tool_agent", "synthesizer"],
+        edges=[
+            ("planner", "tool_agent"),
+            ("tool_agent", "synthesizer"),
+            ("synthesizer", "END"),
+        ],
+        entry="planner",
+    ),
+
     "human-in-loop": GraphSpec(
         template="human-in-loop",
         nodes=["planner", "human_gate", "worker", "synthesizer"],
@@ -133,6 +144,17 @@ TEMPLATES: dict[str, GraphSpec] = {
                     "waiting": "human_gate",
                 },
             )
+        ],
+        entry="planner",
+    ),
+
+    "orchestrator": GraphSpec(
+        template="orchestrator",
+        nodes=["planner", "tool_agent", "synthesizer"],
+        edges=[
+            ("planner", "tool_agent"),
+            ("tool_agent", "synthesizer"),
+            ("synthesizer", "END"),
         ],
         entry="planner",
     ),

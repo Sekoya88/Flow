@@ -479,6 +479,22 @@ def make_human_gate(ctx: GraphContext):
 # Tool-agent: LangChain function-calling node with web + workspace tools
 # ---------------------------------------------------------------------------
 
+def _check_tool_prereqs(tool_name: str, ctx: "GraphContext") -> str | None:
+    """Return an error string if tool requirements are not met, else None."""
+    settings = ctx.settings
+    PREREQS: dict[str, tuple[str, str]] = {
+        "tavily_search": ("tavily_api_key", "FLOW_TAVILY_API_KEY not configured — set it in settings"),
+        "knowledge_search": ("openai_api_key", "OpenAI API key required for knowledge search embedding"),
+        "long_term_memory": ("openai_api_key", "OpenAI API key required for memory search embedding"),
+    }
+    if tool_name not in PREREQS:
+        return None
+    attr, msg = PREREQS[tool_name]
+    if not (settings and getattr(settings, attr, None)):
+        return msg
+    return None
+
+
 def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
     from pydantic import BaseModel, Field
@@ -489,6 +505,10 @@ def _build_context_tools(ctx: GraphContext) -> list:
     lc_tools: list = []
 
     async def _emit_wrap(tool_name: str, coro, input_data: dict):
+        # Tool monitor: check prerequisites before invoking
+        prereq_err = _check_tool_prereqs(tool_name, ctx)
+        if prereq_err:
+            return f"[tool_monitor] {prereq_err}"
         t0 = time.time()
         try:
             result = await coro
@@ -578,6 +598,55 @@ def _build_context_tools(ctx: GraphContext) -> list:
             return "\n\n---\n\n".join(chunks) or "(no results)"
 
         lc_tools.append(StructuredTool.from_function(coroutine=_knowledge, name="knowledge_search", description="Search workspace knowledge base (uploaded PDFs, docs, URLs).", args_schema=KnowledgeArgs))
+
+    # subagent_call — inline sub-graph execution
+    class SubagentArgs(BaseModel):
+        agent_name: str = Field(description="Name of the target agent in this workspace")
+        message: str = Field(description="Message to send to the subagent")
+
+    async def _subagent_call(agent_name: str, message: str) -> str:
+        t0 = time.time()
+        try:
+            from flow.infrastructure.persistence.repo import FlowRepository as _Repo
+            from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx, build_deer_flow_graph
+            _repo = _Repo(ctx.pool)
+            # Find agent by name in workspace
+            agents = await _repo.list_agents(ctx.workspace_id)
+            target = next((a for a in agents if a["name"].lower() == agent_name.lower()), None)
+            if target is None:
+                return f"[subagent_call] Agent '{agent_name}' not found in workspace."
+            sub_config = target["config"] if isinstance(target["config"], dict) else {}
+            sub_ctx = _GCtx(
+                pool=ctx.pool,
+                workspace_id=ctx.workspace_id,
+                agent_id=target["id"],
+                user_id=ctx.user_id,
+                openai_api_key=ctx.openai_api_key,
+                agent_config=sub_config,
+                anthropic_api_key=ctx.anthropic_api_key,
+                execution_id=None,
+                settings=ctx.settings,
+                stream_hub=None,  # sub-runs don't stream to parent SSE
+            )
+            graph = build_deer_flow_graph(sub_ctx)
+            from langchain_core.messages import HumanMessage as _HM
+            result_state = await graph.ainvoke({"messages": [_HM(content=message)]})
+            answer = result_state.get("answer") or result_state.get("worker_output") or ""
+            if not answer:
+                msgs = result_state.get("messages") or []
+                answer = str(msgs[-1].content) if msgs else "(no answer)"
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], int((time.time() - t0) * 1000))
+            return str(answer)[:4000]
+        except Exception as exc:
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), int((time.time() - t0) * 1000), "error")
+            return f"[subagent_call] Error: {exc}"
+
+    lc_tools.append(StructuredTool.from_function(
+        coroutine=_subagent_call,
+        name="subagent_call",
+        description="Invoke another agent in this workspace as a subagent. Returns the subagent's answer. Use when you need to delegate a subtask to a specialized agent.",
+        args_schema=SubagentArgs,
+    ))
 
     return lc_tools
 
