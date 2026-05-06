@@ -5,7 +5,20 @@ matching LangGraph's `(state) -> dict` signature.
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
+
+from flow.infrastructure.observability.logging import get_logger as _get_node_logger
+
+_node_logger = _get_node_logger("flow.graph.node")
+
+try:
+    from langchain_core.traceable import traceable as _traceable
+except ImportError:
+    def _traceable(**_kw):  # type: ignore[misc]
+        def _wrap(fn):
+            return fn
+        return _wrap
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import NodeInterrupt
@@ -17,6 +30,30 @@ from flow.infrastructure.tools.sandbox.factory import get_sandbox
 
 if TYPE_CHECKING:
     from flow.infrastructure.graph.deer_graph import GraphContext
+
+
+def _emit_tool_call(
+    ctx: "GraphContext",
+    tool: str,
+    input_data: dict,
+    output: Any,
+    duration_ms: int,
+    status: str = "success",
+) -> None:
+    """Publish a tool_call SSE event. No-op when stream_hub is unavailable."""
+    if ctx.stream_hub is None or ctx.execution_id is None:
+        return
+    ctx.stream_hub.publish(
+        ctx.execution_id,
+        {
+            "kind": "tool_call",
+            "tool": tool,
+            "input": input_data,
+            "output": str(output)[:2000],
+            "duration_ms": duration_ms,
+            "status": status,
+        },
+    )
 
 
 DEFAULT_TOOLS = {"retrieve": True, "sandbox": True, "long_term_memory": True}
@@ -66,10 +103,10 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
         try:
             q_emb = (await emb_svc.embed_texts(api_key=ctx.openai_api_key, texts=[user_text]))[0]
             if tools["retrieve"]:
+                t0 = time.time()
                 try:
                     if use_agentic:
                         from flow.infrastructure.agentic_rag.pipeline import run_agentic_retrieval
-
                         rag_bits = (await run_agentic_retrieval(ctx, user_text))[0]
                     else:
                         rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=8)
@@ -83,6 +120,7 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
                             }
                             for r in rows
                         ]
+                    _emit_tool_call(ctx, "knowledge_search", {"query": user_text}, f"{len(rag_bits)} chunks", int((time.time() - t0) * 1000))
                 except Exception:
                     rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=8)
                     rag_bits = [r["content"] for r in rows]
@@ -95,12 +133,15 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
                         }
                         for r in rows
                     ]
+                    _emit_tool_call(ctx, "knowledge_search", {"query": user_text}, f"{len(rag_bits)} chunks (fallback)", int((time.time() - t0) * 1000))
             if tools["long_term_memory"]:
+                t0 = time.time()
                 try:
                     mrows = await repo.search_memories(
                         ctx.workspace_id, ctx.agent_id, ctx.user_id, q_emb, limit=4
                     )
                     mem_bits = [r["content"] for r in mrows]
+                    _emit_tool_call(ctx, "long_term_memory", {"query": user_text}, f"{len(mem_bits)} memories", int((time.time() - t0) * 1000))
                 except Exception:
                     pass
         except Exception:
@@ -116,7 +157,9 @@ def make_planner(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
     tracer = get_tracer()
 
+    @_traceable(name="flow.planner", run_type="chain")
     async def planner(state: FlowGraphState) -> dict:
+        _t0 = time.monotonic()
         with tracer.start_as_current_span("graph.planner") as span:
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             user_text = _last_human_text(state)
@@ -129,6 +172,7 @@ def make_planner(ctx: GraphContext):
                     HumanMessage(content=user_text),
                 ])
                 plan = str(out.content)
+            _node_logger.info("node.done", node="planner", duration_ms=int((time.monotonic() - _t0) * 1000))
             return {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
 
     return planner
@@ -140,7 +184,9 @@ def make_worker(ctx: GraphContext):
     tools = _resolved_tools(ctx.agent_config)
     repo = FlowRepository(ctx.pool)
 
+    @_traceable(name="flow.worker", run_type="chain")
     async def worker(state: FlowGraphState) -> dict:
+        _t0 = time.monotonic()
         with tracer.start_as_current_span("graph.worker") as span:
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             plan = state.get("plan") or ""
@@ -162,6 +208,7 @@ def make_worker(ctx: GraphContext):
             llm = _get_llm(ctx)
             if llm is None:
                 body = f"RAG:\n{numbered_snippets}\n\nMemories:\n{mem_block}\n\nUser prefs:\n{pref_block}\n\nPlan:\n{plan}"
+                _node_logger.info("node.done", node="worker", duration_ms=int((time.monotonic() - _t0) * 1000))
                 return {
                     "worker_output": body[:8000],
                     "rag_sources": rag_sources,
@@ -187,11 +234,14 @@ def make_worker(ctx: GraphContext):
                 start = text.index("```python") + len("```python")
                 end = text.index("```", start)
                 code = text[start:end].strip()
+                t0 = time.time()
                 sandbox = get_sandbox()
                 result = await sandbox.run(code)
+                _emit_tool_call(ctx, "sandbox", {"code": code[:300]}, result[:1000], int((time.time() - t0) * 1000))
                 text = f"{text}\n\n[sandbox]\n{result}"
             elif not tools["sandbox"] and "```python" in text:
                 text = f"{text}\n\n[sandbox disabled in agent tools — code not executed]"
+            _node_logger.info("node.done", node="worker", duration_ms=int((time.monotonic() - _t0) * 1000))
             return {
                 "worker_output": text,
                 "rag_sources": rag_sources,
@@ -205,7 +255,9 @@ def make_synthesizer(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
     tracer = get_tracer()
 
+    @_traceable(name="flow.synthesizer", run_type="chain")
     async def synthesizer(state: FlowGraphState) -> dict:
+        _t0 = time.monotonic()
         with tracer.start_as_current_span("graph.synthesizer") as span:
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             plan = state.get("plan") or ""
@@ -217,6 +269,7 @@ def make_synthesizer(ctx: GraphContext):
                     "Flow is running without OPENAI_API_KEY. "
                     f"Configure the key to enable full LLM. Plan (stub): {plan[:500]}"
                 )
+                _node_logger.info("node.done", node="synthesizer", duration_ms=int((time.monotonic() - _t0) * 1000))
                 return {"answer": answer, "confidence": 0.5, "messages": [AIMessage(content=answer)]}
 
             citation_instruction = ""
@@ -246,6 +299,7 @@ def make_synthesizer(ctx: GraphContext):
                     confidence = max(0.0, min(1.0, float(parts[1].strip().split()[0])))
                 except (ValueError, IndexError):
                     pass
+            _node_logger.info("node.done", node="synthesizer", duration_ms=int((time.monotonic() - _t0) * 1000))
             return {
                 "answer": answer,
                 "confidence": confidence,
@@ -386,6 +440,170 @@ def make_human_gate(ctx: GraphContext):
 
 
 # ---------------------------------------------------------------------------
+# Tool-agent: LangChain function-calling node with web + workspace tools
+# ---------------------------------------------------------------------------
+
+def _build_context_tools(ctx: GraphContext) -> list:
+    """Return LangChain StructuredTool list enabled in agent config."""
+    from pydantic import BaseModel, Field
+    from langchain_core.tools import StructuredTool
+
+    enabled: dict = ctx.agent_config.get("tools") or {}
+    settings = ctx.settings
+    lc_tools: list = []
+
+    async def _emit_wrap(tool_name: str, coro, input_data: dict):
+        t0 = time.time()
+        try:
+            result = await coro
+            _emit_tool_call(ctx, tool_name, input_data, result, int((time.time() - t0) * 1000))
+            return result
+        except Exception as exc:
+            _emit_tool_call(ctx, tool_name, input_data, str(exc), int((time.time() - t0) * 1000), "error")
+            raise
+
+    if enabled.get("tavily_search"):
+        from flow.infrastructure.tools.web import run_tavily_search
+
+        class TavilyArgs(BaseModel):
+            query: str = Field(description="Search query")
+            max_results: int = Field(default=5, description="Number of results")
+
+        async def _tavily(query: str, max_results: int = 5) -> str:
+            r = await _emit_wrap("tavily_search", run_tavily_search(query, max_results, (settings.tavily_api_key or "") if settings else ""), {"query": query, "max_results": max_results})
+            return str(r)
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_tavily, name="tavily_search", description="Search the web using Tavily. Use for current events, news, and factual queries.", args_schema=TavilyArgs))
+
+    if enabled.get("fetch_webpage"):
+        from flow.infrastructure.tools.web import run_fetch_webpage
+
+        class FetchArgs(BaseModel):
+            url: str = Field(description="URL to fetch and read")
+
+        async def _fetch(url: str) -> str:
+            r = await _emit_wrap("fetch_webpage", run_fetch_webpage(url), {"url": url})
+            return str(r)
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_fetch, name="fetch_webpage", description="Fetch and extract readable text from any URL.", args_schema=FetchArgs))
+
+    if enabled.get("arxiv_search"):
+        from flow.infrastructure.tools.web import run_arxiv_search
+
+        class ArxivArgs(BaseModel):
+            query: str = Field(description="ArXiv search query (topic, keywords, or author)")
+            max_results: int = Field(default=5)
+
+        async def _arxiv(query: str, max_results: int = 5) -> str:
+            r = await _emit_wrap("arxiv_search", run_arxiv_search(query, max_results), {"query": query, "max_results": max_results})
+            return str(r)
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_arxiv, name="arxiv_search", description="Search ArXiv for academic papers. Returns title, abstract, URL, publish date.", args_schema=ArxivArgs))
+
+    if enabled.get("hf_papers"):
+        from flow.infrastructure.tools.web import run_hf_papers
+
+        class HFPapersArgs(BaseModel):
+            date: str = Field(default="", description="Date as YYYY-MM-DD. Empty = today.")
+
+        async def _hf(date: str = "") -> str:
+            r = await _emit_wrap("hf_papers", run_hf_papers(date), {"date": date or "today"})
+            return str(r)
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_hf, name="hf_papers", description="Get HuggingFace Daily Papers with upvotes. Best for trending AI/ML research.", args_schema=HFPapersArgs))
+
+    if enabled.get("sandbox"):
+        class SandboxArgs(BaseModel):
+            code: str = Field(description="Python code to execute")
+
+        async def _sandbox(code: str) -> str:
+            t0 = time.time()
+            sandbox = get_sandbox()
+            result = await sandbox.run(code)
+            _emit_tool_call(ctx, "sandbox", {"code": code[:300]}, result[:1000], int((time.time() - t0) * 1000))
+            return result
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_sandbox, name="sandbox", description="Execute Python code and return stdout/stderr.", args_schema=SandboxArgs))
+
+    if enabled.get("retrieve"):
+        repo = FlowRepository(ctx.pool)
+
+        class KnowledgeArgs(BaseModel):
+            query: str = Field(description="Semantic search query over workspace documents")
+
+        async def _knowledge(query: str) -> str:
+            if not ctx.openai_api_key:
+                return "(knowledge search requires OpenAI API key)"
+            t0 = time.time()
+            q_emb = (await emb_svc.embed_texts(api_key=ctx.openai_api_key, texts=[query]))[0]
+            rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=6)
+            chunks = [r["content"] for r in rows]
+            _emit_tool_call(ctx, "knowledge_search", {"query": query}, f"{len(chunks)} chunks", int((time.time() - t0) * 1000))
+            return "\n\n---\n\n".join(chunks) or "(no results)"
+
+        lc_tools.append(StructuredTool.from_function(coroutine=_knowledge, name="knowledge_search", description="Search workspace knowledge base (uploaded PDFs, docs, URLs).", args_schema=KnowledgeArgs))
+
+    return lc_tools
+
+
+def make_tool_agent(ctx: GraphContext):
+    """ReAct-style node: LLM with bound tools, emits tool_call SSE per invocation."""
+    from flow.infrastructure.observability.tracing import get_tracer
+    tracer = get_tracer()
+
+    @_traceable(name="flow.tool_agent", run_type="chain")
+    async def tool_agent(state: FlowGraphState) -> dict:
+        from langchain_core.messages import ToolMessage
+        _t0 = time.monotonic()
+        with tracer.start_as_current_span("graph.tool_agent") as span:
+            span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
+            user_text = _last_human_text(state)
+            plan = state.get("plan") or ""
+
+            lc_tools = _build_context_tools(ctx)
+            llm = _get_llm(ctx)
+
+            if llm is None:
+                return {"worker_output": "No LLM configured.", "messages": [AIMessage(content="No LLM configured.")]}
+
+            system_prompt = (ctx.agent_config or {}).get(
+                "system_prompt",
+                "You are a helpful research assistant. Use the available tools to answer the user's question thoroughly.",
+            )
+            msgs: list = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"Plan:\n{plan}\n\nUser request:\n{user_text}" if plan else user_text),
+            ]
+
+            llm_with_tools = llm.bind_tools(lc_tools) if lc_tools else llm
+
+            for _ in range(8):  # max ReAct iterations
+                response = await llm_with_tools.ainvoke(msgs)
+                msgs.append(response)
+                tool_calls = getattr(response, "tool_calls", None) or []
+                if not tool_calls:
+                    break
+                for tc in tool_calls:
+                    tool_name = tc["name"]
+                    tool_input = tc["args"]
+                    tool_obj = next((t for t in lc_tools if t.name == tool_name), None)
+                    try:
+                        result = await tool_obj.arun(tool_input) if tool_obj else f"Tool '{tool_name}' not available"
+                    except Exception as exc:
+                        result = f"Error: {exc}"
+                    msgs.append(ToolMessage(content=str(result)[:4000], tool_call_id=tc["id"]))
+
+            last_content = str(getattr(msgs[-1], "content", "") or "")
+            _node_logger.info("node.done", node="tool_agent", duration_ms=int((time.monotonic() - _t0) * 1000))
+            return {
+                "worker_output": last_content,
+                "messages": [AIMessage(content=last_content[:6000])],
+            }
+
+    return tool_agent
+
+
+# ---------------------------------------------------------------------------
 # Node registry builder
 # ---------------------------------------------------------------------------
 
@@ -395,6 +613,8 @@ def build_node_registry(ctx: GraphContext) -> dict:
         "planner": make_planner(ctx),
         "worker": make_worker(ctx),
         "synthesizer": make_synthesizer(ctx),
+        # tool-agent
+        "tool_agent": make_tool_agent(ctx),
         # researcher-critic-writer
         "researcher": make_researcher(ctx),
         "critic": make_critic(ctx),
