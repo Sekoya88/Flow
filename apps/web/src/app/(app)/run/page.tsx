@@ -461,7 +461,7 @@ export default function RunPage() {
             setLastExecutionId(eid);
             void apiFetch<ExecutionTrace>(`/api/v1/executions/${eid}/trace`)
               .then((t) => setExecutionTrace(t))
-              .catch(() => null);
+              .catch((err) => { console.warn("[ExecutionTrace] failed to load:", err); });
             setFeedbackPercent(70);
             setFeedbackComment("");
             track("run_completed", { execution_id: eid, agent_id: agentId });
