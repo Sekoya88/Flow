@@ -155,7 +155,9 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
 
 def make_planner(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+    from flow.infrastructure.persistence.repo import FlowRepository
     tracer = get_tracer()
+    repo = FlowRepository(ctx.pool)
 
     @_traceable(name="flow.planner", run_type="chain")
     async def planner(state: FlowGraphState) -> dict:
@@ -164,11 +166,45 @@ def make_planner(ctx: GraphContext):
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
             user_text = _last_human_text(state)
             llm = _get_llm(ctx)
+
+            # Query ReasoningBank for similar past patterns
+            pattern_block = ""
+            if ctx.openai_api_key:
+                try:
+                    from flow.infrastructure.llm import embeddings as emb_svc
+                    q_emb = (await emb_svc.embed_texts(
+                        api_key=ctx.openai_api_key, texts=[user_text]
+                    ))[0]
+                    patterns = await repo.search_reasoning_patterns(
+                        ctx.workspace_id, ctx.agent_id, q_emb, limit=3
+                    )
+                    if patterns:
+                        lines = []
+                        for p in patterns:
+                            lines.append(
+                                f"[Pattern score={p['score']:.2f}]\n"
+                                f"Problem: {p['problem_summary']}\n"
+                                f"Solution: {p['solution_steps']}"
+                            )
+                            await repo.increment_pattern_use(p["id"])
+                        pattern_block = "\n\n".join(lines)
+                except Exception:
+                    pass  # reasoning bank query is best-effort
+
             if llm is None:
                 plan = "Offline plan: clarify goal, gather facts, draft answer."
+                if pattern_block:
+                    plan = f"[Reasoning patterns found]\n{pattern_block}\n\n{plan}"
             else:
+                system = "You are a planning node. Output a short numbered plan (max 5 bullets)."
+                if pattern_block:
+                    system = (
+                        "You are a planning node. Output a short numbered plan (max 5 bullets).\n\n"
+                        "PAST SUCCESSFUL PATTERNS (use as inspiration, don't copy verbatim):\n"
+                        + pattern_block
+                    )
                 out = await llm.ainvoke([
-                    SystemMessage(content="You are a planning node. Output a short numbered plan (max 5 bullets)."),
+                    SystemMessage(content=system),
                     HumanMessage(content=user_text),
                 ])
                 plan = str(out.content)
