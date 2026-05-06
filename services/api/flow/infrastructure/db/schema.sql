@@ -109,3 +109,18 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 
 CREATE INDEX IF NOT EXISTS ix_proposals_workspace_status ON proposals (workspace_id, status);
+
+CREATE TABLE IF NOT EXISTS reasoning_patterns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    agent_id UUID NOT NULL REFERENCES agents (id) ON DELETE CASCADE,
+    problem_summary TEXT NOT NULL,
+    solution_steps TEXT NOT NULL,
+    embedding vector(1536),
+    score REAL NOT NULL DEFAULT 1.0,
+    use_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_reasoning_patterns_lookup
+    ON reasoning_patterns (workspace_id, agent_id);

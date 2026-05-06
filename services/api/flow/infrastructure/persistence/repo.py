@@ -543,6 +543,73 @@ class FlowRepository:
         )
 
     # ------------------------------------------------------------------
+    # Reasoning patterns (ReasoningBank)
+    # ------------------------------------------------------------------
+
+    async def insert_reasoning_pattern(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        problem_summary: str,
+        solution_steps: str,
+        embedding: list[float] | None,
+        score: float = 1.0,
+    ) -> UUID:
+        vec = _vec_literal(embedding) if embedding is not None else None
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO reasoning_patterns
+                (workspace_id, agent_id, problem_summary, solution_steps, embedding, score)
+            VALUES ($1, $2, $3, $4, $5::vector, $6)
+            RETURNING id
+            """,
+            workspace_id,
+            agent_id,
+            problem_summary,
+            solution_steps,
+            vec,
+            score,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def search_reasoning_patterns(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        embedding: list[float],
+        limit: int = 3,
+    ) -> list[asyncpg.Record]:
+        vec = _vec_literal(embedding)
+        return await self._pool.fetch(
+            """
+            SELECT id, problem_summary, solution_steps, score, use_count
+            FROM reasoning_patterns
+            WHERE workspace_id = $1 AND agent_id = $2 AND embedding IS NOT NULL
+            ORDER BY embedding <=> $3::vector
+            LIMIT $4
+            """,
+            workspace_id,
+            agent_id,
+            vec,
+            limit,
+        )
+
+    async def increment_pattern_use(self, pattern_id: UUID) -> None:
+        await self._pool.execute(
+            "UPDATE reasoning_patterns SET use_count = use_count + 1 WHERE id = $1",
+            pattern_id,
+        )
+
+    async def delete_episodic_memory(self, memory_id: UUID, workspace_id: UUID) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM episodic_memories WHERE id = $1 AND workspace_id = $2",
+            memory_id,
+            workspace_id,
+        )
+        return result == "DELETE 1"
+
+    # ------------------------------------------------------------------
     # Agent negatives
     # ------------------------------------------------------------------
 
