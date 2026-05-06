@@ -13,7 +13,7 @@ from flow.infrastructure.observability.logging import get_logger as _get_node_lo
 _node_logger = _get_node_logger("flow.graph.node")
 
 try:
-    from langchain_core.traceable import traceable as _traceable
+    from langsmith import traceable as _traceable
 except ImportError:
     def _traceable(**_kw):  # type: ignore[misc]
         def _wrap(fn):
