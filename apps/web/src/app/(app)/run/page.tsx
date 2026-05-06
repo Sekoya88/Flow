@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Brain, Check, ChevronDown, Loader2 } from "lucide-react";
+import { AlertCircle, Bot, Brain, Check, ChevronDown, Loader2, Plus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -28,6 +28,8 @@ import { TokenStream } from "@/components/flow/TokenStream";
 import { AgentTimeline, type ExecRow } from "@/components/flow/AgentTimeline";
 import { MemoryDrawer } from "@/components/flow/MemoryDrawer";
 import { CitationsPanel, type CitationSource } from "@/components/flow/CitationsPanel";
+import { ToolCallLog, type ToolCall } from "@/components/flow/ToolCallLog";
+import { ExecutionTimeline, type ExecutionTrace } from "@/components/flow/ExecutionTimeline";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
@@ -43,7 +45,15 @@ type AgentRow = { id: string; name: string; template: string; config: Record<str
 
 type Agents = { agents: AgentRow[] };
 
-type ToolFlags = { retrieve: boolean; sandbox: boolean; long_term_memory: boolean };
+type ToolFlags = {
+  retrieve: boolean;
+  sandbox: boolean;
+  long_term_memory: boolean;
+  tavily_search: boolean;
+  fetch_webpage: boolean;
+  arxiv_search: boolean;
+  hf_papers: boolean;
+};
 
 type RunPrefs = { message: string; tools: ToolFlags; agentId: string };
 
@@ -73,6 +83,10 @@ const DEFAULT_TOOLS: ToolFlags = {
   retrieve: true,
   sandbox: true,
   long_term_memory: true,
+  tavily_search: false,
+  fetch_webpage: false,
+  arxiv_search: false,
+  hf_papers: false,
 };
 
 function readTools(cfg: Record<string, unknown> | undefined): ToolFlags {
@@ -83,6 +97,10 @@ function readTools(cfg: Record<string, unknown> | undefined): ToolFlags {
     retrieve: o.retrieve !== false,
     sandbox: o.sandbox !== false,
     long_term_memory: o.long_term_memory !== false,
+    tavily_search: o.tavily_search === true,
+    fetch_webpage: o.fetch_webpage === true,
+    arxiv_search: o.arxiv_search === true,
+    hf_papers: o.hf_papers === true,
   };
 }
 
@@ -95,22 +113,14 @@ function agentDisplayName(a: AgentRow | undefined): string {
   return `Agent ${a.id.slice(0, 8)}…`;
 }
 
-const TOOL_ROWS: { key: keyof ToolFlags; title: string; desc: string }[] = [
-  {
-    key: "retrieve",
-    title: "Knowledge search",
-    desc: "Pull relevant snippets from workspace sources before answering.",
-  },
-  {
-    key: "sandbox",
-    title: "Python sandbox",
-    desc: "When the model emits a fenced python block, run it in an isolated runner.",
-  },
-  {
-    key: "long_term_memory",
-    title: "Long-term memory",
-    desc: "Recall past saved memories for you with this agent.",
-  },
+const TOOL_ROWS: { key: keyof ToolFlags; title: string; desc: string; group?: string }[] = [
+  { key: "retrieve", title: "Knowledge search", desc: "Semantic search over workspace docs and PDFs.", group: "workspace" },
+  { key: "sandbox", title: "Python sandbox", desc: "Run code in an isolated runner.", group: "workspace" },
+  { key: "long_term_memory", title: "Long-term memory", desc: "Recall past conversations with this agent.", group: "workspace" },
+  { key: "tavily_search", title: "Web search (Tavily)", desc: "Search the live web. Requires FLOW_TAVILY_API_KEY.", group: "web" },
+  { key: "fetch_webpage", title: "Fetch webpage", desc: "Read and extract text from any URL.", group: "web" },
+  { key: "arxiv_search", title: "ArXiv search", desc: "Find academic papers by query.", group: "web" },
+  { key: "hf_papers", title: "HuggingFace papers", desc: "Daily trending AI/ML papers from HuggingFace.", group: "web" },
 ];
 
 const TRACE_VERBOSE_KEY = "flow.run.traceVerbose";
@@ -157,6 +167,12 @@ type SseEvent = {
   message?: string;
   confidence?: number;
   payload?: { node?: string; partial?: unknown };
+  // tool_call fields
+  tool?: string;
+  input?: Record<string, unknown>;
+  output?: string;
+  duration_ms?: number;
+  status?: "success" | "error";
 };
 
 export default function RunPage() {
@@ -196,11 +212,15 @@ export default function RunPage() {
   const traceBottomRef = useRef<HTMLDivElement>(null);
   const [traceVerbose, setTraceVerbose] = useState(false);
   const [citations, setCitations] = useState<CitationSource[]>([]);
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
+  const [executionTrace, setExecutionTrace] = useState<ExecutionTrace | null>(null);
   const traceVerboseRef = useRef(false);
 
   const prefsDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeAgent = useMemo(() => agents.find((x) => x.id === agentId), [agents, agentId]);
   const activeAgentLabel = useMemo(() => agentDisplayName(activeAgent), [activeAgent]);
+  const activeAgentRef = useRef<AgentRow | undefined>(undefined);
+  useEffect(() => { activeAgentRef.current = activeAgent; }, [activeAgent]);
 
   useEffect(() => {
     routerRef.current = router;
@@ -351,6 +371,8 @@ export default function RunPage() {
     setLastExecutionId(null);
     setFeedbackMsg(null);
     setCitations([]);
+    setToolCalls([]);
+    setExecutionTrace(null);
     const apiBase = getApiBase();
     try {
       const res = await apiFetch<{ execution_id: string }>(`/api/v1/agents/${agentId}/execute`, {
@@ -378,9 +400,15 @@ export default function RunPage() {
           const verbose = traceVerboseRef.current;
 
           if (data.kind === "node_update" && data.node) {
-            const prev = ["planner", "worker", "synthesizer"];
-            const idx = prev.indexOf(data.node);
-            if (idx > 0) setNode(prev[idx - 1], { status: "done" });
+            const tmpl = activeAgentRef.current?.template ?? "";
+            const nodeOrder =
+              tmpl === "tool-agent"
+                ? ["planner", "tool_agent", "synthesizer"]
+                : tmpl === "researcher-critic-writer"
+                  ? ["researcher", "critic", "writer"]
+                  : ["planner", "worker", "synthesizer"];
+            const idx = nodeOrder.indexOf(data.node);
+            if (idx > 0) setNode(nodeOrder[idx - 1], { status: "done" });
             setNode(data.node, { status: "streaming" });
             appendTraceLine(
               verbose
@@ -405,14 +433,35 @@ export default function RunPage() {
           } else if (data.kind === "error") {
             appendTraceLine(`error · ${data.message ?? "unknown"}`);
             setNode("synthesizer", { status: "error" });
-          } else if (data.kind === "citations" && Array.isArray((data as { payload?: unknown }).payload)) {
-            setCitations((data as { payload: CitationSource[] }).payload);
+          } else if (data.kind === "tool_call" && data.tool) {
+            const toolName = data.tool;
+            setToolCalls((prev) => [
+              ...prev,
+              {
+                id: `${toolName}-${Date.now()}-${Math.random()}`,
+                tool: toolName,
+                input: data.input ?? {},
+                output: data.output ?? "",
+                duration_ms: data.duration_ms ?? 0,
+                status: data.status ?? "success",
+              },
+            ]);
+            appendTraceLine(
+              verbose
+                ? `tool_call · ${data.tool} · ${data.duration_ms ?? 0}ms · ${data.status ?? "success"}`
+                : `tool · ${data.tool} (${data.duration_ms ?? 0}ms)`,
+            );
+          } else if (data.kind === "citations" && Array.isArray((data as unknown as { payload?: unknown }).payload)) {
+            setCitations(((data as unknown) as { payload: CitationSource[] }).payload);
           } else if (data.kind === "done") {
             appendTraceLine("done · stream closed");
             es.close();
             setRunning(false);
             setActiveExecution(null);
             setLastExecutionId(eid);
+            void apiFetch<ExecutionTrace>(`/api/v1/executions/${eid}/trace`)
+              .then((t) => setExecutionTrace(t))
+              .catch(() => null);
             setFeedbackPercent(70);
             setFeedbackComment("");
             track("run_completed", { execution_id: eid, agent_id: agentId });
@@ -550,55 +599,104 @@ export default function RunPage() {
           }
         />
 
+        {/* Always-visible agent selector bar */}
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-5 py-3.5 shadow-sm backdrop-blur-sm">
+          <Bot className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="flex flex-1 min-w-0 items-center gap-3">
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Active agent</span>
+              <Select value={agentId ?? ""} onValueChange={(v) => v && onSelectAgent(v)}>
+                <SelectTrigger className="h-8 border-0 bg-transparent p-0 text-[15px] font-semibold shadow-none ring-0 focus:ring-0 [&>svg]:ml-1.5">
+                  <SelectValue>{activeAgentLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {agentDisplayName(a)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {activeAgent?.template ? (
+              <Badge variant="secondary" className="shrink-0 font-mono text-[11px]">
+                {activeAgent.template}
+              </Badge>
+            ) : null}
+          </div>
+          <Separator orientation="vertical" className="h-8 mx-1" />
+          <Link
+            href="/agents/new"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0 gap-1.5 h-8")}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            New agent
+          </Link>
+        </div>
+
         <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-6 shadow-sm backdrop-blur-sm">
           <FlowGraph className="mx-auto w-full max-w-sm" />
         </div>
 
+        {toolCalls.length > 0 && (
+          <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-5 shadow-sm backdrop-blur-sm">
+            <ToolCallLog calls={toolCalls} />
+          </div>
+        )}
+
         <details className="group rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
           <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-foreground outline-none [&::-webkit-details-marker]:hidden">
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-            Connection details · trace
+            Execution trace
+            {executionTrace?.total_duration_ms != null && (
+              <span className="ml-1 font-mono text-xs text-muted-foreground">
+                · {executionTrace.total_duration_ms < 1000
+                  ? `${executionTrace.total_duration_ms}ms`
+                  : `${(executionTrace.total_duration_ms / 1000).toFixed(1)}s`}
+              </span>
+            )}
           </summary>
-          <div className="mt-3 space-y-3 text-muted-foreground text-xs leading-relaxed">
-            <p>
-              Live output uses Server-Sent Events with{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
-                Last-Event-ID
-              </code>{" "}
-              reconnect. API base:{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground/90">
-                {getApiBase()}
-              </code>
-            </p>
-            <p className="text-[11px]">
-              <strong className="text-foreground">LangSmith</strong> traces graph nodes when{" "}
-              <code className="rounded bg-muted px-1 py-0.5 font-mono">LANGCHAIN_API_KEY</code> is set; API logs stay at
-              INFO unless <code className="rounded bg-muted px-1 py-0.5 font-mono">LOG_LEVEL=DEBUG</code>.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="mb-0 font-medium text-foreground">Live trace</p>
-              <div className="flex items-center gap-2">
-                <span className={cn(!traceVerbose && "text-foreground")}>Concise</span>
-                <Switch
-                  checked={traceVerbose}
-                  onCheckedChange={onTraceVerboseChange}
-                  aria-label="Verbose SSE trace"
-                />
-                <span className={cn(traceVerbose && "text-foreground")}>Verbose</span>
+          <div className="mt-4 space-y-6">
+            {executionTrace ? (
+              <ExecutionTimeline trace={executionTrace} />
+            ) : (
+              <p className="text-muted-foreground text-xs italic">
+                Run a message to see the execution timeline.
+              </p>
+            )}
+
+            <details className="group/inner">
+              <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground list-none">
+                Raw SSE log
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[11px] text-muted-foreground">
+                    API base:{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground/90">
+                      {getApiBase()}
+                    </code>
+                  </p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={cn(!traceVerbose && "text-foreground")}>Concise</span>
+                    <Switch
+                      checked={traceVerbose}
+                      onCheckedChange={onTraceVerboseChange}
+                      aria-label="Verbose SSE trace"
+                    />
+                    <span className={cn(traceVerbose && "text-foreground")}>Verbose</span>
+                  </div>
+                </div>
+                <ScrollArea className="h-44 rounded-md border border-border/80 bg-background/80">
+                  <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-snug text-foreground/90">
+                    {traceLines.length === 0
+                      ? "No trace lines yet."
+                      : traceLines.join("\n\n")}
+                    <div ref={traceBottomRef} aria-hidden className="h-px w-full shrink-0" />
+                  </pre>
+                </ScrollArea>
               </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Concise: graph steps (server summaries), lifecycle, final size — no per-token lines. Verbose: raw node
-              payloads and tokens.
-            </p>
-            <ScrollArea className="h-52 rounded-md border border-border/80 bg-background/80">
-              <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-snug text-foreground/90">
-                {traceLines.length === 0
-                  ? "Run a message — concise mode shows pipeline checkpoints only; toggle verbose for full SSE payloads."
-                  : traceLines.join("\n\n")}
-                <div ref={traceBottomRef} aria-hidden className="h-px w-full shrink-0" />
-              </pre>
-            </ScrollArea>
+            </details>
           </div>
         </details>
 
@@ -746,48 +844,34 @@ export default function RunPage() {
 
             {inspectorOpen && (
               <>
-                {/* Agent selector */}
+                {/* Agent rename */}
                 <Card className="gap-6 py-6 shadow-sm">
                   <CardHeader className="space-y-1 px-6">
-                    <CardTitle className="text-lg">Agent</CardTitle>
+                    <CardTitle className="text-lg">Rename agent</CardTitle>
                     <CardDescription className="text-[13px] leading-relaxed">
-                      Choose which workspace agent receives this thread.
+                      Change the display name for{" "}
+                      <span className="font-medium text-foreground">{activeAgentLabel}</span>.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3 px-6">
-                    <Label htmlFor="agent-pick">Active agent</Label>
-                    <Select value={agentId} onValueChange={(v) => v != null && onSelectAgent(v)}>
-                      <SelectTrigger id="agent-pick" className="h-10 w-full min-w-0 max-w-full" size="default">
-                        <SelectValue>{activeAgentLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {agents.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {agentDisplayName(a)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="space-y-2 pt-2">
-                      <Label htmlFor="agent-rename">Display name</Label>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          id="agent-rename"
-                          value={agentRenameDraft}
-                          onChange={(e) => setAgentRenameDraft(e.target.value)}
-                          placeholder="Name shown in lists"
-                          className="text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={savingName || !agentRenameDraft.trim()}
-                          onClick={() => void saveAgentDisplayName()}
-                        >
-                          {savingName ? "Saving…" : "Save name"}
-                        </Button>
-                      </div>
+                    <Label htmlFor="agent-rename">Display name</Label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        id="agent-rename"
+                        value={agentRenameDraft}
+                        onChange={(e) => setAgentRenameDraft(e.target.value)}
+                        placeholder="Name shown in lists"
+                        className="text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={savingName || !agentRenameDraft.trim()}
+                        onClick={() => void saveAgentDisplayName()}
+                      >
+                        {savingName ? "Saving…" : "Save"}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -813,30 +897,40 @@ export default function RunPage() {
                   <CardHeader className="space-y-1 px-6">
                     <CardTitle className="text-lg">Capabilities</CardTitle>
                     <CardDescription className="text-[13px] leading-relaxed">
-                      Switches update this agent&apos;s saved configuration. Remember to save before running.
+                      Toggle tools for this agent. Save before running.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-5 px-6">
-                    {TOOL_ROWS.map(({ key, title, desc }, i) => (
-                      <div key={key}>
-                        {i > 0 ? <Separator className="mb-5" /> : null}
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0 space-y-1">
-                            <span className="block text-sm font-medium leading-snug">{title}</span>
-                            <span className="text-muted-foreground text-xs leading-relaxed">{desc}</span>
+                    {(["workspace", "web"] as const).map((group, gi) => {
+                      const rows = TOOL_ROWS.filter((r) => r.group === group);
+                      return (
+                        <div key={group}>
+                          {gi > 0 ? <Separator className="mb-5" /> : null}
+                          <p className="mb-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {group === "workspace" ? "Workspace" : "Web & Research"}
+                          </p>
+                          <div className="space-y-4">
+                            {rows.map(({ key, title, desc }) => (
+                              <div key={key} className="flex items-start justify-between gap-4">
+                                <div className="min-w-0 space-y-0.5">
+                                  <span className="block text-sm font-medium leading-snug">{title}</span>
+                                  <span className="text-muted-foreground text-xs leading-relaxed">{desc}</span>
+                                </div>
+                                <Switch
+                                  checked={tools[key]}
+                                  onCheckedChange={(checked) => {
+                                    setTools((t) => ({ ...t, [key]: checked }));
+                                    setToolsSaved(false);
+                                  }}
+                                  aria-label={title}
+                                  className="shrink-0"
+                                />
+                              </div>
+                            ))}
                           </div>
-                          <Switch
-                            checked={tools[key]}
-                            onCheckedChange={(checked) => {
-                              setTools((t) => ({ ...t, [key]: checked }));
-                              setToolsSaved(false);
-                            }}
-                            aria-label={title}
-                            className="shrink-0"
-                          />
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <Separator />
                     <Button type="button" variant="secondary" disabled={savingTools} onClick={() => void saveTools()}>
                       {savingTools ? "Saving…" : "Save capabilities"}
