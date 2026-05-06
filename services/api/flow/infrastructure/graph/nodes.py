@@ -549,11 +549,11 @@ def _build_context_tools(ctx: GraphContext) -> list:
 def make_tool_agent(ctx: GraphContext):
     """ReAct-style node: LLM with bound tools, emits tool_call SSE per invocation."""
     from flow.infrastructure.observability.tracing import get_tracer
+    from langchain_core.messages import ToolMessage
     tracer = get_tracer()
 
     @_traceable(name="flow.tool_agent", run_type="chain")
     async def tool_agent(state: FlowGraphState) -> dict:
-        from langchain_core.messages import ToolMessage
         _t0 = time.monotonic()
         with tracer.start_as_current_span("graph.tool_agent") as span:
             span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
@@ -564,6 +564,7 @@ def make_tool_agent(ctx: GraphContext):
             llm = _get_llm(ctx)
 
             if llm is None:
+                _node_logger.info("node.done", node="tool_agent", duration_ms=int((time.monotonic() - _t0) * 1000))
                 return {"worker_output": "No LLM configured.", "messages": [AIMessage(content="No LLM configured.")]}
 
             system_prompt = (ctx.agent_config or {}).get(
