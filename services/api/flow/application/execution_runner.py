@@ -22,6 +22,17 @@ def _log_banner(log, event: str, **kw) -> None:
     log.info(event, **kw)
 
 
+def _get_llm_for_judge(settings):
+    """Get cheap LLM instance for post-run judge tasks."""
+    if not settings.openai_api_key:
+        return None
+    try:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(api_key=settings.openai_api_key, model="gpt-4o-mini", temperature=0)
+    except Exception:
+        return None
+
+
 def _json_safe(obj: Any) -> Any:
     try:
         json.dumps(obj)
@@ -169,17 +180,33 @@ async def run_deer_execution(
             template=_template,
         )
 
-        # Save episodic memory: 1-sentence run summary
+        # LLM-judge memory extraction (best-effort, post-run)
         if answer and settings.openai_api_key:
             try:
                 from flow.infrastructure.llm import embeddings as emb_svc
-                summary = answer[:500]
-                emb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[summary]))[0]
-                await repo.insert_episodic_memory(
-                    workspace_id, agent_id, user_id, summary, emb, execution_id=execution_id
+                from flow.application.memory_judge import (
+                    extract_facts_from_answer,
+                    extract_pattern_summary,
+                    should_store_pattern,
                 )
+                _judge_llm = _get_llm_for_judge(settings)
+                _answer_str = str(answer)
+                facts = await extract_facts_from_answer(_judge_llm, user_message, _answer_str) if _judge_llm else []
+                for fact in facts:
+                    emb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[fact]))[0]
+                    await repo.insert_episodic_memory(
+                        workspace_id, agent_id, user_id, fact, emb, execution_id=execution_id
+                    )
+                if _judge_llm and await should_store_pattern(confidence, len(_answer_str)):
+                    pattern = await extract_pattern_summary(_judge_llm, user_message, _answer_str)
+                    if pattern:
+                        problem_summary, solution_steps = pattern
+                        pemb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[problem_summary]))[0]
+                        await repo.insert_reasoning_pattern(
+                            workspace_id, agent_id, problem_summary, solution_steps, pemb, score=confidence
+                        )
             except Exception:
-                pass  # episodic save is best-effort
+                pass  # memory extraction is best-effort
     except Exception as exc:
         _duration_ms = int((_time.monotonic() - _t_start) * 1000)
         logger.error(
