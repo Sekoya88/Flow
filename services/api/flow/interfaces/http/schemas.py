@@ -43,6 +43,10 @@ class AgentPatchIn(BaseModel):
     retrieve: bool | None = None
     sandbox: bool | None = None
     long_term_memory: bool | None = None
+    tavily_search: bool | None = None
+    fetch_webpage: bool | None = None
+    arxiv_search: bool | None = None
+    hf_papers: bool | None = None
 
 
 class AnalyticsEventIn(BaseModel):
@@ -76,3 +80,7 @@ class FeedbackIn(BaseModel):
 
 class ProposalActionIn(BaseModel):
     status: Literal["approved", "rejected"]
+
+
+class VibeIn(BaseModel):
+    description: str = Field(min_length=10, max_length=2000)

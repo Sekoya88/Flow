@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Loader2, MessageSquare, Workflow } from "lucide-react";
+import { AlertCircle, Loader2, MessageSquare, Plus, Workflow } from "lucide-react";
 import { AgentTopologyCanvas, type CatalogEdge, type CatalogNode } from "@/components/agents/AgentTopologyCanvas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -251,6 +251,13 @@ export default function AgentsGraphPage() {
             >
               <MessageSquare className="h-3.5 w-3.5" aria-hidden />
               Run agent
+            </Link>
+            <Link
+              href="/agents/new"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-flow-brand/40 bg-flow-brand/10 px-3 py-1.5 text-xs font-medium hover:bg-flow-brand/20"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              New agent
             </Link>
           </div>
         </CardContent>

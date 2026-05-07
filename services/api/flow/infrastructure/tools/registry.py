@@ -138,6 +138,60 @@ register(ToolSpec(
     required_capabilities=[],
 ))
 
+register(ToolSpec(
+    name="tavily_search",
+    description="Search the web with Tavily. Use for current events, factual queries, or any web search. Requires FLOW_TAVILY_API_KEY.",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "max_results": {"type": "integer", "default": 5},
+        },
+        "required": ["query"],
+    },
+    required_capabilities=["tavily_search"],
+))
+
+register(ToolSpec(
+    name="fetch_webpage",
+    description="Fetch and extract readable text from any URL. Good for reading articles, documentation, or paper abstracts.",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "URL to fetch"},
+        },
+        "required": ["url"],
+    },
+    required_capabilities=[],
+))
+
+register(ToolSpec(
+    name="arxiv_search",
+    description="Search ArXiv for academic papers by query. Returns title, abstract, URL, and publish date.",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "max_results": {"type": "integer", "default": 5},
+        },
+        "required": ["query"],
+    },
+    required_capabilities=[],
+))
+
+register(ToolSpec(
+    name="hf_papers",
+    description="Fetch HuggingFace Daily Papers. Returns top AI/ML papers of the day with title, abstract, and upvotes.",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "Date in YYYY-MM-DD format. Leave empty for today."},
+        },
+        "required": [],
+    },
+    required_capabilities=[],
+))
+
 
 # ---------------------------------------------------------------------------
 # Load external tools from entry-points (silently skip failures)
