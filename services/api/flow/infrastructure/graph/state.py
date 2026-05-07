@@ -28,3 +28,4 @@ class FlowGraphState(TypedDict, total=False):
     requires_approval: bool
     approved: bool
     rag_sources: list[dict]  # [{"source_id": str, "title": str, "chunk_index": int, "preview": str}]
+    reflection: dict  # added for reflector node output

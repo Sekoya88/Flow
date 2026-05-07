@@ -249,6 +249,25 @@ async def run_deer_execution(
                         )
             except Exception:
                 pass  # memory extraction is best-effort
+
+        # Write trace node into KG (best-effort)
+        try:
+            _answer_preview = str(answer)[:500] if answer else ""
+            _q_emb = None
+            if settings.openai_api_key:
+                from flow.infrastructure.llm import embeddings as emb_svc
+                _q_emb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[user_message[:200]]))[0]
+            await repo.insert_trace_node(
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                execution_id=execution_id,
+                question=user_message,
+                answer_summary=_answer_preview,
+                confidence=confidence,
+                embedding=_q_emb,
+            )
+        except Exception:
+            pass  # trace writing is best-effort
     except Exception as exc:
         _duration_ms = int((_time.monotonic() - _t_start) * 1000)
         logger.error(

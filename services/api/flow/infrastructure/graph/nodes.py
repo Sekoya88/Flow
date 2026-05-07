@@ -191,6 +191,19 @@ def make_planner(ctx: GraphContext):
                 except Exception:
                     pass  # reasoning bank query is best-effort
 
+            # Read active agent skills
+            skills_block = ""
+            try:
+                skills = await repo.list_active_skills(ctx.agent_id, ctx.workspace_id)
+                if skills:
+                    skill_lines = []
+                    for s in skills:
+                        skill_lines.append(f"[Skill: {s['name']} v{s['version']}]\n{s['content_md'][:500]}")
+                        await repo.increment_skill_use(s["id"])
+                    skills_block = "\n\n".join(skill_lines)
+            except Exception:
+                pass  # skills query is best-effort
+
             if llm is None:
                 plan = "Offline plan: clarify goal, gather facts, draft answer."
                 if pattern_block:
@@ -203,6 +216,8 @@ def make_planner(ctx: GraphContext):
                         "PAST SUCCESSFUL PATTERNS (use as inspiration, don't copy verbatim):\n"
                         + pattern_block
                     )
+                if skills_block:
+                    system += f"\n\nAGENT SKILLS (apply these guidelines):\n{skills_block}"
                 out = await llm.ainvoke([
                     SystemMessage(content=system),
                     HumanMessage(content=user_text),
@@ -343,6 +358,77 @@ def make_synthesizer(ctx: GraphContext):
             }
 
     return synthesizer
+
+
+def make_reflector(ctx: GraphContext):
+    """Self-reflection node: grades answer quality and optionally creates/updates skills."""
+    from flow.infrastructure.observability.tracing import get_tracer
+    tracer = get_tracer()
+    repo = FlowRepository(ctx.pool)
+
+    _REFLECTION_PROMPT = """\
+You are a quality reflector. Given the user question, the plan, and the final answer, do:
+1. Grade the answer quality from 1-5 (1=terrible, 5=excellent).
+2. If grade >= 4 AND the answer used a novel approach, suggest a reusable skill (name + short markdown content) for future runs.
+3. If grade <= 2, note what went wrong in one sentence.
+
+Output ONLY valid JSON:
+{{"grade": <int>, "skill_suggestion": {{"name": "...", "content": "..."}} | null, "issue": "..." | null}}
+"""
+
+    @_traceable(name="flow.reflector", run_type="chain")
+    async def reflector(state: FlowGraphState) -> dict:
+        _t0 = time.monotonic()
+        with tracer.start_as_current_span("graph.reflector") as span:
+            span.set_attribute("execution.workspace_id", str(ctx.workspace_id))
+
+            answer = state.get("answer") or state.get("worker_output") or ""
+            if len(str(answer)) < 100:
+                _node_logger.info("node.skip", node="reflector", reason="short_answer")
+                return {"reflection": {"grade": 3, "skipped": True}}
+
+            llm = _get_llm(ctx)
+            if llm is None:
+                return {"reflection": {"grade": 3, "skipped": True}}
+
+            user_text = _last_human_text(state)
+            plan = state.get("plan") or ""
+
+            try:
+                import json as _json
+                out = await llm.ainvoke([
+                    SystemMessage(content=_REFLECTION_PROMPT),
+                    HumanMessage(content=f"Question: {user_text[:500]}\n\nPlan: {plan[:500]}\n\nAnswer: {str(answer)[:2000]}"),
+                ])
+                raw = str(out.content).strip()
+                if "```" in raw:
+                    raw = raw.split("```")[1].removeprefix("json").strip()
+                data = _json.loads(raw)
+                grade = int(data.get("grade", 3))
+
+                skill_sug = data.get("skill_suggestion")
+                if skill_sug and isinstance(skill_sug, dict) and grade >= 4:
+                    sname = skill_sug.get("name", "").strip()
+                    scontent = skill_sug.get("content", "").strip()
+                    if sname and scontent:
+                        try:
+                            await repo.upsert_agent_skill(
+                                agent_id=ctx.agent_id,
+                                workspace_id=ctx.workspace_id,
+                                name=sname,
+                                content_md=scontent,
+                            )
+                            _node_logger.info("reflector.skill_created", skill=sname, grade=grade)
+                        except Exception:
+                            pass
+
+                _node_logger.info("node.done", node="reflector", grade=grade, duration_ms=int((time.monotonic() - _t0) * 1000))
+                return {"reflection": data}
+            except Exception as exc:
+                _node_logger.debug("reflector failed: %s", exc)
+                return {"reflection": {"grade": 3, "error": str(exc)}}
+
+    return reflector
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +805,7 @@ def build_node_registry(ctx: GraphContext) -> dict:
         "planner": make_planner(ctx),
         "worker": make_worker(ctx),
         "synthesizer": make_synthesizer(ctx),
+        "reflector": make_reflector(ctx),
         # tool-agent
         "tool_agent": make_tool_agent(ctx),
         # researcher-critic-writer
@@ -742,6 +829,20 @@ def should_continue_research(state: FlowGraphState) -> str:
 
 def gate_approved(state: FlowGraphState) -> str:
     return "approved" if state.get("approved") else "waiting"
+
+
+async def _tool_update_skill(ctx: "GraphContext", repo: FlowRepository, skill_name: str, content: str) -> str:
+    """Create or update an agent skill. Returns confirmation."""
+    try:
+        await repo.upsert_agent_skill(
+            agent_id=ctx.agent_id,
+            workspace_id=ctx.workspace_id,
+            name=skill_name,
+            content_md=content,
+        )
+        return f"Skill '{skill_name}' saved (new version)."
+    except Exception as e:
+        return f"Failed to save skill: {e}"
 
 
 CONDITION_REGISTRY: dict[str, Any] = {

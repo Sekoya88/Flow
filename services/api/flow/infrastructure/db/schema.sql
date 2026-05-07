@@ -142,11 +142,27 @@ CREATE TABLE IF NOT EXISTS agent_schedules (
 CREATE INDEX IF NOT EXISTS ix_agent_schedules_workspace
     ON agent_schedules (workspace_id, enabled);
 
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID NOT NULL REFERENCES agents (id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    version INT NOT NULL DEFAULT 1,
+    content_md TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+    score REAL NOT NULL DEFAULT 1.0,
+    use_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_agent_skills_active
+    ON agent_skills (agent_id, workspace_id, active);
+
 CREATE TABLE IF NOT EXISTS kg_nodes (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     label         TEXT NOT NULL,
-    node_type     TEXT NOT NULL CHECK (node_type IN ('note','concept','topic','query')),
+    node_type     TEXT NOT NULL CHECK (node_type IN ('note','concept','topic','query','trace')),
     source_path   TEXT,
     content_hash  TEXT,
     summary       TEXT,

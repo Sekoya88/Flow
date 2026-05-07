@@ -756,6 +756,65 @@ class FlowRepository:
             limit,
         )
 
+    # ── Agent Skills ──────────────────────────────────────────────────────
+
+    async def list_active_skills(
+        self, agent_id: UUID, workspace_id: UUID, limit: int = 10
+    ) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            """
+            SELECT id, name, version, content_md
+            FROM agent_skills
+            WHERE agent_id = $1 AND workspace_id = $2 AND active = true
+            ORDER BY score DESC, use_count DESC
+            LIMIT $3
+            """,
+            agent_id,
+            workspace_id,
+            limit,
+        )
+
+    async def increment_skill_use(self, skill_id: UUID) -> None:
+        await self._pool.execute(
+            "UPDATE agent_skills SET use_count = use_count + 1 WHERE id = $1",
+            skill_id,
+        )
+
+    async def upsert_agent_skill(
+        self,
+        agent_id: UUID,
+        workspace_id: UUID,
+        name: str,
+        content_md: str,
+    ) -> UUID:
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO agent_skills (agent_id, workspace_id, name, content_md)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            agent_id,
+            workspace_id,
+            name,
+            content_md,
+        )
+        if row is not None:
+            return row["id"]
+        existing = await self._pool.fetchrow(
+            "SELECT id FROM agent_skills WHERE agent_id = $1 AND workspace_id = $2 AND name = $3",
+            agent_id, workspace_id, name,
+        )
+        await self._pool.execute(
+            """
+            UPDATE agent_skills SET content_md = $2, version = version + 1
+            WHERE id = $1
+            """,
+            existing["id"],
+            content_md,
+        )
+        return existing["id"]
+
     # ── Knowledge Graph ─────────────────────────────────────────────────────
 
     async def upsert_kg_node(
@@ -817,6 +876,12 @@ class FlowRepository:
         return await self._pool.fetch(
             "SELECT * FROM kg_nodes WHERE workspace_id=$1 ORDER BY pagerank DESC",
             workspace_id,
+        )
+
+    async def list_kg_nodes_by_types(self, workspace_id: "UUID", node_types: list[str]) -> list["asyncpg.Record"]:
+        return await self._pool.fetch(
+            "SELECT * FROM kg_nodes WHERE workspace_id=$1 AND node_type = ANY($2::text[]) ORDER BY pagerank DESC",
+            workspace_id, node_types,
         )
 
     async def list_kg_edges(self, workspace_id: "UUID") -> list["asyncpg.Record"]:
@@ -915,6 +980,118 @@ class FlowRepository:
             node_id, workspace_id,
         )
         return result.endswith("1")
+
+    async def insert_trace_node(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        execution_id: UUID,
+        question: str,
+        answer_summary: str,
+        confidence: float,
+        embedding: list[float] | None = None,
+    ) -> UUID:
+        """Create a trace node in the KG for this execution."""
+        label = f"Run: {question[:60]}"
+        vec = _vec_literal(embedding) if embedding else None
+        metadata = json.dumps({
+            "agent_id": str(agent_id),
+            "execution_id": str(execution_id),
+            "confidence": confidence,
+            "answer_preview": answer_summary[:300],
+        })
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_nodes (workspace_id, label, node_type, summary, embedding, metadata)
+            VALUES ($1, $2, 'trace', $3, $4::vector, $5::jsonb)
+            ON CONFLICT (workspace_id, label, node_type) DO UPDATE SET
+                summary = EXCLUDED.summary,
+                metadata = EXCLUDED.metadata,
+                updated_at = now()
+            RETURNING id
+            """,
+            workspace_id, label, answer_summary[:500], vec, metadata,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def insert_trace_edges(self, workspace_id: UUID, trace_node_id: UUID, fact_node_ids: list[UUID]) -> None:
+        """Link trace node to fact/concept nodes it produced."""
+        for fid in fact_node_ids:
+            await self._pool.execute(
+                """
+                INSERT INTO kg_edges (workspace_id, source_id, target_id, edge_type, weight)
+                VALUES ($1, $2, $3, 'referenced_by', 1.0)
+                ON CONFLICT DO NOTHING
+                """,
+                workspace_id, trace_node_id, fid,
+            )
+
+    # ── Agent Skills ─────────────────────────────────────────────────────
+
+    async def upsert_agent_skill(
+        self, agent_id: UUID, workspace_id: UUID, name: str, content_md: str
+    ) -> UUID:
+        """Insert a new version of a skill (append-only versioning)."""
+        row = await self._pool.fetchrow(
+            "SELECT COALESCE(MAX(version), 0) as max_v FROM agent_skills WHERE agent_id=$1 AND name=$2",
+            agent_id, name,
+        )
+        next_version = (row["max_v"] if row else 0) + 1
+        await self._pool.execute(
+            "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
+            agent_id, name,
+        )
+        new_row = await self._pool.fetchrow(
+            """
+            INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, active)
+            VALUES ($1, $2, $3, $4, $5, true)
+            RETURNING id
+            """,
+            agent_id, workspace_id, name, next_version, content_md,
+        )
+        assert new_row is not None
+        return new_row["id"]
+
+    async def list_active_skills(self, agent_id: UUID, workspace_id: UUID) -> list[asyncpg.Record]:
+        """Get all active skill versions for an agent."""
+        return await self._pool.fetch(
+            """
+            SELECT id, name, version, content_md, created_at
+            FROM agent_skills
+            WHERE agent_id = $1 AND workspace_id = $2 AND active = true
+            ORDER BY name
+            """,
+            agent_id, workspace_id,
+        )
+
+    async def get_skill_history(self, agent_id: UUID, name: str) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            "SELECT id, version, content_md, active, created_at FROM agent_skills WHERE agent_id=$1 AND name=$2 ORDER BY version DESC",
+            agent_id, name,
+        )
+
+    async def decay_skill_scores(self, agent_id: UUID, workspace_id: UUID, decay_factor: float = 0.95) -> int:
+        """Decay all active skill scores. Returns count of pruned skills (score < 0.3 after 10 uses)."""
+        await self._pool.execute(
+            "UPDATE agent_skills SET score = score * $1 WHERE agent_id=$2 AND workspace_id=$3 AND active=true",
+            decay_factor, agent_id, workspace_id,
+        )
+        result = await self._pool.execute(
+            "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND workspace_id=$2 AND active=true AND score < 0.3 AND use_count >= 10",
+            agent_id, workspace_id,
+        )
+        try:
+            return int(result.split(" ")[1])
+        except Exception:
+            return 0
+
+    async def boost_skill_score(self, skill_id: UUID, boost: float = 0.1) -> None:
+        """Boost a skill's score when it leads to a good reflection grade."""
+        await self._pool.execute(
+            "UPDATE agent_skills SET score = LEAST(score + $1, 2.0) WHERE id = $2",
+            boost, skill_id,
+        )
 
     async def list_kg_topics(self, workspace_id: "UUID") -> list[str]:
         rows = await self._pool.fetch(

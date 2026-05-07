@@ -77,22 +77,24 @@ def compile_graph(
 TEMPLATES: dict[str, GraphSpec] = {
     "linear-3": GraphSpec(
         template="linear-3",
-        nodes=["planner", "worker", "synthesizer"],
+        nodes=["planner", "worker", "synthesizer", "reflector"],
         edges=[
             ("planner", "worker"),
             ("worker", "synthesizer"),
-            ("synthesizer", "END"),
+            ("synthesizer", "reflector"),
+            ("reflector", "END"),
         ],
         entry="planner",
     ),
 
     "deer_flow": GraphSpec(  # alias kept for existing agents
         template="deer_flow",
-        nodes=["planner", "worker", "synthesizer"],
+        nodes=["planner", "worker", "synthesizer", "reflector"],
         edges=[
             ("planner", "worker"),
             ("worker", "synthesizer"),
-            ("synthesizer", "END"),
+            ("synthesizer", "reflector"),
+            ("reflector", "END"),
         ],
         entry="planner",
     ),

@@ -158,10 +158,17 @@ async def get_graph(
     workspace_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
+    node_types: str | None = None,
 ) -> KGGraphOut:
     await _assert_workspace(user_id, workspace_id, repo)
-    nodes = await repo.list_kg_nodes(workspace_id)
+    if node_types:
+        type_list = [t.strip() for t in node_types.split(",") if t.strip()]
+        nodes = await repo.list_kg_nodes_by_types(workspace_id, type_list)
+    else:
+        nodes = await repo.list_kg_nodes(workspace_id)
+    node_ids = {n["id"] for n in nodes}
     edges = await repo.list_kg_edges(workspace_id)
+    edges = [e for e in edges if e["source_id"] in node_ids and e["target_id"] in node_ids]
     cluster_ids = {n.get("cluster_id") for n in nodes if n.get("cluster_id") is not None}
     return KGGraphOut(
         nodes=[_node_out(n) for n in nodes],
