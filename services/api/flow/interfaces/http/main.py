@@ -32,6 +32,7 @@ from flow.interfaces.http.routes import (
     executions,
     feedback,
     health,
+    kg,
     knowledge,
     memory,
     meta,
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(schedules.router)
     app.include_router(tools.router)
     app.include_router(trace.router)
+    app.include_router(kg.router)
     return app
 
 
