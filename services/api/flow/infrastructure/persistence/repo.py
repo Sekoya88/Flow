@@ -755,3 +755,170 @@ class FlowRepository:
             agent_id,
             limit,
         )
+
+    # ── Knowledge Graph ─────────────────────────────────────────────────────
+
+    async def upsert_kg_node(
+        self,
+        workspace_id: "UUID",
+        label: str,
+        node_type: str,
+        source_path: str | None = None,
+        content_hash: str | None = None,
+        summary: str | None = None,
+        embedding: list[float] | None = None,
+        metadata: dict | None = None,
+        cluster_id: int | None = None,
+        pagerank: float = 0.0,
+        pos_x: float = 0.0,
+        pos_y: float = 0.0,
+    ) -> "UUID":
+        import json as _json
+        emb_str = _vec_literal(embedding) if embedding else None
+        meta_str = _json.dumps(metadata or {})
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_nodes
+              (workspace_id, label, node_type, source_path, content_hash, summary,
+               embedding, metadata, cluster_id, pagerank, pos_x, pos_y, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,
+                    CASE WHEN $7::text IS NULL THEN NULL ELSE $7::vector END,
+                    $8::jsonb, $9, $10, $11, $12, now())
+            ON CONFLICT (workspace_id, label, node_type) DO UPDATE SET
+              source_path   = EXCLUDED.source_path,
+              content_hash  = EXCLUDED.content_hash,
+              summary       = EXCLUDED.summary,
+              embedding     = EXCLUDED.embedding,
+              metadata      = EXCLUDED.metadata,
+              cluster_id    = EXCLUDED.cluster_id,
+              pagerank      = EXCLUDED.pagerank,
+              pos_x         = EXCLUDED.pos_x,
+              pos_y         = EXCLUDED.pos_y,
+              updated_at    = now()
+            RETURNING id
+            """,
+            workspace_id, label, node_type, source_path, content_hash, summary,
+            emb_str, meta_str, cluster_id, pagerank, pos_x, pos_y,
+        )
+        return row["id"]
+
+    async def get_kg_node_by_label(
+        self, workspace_id: "UUID", label: str, node_type: str
+    ) -> "asyncpg.Record | None":
+        return await self._pool.fetchrow(
+            "SELECT * FROM kg_nodes WHERE workspace_id=$1 AND label=$2 AND node_type=$3",
+            workspace_id, label, node_type,
+        )
+
+    async def get_kg_node(self, node_id: "UUID") -> "asyncpg.Record | None":
+        return await self._pool.fetchrow("SELECT * FROM kg_nodes WHERE id=$1", node_id)
+
+    async def list_kg_nodes(self, workspace_id: "UUID") -> list["asyncpg.Record"]:
+        return await self._pool.fetch(
+            "SELECT * FROM kg_nodes WHERE workspace_id=$1 ORDER BY pagerank DESC",
+            workspace_id,
+        )
+
+    async def list_kg_edges(self, workspace_id: "UUID") -> list["asyncpg.Record"]:
+        return await self._pool.fetch(
+            "SELECT * FROM kg_edges WHERE workspace_id=$1",
+            workspace_id,
+        )
+
+    async def upsert_kg_edge(
+        self,
+        workspace_id: "UUID",
+        source_id: "UUID",
+        target_id: "UUID",
+        edge_type: str,
+        weight: float = 1.0,
+        metadata: dict | None = None,
+    ) -> "UUID":
+        import json as _json
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_edges (workspace_id, source_id, target_id, edge_type, weight, metadata)
+            VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+            ON CONFLICT (source_id, target_id, edge_type) DO UPDATE SET
+              weight   = EXCLUDED.weight,
+              metadata = EXCLUDED.metadata
+            RETURNING id
+            """,
+            workspace_id, source_id, target_id, edge_type, weight,
+            _json.dumps(metadata or {}),
+        )
+        return row["id"]
+
+    async def get_kg_neighbors(
+        self, node_id: "UUID", workspace_id: "UUID"
+    ) -> tuple[list["asyncpg.Record"], list["asyncpg.Record"]]:
+        """Return (neighbor_nodes, edges) for 1-hop neighborhood."""
+        edges = await self._pool.fetch(
+            """
+            SELECT * FROM kg_edges
+            WHERE workspace_id=$1 AND (source_id=$2 OR target_id=$2)
+            """,
+            workspace_id, node_id,
+        )
+        neighbor_ids = set()
+        for e in edges:
+            neighbor_ids.add(e["source_id"])
+            neighbor_ids.add(e["target_id"])
+        neighbor_ids.discard(node_id)
+        nodes = await self._pool.fetch(
+            "SELECT * FROM kg_nodes WHERE id = ANY($1::uuid[])",
+            list(neighbor_ids),
+        ) if neighbor_ids else []
+        return list(nodes), list(edges)
+
+    async def bulk_update_kg_metrics(
+        self,
+        pageranks: dict["UUID", float],
+        clusters: dict["UUID", int],
+        positions: dict["UUID", tuple[float, float]],
+    ) -> None:
+        """Bulk-write pagerank, cluster_id, pos_x, pos_y after NetworkX recompute."""
+        if not pageranks:
+            return
+        async with self._pool.acquire() as conn:
+            await conn.executemany(
+                """
+                UPDATE kg_nodes
+                SET pagerank=($1)::float, cluster_id=($2)::int,
+                    pos_x=($3)::float, pos_y=($4)::float
+                WHERE id=$5
+                """,
+                [
+                    (pageranks.get(nid, 0.0), clusters.get(nid), *positions.get(nid, (0.0, 0.0)), nid)
+                    for nid in pageranks
+                ],
+            )
+
+    async def vector_search_kg(
+        self, workspace_id: "UUID", embedding: list[float], k: int = 6
+    ) -> list["asyncpg.Record"]:
+        return await self._pool.fetch(
+            """
+            SELECT id, label, node_type, summary, source_path, metadata,
+                   embedding <=> $1::vector AS dist
+            FROM kg_nodes
+            WHERE workspace_id=$2 AND embedding IS NOT NULL
+            ORDER BY embedding <=> $1::vector
+            LIMIT $3
+            """,
+            _vec_literal(embedding), workspace_id, k,
+        )
+
+    async def delete_kg_node(self, workspace_id: "UUID", node_id: "UUID") -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM kg_nodes WHERE id=$1 AND workspace_id=$2",
+            node_id, workspace_id,
+        )
+        return result.endswith("1")
+
+    async def list_kg_topics(self, workspace_id: "UUID") -> list[str]:
+        rows = await self._pool.fetch(
+            "SELECT label FROM kg_nodes WHERE workspace_id=$1 AND node_type='topic' ORDER BY pagerank DESC LIMIT 30",
+            workspace_id,
+        )
+        return [r["label"] for r in rows]
