@@ -6,10 +6,15 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   BookOpen,
+  Brain,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
   Database,
   MessageSquare,
   ScrollText,
   Sparkles,
+  XCircle,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -29,14 +34,25 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-type Summary = { counts: Record<string, number> };
+type RecentExecution = {
+  id: string;
+  agent_name: string;
+  status: "completed" | "failed" | "running";
+  user_message: string;
+  created_at: string;
+};
+
+type Summary = {
+  counts: Record<string, number>;
+  recent_executions: RecentExecution[];
+};
 type Proposal = { id: string; title: string; body: string; status: string; created_at: string };
 
 const TILES = [
-  { key: "agents", label: "Agents", href: "/settings" },
-  { key: "executions", label: "Executions", href: "/run" },
-  { key: "knowledge", label: "Knowledge sources", href: "/knowledge" },
-  { key: "pending_proposals", label: "Pending proposals", href: "/proposals" },
+  { key: "agents", label: "Agents", href: "/agents" },
+  { key: "executions", label: "Runs", href: "/run" },
+  { key: "episodic_memories", label: "Memories", href: "/memory" },
+  { key: "active_schedules", label: "Active schedules", href: "/schedules" },
 ] as const;
 
 /** Mirrors `services/api/flow/infrastructure/db/schema.sql` — documentation only */
@@ -74,6 +90,18 @@ const POSTGRES_MODEL: { table: string; columns: string[] }[] = [
     table: "execution_events",
     columns: ["id", "execution_id", "kind", "payload", "created_at"],
   },
+  {
+    table: "episodic_memories",
+    columns: ["id", "workspace_id", "agent_id", "user_id", "execution_id", "content", "embedding", "created_at"],
+  },
+  {
+    table: "reasoning_patterns",
+    columns: ["id", "workspace_id", "agent_id", "problem_summary", "solution_steps", "embedding", "score", "use_count", "created_at"],
+  },
+  {
+    table: "agent_schedules",
+    columns: ["id", "workspace_id", "agent_id", "user_id", "cron_expr", "prompt_template", "delivery_type", "delivery_target", "enabled", "last_run_at", "created_at"],
+  },
 ];
 
 export default function DashboardPage() {
@@ -81,6 +109,7 @@ export default function DashboardPage() {
   const routerRef = useRef(router);
   const [data, setData] = useState<Summary | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [recent, setRecent] = useState<RecentExecution[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -100,6 +129,7 @@ export default function DashboardPage() {
       .then(([s, p]) => {
         setData(s);
         setProposals(p.proposals ?? []);
+        setRecent(s.recent_executions ?? []);
       })
       .catch((e) => {
         setErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load dashboard");
@@ -188,7 +218,7 @@ export default function DashboardPage() {
             <Card
               className={cn(
                 "relative overflow-hidden shadow-sm transition-shadow hover:shadow-md",
-                key === "pending_proposals" && c[key] > 0 && "border-flow-thinking/40",
+                key === "active_schedules" && c[key] > 0 && "border-flow-thinking/40",
               )}
               style={{ animationDelay: `${i * 60}ms` }}
             >
@@ -200,7 +230,7 @@ export default function DashboardPage() {
                       ? "var(--color-flow-brand)"
                       : key === "executions"
                         ? "var(--color-flow-streaming)"
-                        : key === "knowledge"
+                        : key === "episodic_memories"
                           ? "var(--color-flow-done)"
                           : "var(--color-flow-thinking)",
                 }}
@@ -245,6 +275,13 @@ export default function DashboardPage() {
             >
               <BookOpen className="h-3.5 w-3.5" aria-hidden />
               Setup guide
+            </Link>
+            <Link
+              href="/schedules"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
+            >
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+              Schedules
             </Link>
           </div>
         </Card>
@@ -298,6 +335,40 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent runs */}
+      {recent.length > 0 && (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MessageSquare className="h-4 w-4 text-flow-streaming" />
+              Recent runs
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border/40">
+              {recent.map((r) => (
+                <li key={r.id} className="flex items-center gap-3 px-6 py-3">
+                  {r.status === "completed" ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  ) : r.status === "failed" ? (
+                    <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                  ) : (
+                    <Clock className="h-4 w-4 shrink-0 animate-pulse text-flow-streaming" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{r.user_message || "(no message)"}</p>
+                    <p className="text-xs text-muted-foreground">{r.agent_name}</p>
+                  </div>
+                  <time className="shrink-0 text-[11px] text-muted-foreground">
+                    {new Date(r.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Separator className="bg-border/60" />
 

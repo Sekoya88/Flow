@@ -205,6 +205,7 @@ export default function RunPage() {
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [executions, setExecutions] = useState<ExecRow[]>([]);
   const [knowledgeCount, setKnowledgeCount] = useState<number | null>(null);
+  const [agentMemoryCount, setAgentMemoryCount] = useState<number | null>(null);
   const [agentRenameDraft, setAgentRenameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -294,6 +295,15 @@ export default function RunPage() {
       () => setKnowledgeCount(null),
     );
   }, [wsId, lastExecutionId]);
+
+  useEffect(() => {
+    if (!wsId || !agentId) { setAgentMemoryCount(null); return; }
+    apiFetch<{ episodic: { id: string }[]; semantic: { id: string }[] }>(
+      `/api/v1/memory/tiered?workspace_id=${wsId}&agent_id=${agentId}`,
+    )
+      .then((r) => setAgentMemoryCount((r.episodic?.length ?? 0) + (r.semantic?.length ?? 0)))
+      .catch(() => setAgentMemoryCount(null));
+  }, [wsId, agentId, lastExecutionId]);
 
   useEffect(() => {
     setAgentRenameDraft((activeAgent?.name ?? "").trim());
@@ -633,6 +643,12 @@ export default function RunPage() {
             New agent
           </Link>
         </div>
+        {agentMemoryCount !== null && agentMemoryCount > 0 && (
+          <p className="mt-1 px-1 text-[11px] text-muted-foreground">
+            <Brain className="inline h-3 w-3 mr-1 text-violet-400" />
+            {agentMemoryCount} {agentMemoryCount === 1 ? "memory" : "memories"} available
+          </p>
+        )}
 
         <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-6 shadow-sm backdrop-blur-sm">
           <FlowGraph className="mx-auto w-full max-w-sm" />
