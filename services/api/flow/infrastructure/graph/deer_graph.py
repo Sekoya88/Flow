@@ -26,6 +26,7 @@ class GraphContext:
     anthropic_api_key: str | None = None
     execution_id: UUID | None = None
     settings: Settings | None = None
+    stream_hub: Any | None = None  # ExecutionStreamHub — avoids circular import
 
 
 def build_deer_flow_graph(ctx: GraphContext, checkpointer: Any | None = None) -> Any:

@@ -423,11 +423,17 @@ class FlowRepository:
         q = f"SELECT {cols} FROM proposals WHERE workspace_id = $1 ORDER BY created_at DESC"
         return await self._pool.fetch(q, workspace_id)
 
-    async def dashboard_counts(self, user_id: UUID) -> dict[str, int]:
-        ws_ids = await self._pool.fetch("SELECT workspace_id FROM workspace_members WHERE user_id = $1", user_id)
+    async def dashboard_counts(self, user_id: UUID) -> dict:
+        ws_ids = await self._pool.fetch(
+            "SELECT workspace_id FROM workspace_members WHERE user_id = $1", user_id
+        )
         if not ws_ids:
-            return {"agents": 0, "executions": 0, "knowledge": 0, "pending_proposals": 0}
+            return {
+                "counts": {"agents": 0, "executions": 0, "knowledge": 0, "pending_proposals": 0, "episodic_memories": 0, "active_schedules": 0},
+                "recent_executions": [],
+            }
         ids = [r["workspace_id"] for r in ws_ids]
+
         agents = await self._pool.fetchval(
             "SELECT COUNT(*) FROM agents WHERE workspace_id = ANY($1::uuid[])", ids
         )
@@ -449,11 +455,43 @@ class FlowRepository:
             """,
             ids,
         )
+        episodic = await self._pool.fetchval(
+            "SELECT COUNT(*) FROM episodic_memories WHERE workspace_id = ANY($1::uuid[])", ids
+        )
+        schedules = await self._pool.fetchval(
+            "SELECT COUNT(*) FROM agent_schedules WHERE workspace_id = ANY($1::uuid[]) AND enabled = true", ids
+        )
+        recent_rows = await self._pool.fetch(
+            """
+            SELECT e.id, e.status, e.user_message, e.created_at, a.name AS agent_name
+            FROM executions e
+            JOIN agents a ON a.id = e.agent_id
+            WHERE a.workspace_id = ANY($1::uuid[])
+            ORDER BY e.created_at DESC
+            LIMIT 8
+            """,
+            ids,
+        )
+        recent = [
+            {
+                "id": str(r["id"]),
+                "agent_name": r["agent_name"],
+                "status": r["status"],
+                "user_message": (r["user_message"] or "")[:80],
+                "created_at": r["created_at"].isoformat(),
+            }
+            for r in recent_rows
+        ]
         return {
-            "agents": int(agents or 0),
-            "executions": int(executions or 0),
-            "knowledge": int(knowledge or 0),
-            "pending_proposals": int(proposals or 0),
+            "counts": {
+                "agents": int(agents or 0),
+                "executions": int(executions or 0),
+                "knowledge": int(knowledge or 0),
+                "pending_proposals": int(proposals or 0),
+                "episodic_memories": int(episodic or 0),
+                "active_schedules": int(schedules or 0),
+            },
+            "recent_executions": recent,
         }
 
     async def set_proposal_status(self, proposal_id: UUID, workspace_id: UUID, status: str) -> bool:

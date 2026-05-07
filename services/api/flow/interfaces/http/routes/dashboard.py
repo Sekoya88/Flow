@@ -16,5 +16,5 @@ async def summary(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    counts = await repo.dashboard_counts(user_id)
-    return {"counts": counts}
+    result = await repo.dashboard_counts(user_id)
+    return result
