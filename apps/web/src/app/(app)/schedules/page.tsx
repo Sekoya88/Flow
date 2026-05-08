@@ -35,11 +35,20 @@ type Schedule = {
 
 type AgentRow = { id: string; name: string };
 
+type CronJob = {
+  name: string;
+  cron_expr: string;
+  human_readable: string;
+  next_run: string;
+  description: string;
+};
+
 export default function SchedulesPage() {
   const workspaces = useStore((s) => s.workspaces);
   const workspaceId = workspaces[0]?.id ?? null;
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<{
@@ -61,10 +70,12 @@ export default function SchedulesPage() {
     Promise.all([
       apiFetch<{ schedules: Schedule[] }>(`/api/v1/schedules?workspace_id=${workspaceId}`),
       apiFetch<{ agents: AgentRow[] }>(`/api/v1/agents?workspace_id=${workspaceId}`),
+      apiFetch<{ cron_jobs: CronJob[] }>(`/api/v1/schedules/cron-jobs`),
     ])
-      .then(([sData, aData]) => {
+      .then(([sData, aData, cData]) => {
         setSchedules(sData.schedules ?? []);
         setAgents(aData.agents ?? []);
+        setCronJobs(cData.cron_jobs ?? []);
       })
       .catch(console.warn)
       .finally(() => setLoading(false));
@@ -135,6 +146,44 @@ export default function SchedulesPage() {
     <div className="flex h-full flex-col">
       <FlowPageHeader title="Schedules" />
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {cronJobs.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">System Cron Jobs</CardTitle>
+              <CardDescription>Background jobs managed by the ARQ worker.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="px-4 py-2 text-left font-medium">Name</th>
+                    <th className="px-4 py-2 text-left font-medium">Frequency</th>
+                    <th className="px-4 py-2 text-left font-medium">Next run</th>
+                    <th className="px-4 py-2 text-left font-medium">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronJobs.map((job) => (
+                    <tr key={job.name} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3 font-mono font-medium">{job.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge variant="outline" className="font-mono text-xs">{job.cron_expr}</Badge>
+                          <span className="text-muted-foreground text-xs">{job.human_readable}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">
+                        {new Date(job.next_run).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{job.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">New Schedule</CardTitle>
