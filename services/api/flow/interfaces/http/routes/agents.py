@@ -33,7 +33,7 @@ Available tools (boolean flags):
 
 Output exactly this JSON shape:
 {
-  "name": "short descriptive name",
+  "name": "short 1-3 word title (e.g. 'Code Assistant')",
   "template": "linear-3" or "tool-agent",
   "system_prompt": "2-4 sentence instructions for the agent",
   "tools": {
@@ -229,3 +229,93 @@ async def patch_agent(
     raw_cfg = fresh["config"]
     cfg = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
     return {"id": str(agent_id), "name": fresh["name"], "config": cfg}
+
+
+@router.get("/agents/{agent_id}/stats")
+async def agent_stats(
+    agent_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Return agent stats: total runs, avg confidence, grade distribution, confidence trend."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    allowed_ws = {r["id"] for r in ws_rows}
+    agent = None
+    for ws in allowed_ws:
+        agent = await repo.get_agent(agent_id, ws)
+        if agent:
+            break
+    if not agent:
+        raise HTTPException(status_code=404, detail="agent not found")
+    workspace_id = agent["workspace_id"]
+
+    # Total runs + avg confidence from execution_events final payloads
+    total_runs = await repo._pool.fetchval(
+        "SELECT COUNT(*) FROM executions WHERE agent_id = $1 AND workspace_id = $2",
+        agent_id, workspace_id,
+    )
+
+    # Confidence from execution_events where kind='final' and payload->>'confidence' exists
+    conf_rows = await repo._pool.fetch(
+        """
+        SELECT
+            e.id AS execution_id,
+            ee.payload->>'confidence' AS conf,
+            e.created_at
+        FROM execution_events ee
+        JOIN executions e ON e.id = ee.execution_id
+        WHERE e.agent_id = $1 AND e.workspace_id = $2
+          AND ee.kind = 'final'
+          AND ee.payload->>'confidence' IS NOT NULL
+        ORDER BY e.created_at DESC
+        LIMIT 50
+        """,
+        agent_id, workspace_id,
+    )
+    confidences = []
+    for r in conf_rows:
+        try:
+            confidences.append(float(r["conf"]))
+        except (ValueError, TypeError):
+            pass
+
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+    confidence_trend = [
+        {"confidence": c, "created_at": r["created_at"].isoformat(), "execution_id": str(r["execution_id"])}
+        for c, r in zip(confidences[:20], conf_rows[:20])
+    ]
+
+    # Grade distribution from metacog KG nodes
+    grade_rows = await repo._pool.fetch(
+        """
+        SELECT (metadata->>'grade')::int AS grade, COUNT(*)::int AS cnt
+        FROM kg_nodes
+        WHERE workspace_id = $1 AND node_type = 'metacog'
+          AND metadata->>'grade' IS NOT NULL
+          AND id IN (
+            SELECT kge.source_node_id FROM kg_edges kge
+            JOIN kg_nodes kn2 ON kn2.id = kge.target_node_id
+            JOIN executions ex ON ex.id::text = kn2.metadata->>'execution_id'
+            WHERE ex.agent_id = $2
+          )
+        GROUP BY (metadata->>'grade')::int
+        ORDER BY grade
+        """,
+        workspace_id, agent_id,
+    )
+    grade_dist = {r["grade"]: r["cnt"] for r in grade_rows} if grade_rows else {}
+
+    # Last run time
+    last_run = await repo._pool.fetchval(
+        "SELECT MAX(created_at) FROM executions WHERE agent_id = $1 AND workspace_id = $2",
+        agent_id, workspace_id,
+    )
+
+    return {
+        "agent_id": str(agent_id),
+        "total_runs": int(total_runs or 0),
+        "avg_confidence": round(avg_confidence, 3),
+        "grade_distribution": grade_dist,
+        "confidence_trend": confidence_trend,
+        "last_run_at": last_run.isoformat() if last_run else None,
+    }

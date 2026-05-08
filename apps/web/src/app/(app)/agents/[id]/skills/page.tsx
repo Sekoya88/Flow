@@ -1,0 +1,399 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  FileCode2,
+  GitCompare,
+  Loader2,
+  Plus,
+  Sparkles,
+  User,
+  Zap,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
+import { SkillEditor } from "@/components/agents/SkillEditor";
+import { SkillDiffView } from "@/components/agents/SkillDiffView";
+import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+type SkillRow = {
+  id: string;
+  name: string;
+  version: number;
+  content_md: string;
+  description: string;
+  allowed_tools: string[];
+  triggers: string[];
+  metadata: Record<string, unknown>;
+  active: boolean;
+  score: number;
+  use_count: number;
+  created_at: string;
+};
+
+type VersionRow = {
+  id: string;
+  version: number;
+  content_md: string;
+  active: boolean;
+  created_at: string;
+};
+
+export default function SkillsPage() {
+  const params = useParams<{ id: string }>();
+  const agentId = params.id;
+  const router = useRouter();
+
+  const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [wsId, setWsId] = useState<string | null>(null);
+  const [agentName, setAgentName] = useState<string>("");
+  const [editing, setEditing] = useState<SkillRow | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [diffSkill, setDiffSkill] = useState<string | null>(null);
+  const [versions, setVersions] = useState<VersionRow[]>([]);
+  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const me = await apiFetch<{ workspaces: { id: string }[] }>("/api/v1/auth/me");
+      const w = me.workspaces[0];
+      if (!w) return;
+      setWsId(w.id);
+
+      const agents = await apiFetch<{ agents: { id: string; name: string }[] }>(
+        `/api/v1/workspaces/${w.id}/agents`,
+      );
+      const agent = agents.agents.find((a) => a.id === agentId);
+      if (agent) setAgentName(agent.name);
+
+      const data = await apiFetch<{ skills: SkillRow[] }>(
+        `/api/v1/skills?workspace_id=${w.id}&agent_id=${agentId}`,
+      );
+      setSkills(data.skills ?? []);
+    } catch (e) {
+      console.warn("skills load failed", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const loadVersions = useCallback(async (skillName: string) => {
+    try {
+      const data = await apiFetch<{ versions: VersionRow[] }>(
+        `/api/v1/skills/history?agent_id=${agentId}&name=${encodeURIComponent(skillName)}`,
+      );
+      setVersions(data.versions ?? []);
+    } catch (e) {
+      console.warn("versions load failed", e);
+    }
+  }, [agentId]);
+
+  const toggleExpand = useCallback((name: string) => {
+    if (expandedSkill === name) {
+      setExpandedSkill(null);
+      setVersions([]);
+    } else {
+      setExpandedSkill(name);
+      void loadVersions(name);
+    }
+  }, [expandedSkill, loadVersions]);
+
+  const handleSave = useCallback(async (content: string, name: string) => {
+    if (!wsId) return;
+    try {
+      await apiFetch("/api/v1/skills", {
+        method: "POST",
+        json: {
+          workspace_id: wsId,
+          agent_id: agentId,
+          name,
+          content_md: content,
+        },
+      });
+      setEditing(null);
+      setCreating(false);
+      void load();
+    } catch (e) {
+      console.warn("skill save failed", e);
+    }
+  }, [wsId, agentId, load]);
+
+  const handleDeactivate = useCallback(async (skillId: string) => {
+    try {
+      await apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" });
+      void load();
+    } catch (e) {
+      console.warn("deactivate failed", e);
+    }
+  }, [load]);
+
+  if (editing || creating) {
+    return (
+      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 pb-10 animate-fade-in">
+        <div className="flex items-center gap-2 pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setEditing(null); setCreating(false); }}
+            className="gap-1.5"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {creating ? "New skill" : `Editing: ${editing?.name}`}
+          </span>
+        </div>
+        <SkillEditor
+          initialContent={editing?.content_md ?? ""}
+          initialName={editing?.name ?? ""}
+          onSave={handleSave}
+          onCancel={() => { setEditing(null); setCreating(false); }}
+        />
+      </div>
+    );
+  }
+
+  if (diffSkill && versions.length >= 2) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4 px-4 pb-10 animate-fade-in">
+        <div className="flex items-center gap-2 pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setDiffSkill(null); setVersions([]); }}
+            className="gap-1.5"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Comparing versions of &ldquo;{diffSkill}&rdquo;
+          </span>
+        </div>
+        <SkillDiffView
+          oldContent={versions[1]?.content_md ?? ""}
+          newContent={versions[0]?.content_md ?? ""}
+          oldLabel={`v${versions[1]?.version}`}
+          newLabel={`v${versions[0]?.version}`}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-8 px-4 pb-10 animate-fade-in">
+      <FlowPageHeader
+        eyebrow={
+          <button onClick={() => router.push("/agents")} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-3 w-3" />
+            <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-wide">
+              {agentName || "Agent"}
+            </Badge>
+          </button>
+        }
+        title="Skills"
+        description="Reusable instruction modules auto-created by the reflector or manually authored. Each skill is versioned — new saves create a new version."
+        actions={
+          <Button onClick={() => setCreating(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            New skill
+          </Button>
+        }
+      />
+
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      ) : skills.length === 0 ? (
+        <div className="flex flex-col items-center gap-5 py-16">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-flow-brand/10 border border-flow-brand/20">
+            <Sparkles className="h-7 w-7 text-flow-brand/50" />
+          </div>
+          <div className="text-center space-y-2 max-w-sm">
+            <p className="font-semibold text-foreground">No skills yet</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Skills are auto-created when the reflector node detects reusable patterns during execution.
+              You can also create them manually.
+            </p>
+          </div>
+          <Button onClick={() => setCreating(true)} variant="outline" className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            Create manually
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {skills.map((skill) => {
+            const isExpanded = expandedSkill === skill.name;
+            const isAuto = skill.metadata?.auto_generated === true || skill.metadata?.author === "flow-reflector";
+            return (
+              <div
+                key={skill.id}
+                className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden transition-all"
+              >
+                {/* Skill header */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(skill.name)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/20 transition-colors"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  )}
+
+                  <FileCode2 className="h-4 w-4 text-flow-brand shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">{skill.name}</span>
+                      <Badge
+                        variant="outline"
+                        className="h-4 rounded px-1.5 py-0 text-[9px] font-mono tabular-nums"
+                      >
+                        v{skill.version}
+                      </Badge>
+                      {isAuto && (
+                        <Badge
+                          variant="outline"
+                          className="h-4 rounded px-1.5 py-0 text-[9px] gap-0.5 border-flow-brand/30 bg-flow-brand/10"
+                        >
+                          <Sparkles className="h-2 w-2" />
+                          auto
+                        </Badge>
+                      )}
+                    </div>
+                    {skill.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-lg">
+                        {skill.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1 tabular-nums">
+                      <Zap className="h-2.5 w-2.5" />
+                      {skill.use_count} uses
+                    </span>
+                    <span className="flex items-center gap-1 tabular-nums">
+                      score: {skill.score.toFixed(1)}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Expanded: triggers + actions */}
+                {isExpanded && (
+                  <div className="border-t border-border/40 px-4 py-3 space-y-3 animate-slide-up">
+                    {skill.triggers.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Triggers</p>
+                        <div className="flex flex-wrap gap-1">
+                          {skill.triggers.map((t, i) => (
+                            <span key={i} className="rounded-md bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {skill.allowed_tools.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Allowed tools</p>
+                        <div className="flex flex-wrap gap-1">
+                          {skill.allowed_tools.map((t) => (
+                            <Badge key={t} variant="outline" className="text-[9px] px-1.5 py-0">
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Version history */}
+                    {versions.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">Versions</p>
+                        <div className="space-y-1">
+                          {versions.map((v) => (
+                            <div
+                              key={v.id}
+                              className={cn(
+                                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs",
+                                v.active ? "bg-flow-brand/5 border border-flow-brand/10" : "border border-transparent",
+                              )}
+                            >
+                              <span className="font-mono tabular-nums font-medium w-8">v{v.version}</span>
+                              <Clock className="h-2.5 w-2.5 text-muted-foreground/50" />
+                              <span className="text-muted-foreground">
+                                {new Date(v.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                              {v.active && (
+                                <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-brand/30 bg-flow-brand/10">
+                                  active
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={() => setEditing(skill)}>
+                        <FileCode2 className="h-3 w-3" />
+                        Edit
+                      </Button>
+                      {versions.length >= 2 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs h-7"
+                          onClick={() => {
+                            setDiffSkill(skill.name);
+                          }}
+                        >
+                          <GitCompare className="h-3 w-3" />
+                          Diff
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-xs h-7 text-destructive hover:text-destructive ml-auto"
+                        onClick={() => void handleDeactivate(skill.id)}
+                      >
+                        Deactivate
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

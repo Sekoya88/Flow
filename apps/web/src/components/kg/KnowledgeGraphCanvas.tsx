@@ -1,25 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
-import {
-  Background,
-  Controls,
-  type Edge,
-  Handle,
-  type Node,
-  MiniMap,
-  Position,
-  ReactFlow,
-  useEdgesState,
-  useNodesState,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import * as THREE from "three";
 import { cn } from "@/lib/utils";
+
+const ForceGraph3D = dynamic(() => import("react-force-graph-3d"), { ssr: false });
 
 export interface KGNode {
   id: string;
   label: string;
-  node_type: "note" | "concept" | "topic" | "query";
+  node_type: "note" | "concept" | "topic" | "query" | "trace" | "skill" | "tool_call" | "prompt" | "metacog";
   summary: string | null;
   source_path: string | null;
   cluster_id: number | null;
@@ -37,176 +28,257 @@ export interface KGEdge {
   weight: number;
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  concept: "#94a3b8",
+  skill: "#5eead4",
+  tool_call: "#fbbf24",
+  trace: "#38bdf8",
+  metacog: "#a78bfa",
+  prompt: "#818cf8",
+  note: "#8b9cb7",
+  topic: "#67e8f9",
+  query: "#7dd3fc",
+};
+
 interface Props {
   nodes: KGNode[];
   edges: KGEdge[];
   highlightedNodeIds?: Set<string>;
   highlightedPath?: string[];
-  onNodeClick?: (node: KGNode) => void;
   className?: string;
-}
-
-const CLUSTER_COLORS: Record<number, { bg: string; border: string; text: string }> = {
-  0: { bg: "rgba(99,102,241,0.15)", border: "#6366f1", text: "#a5b4fc" },
-  1: { bg: "rgba(16,185,129,0.15)", border: "#10b981", text: "#6ee7b7" },
-  2: { bg: "rgba(245,158,11,0.15)", border: "#f59e0b", text: "#fcd34d" },
-  3: { bg: "rgba(236,72,153,0.15)", border: "#ec4899", text: "#f9a8d4" },
-  4: { bg: "rgba(14,165,233,0.15)", border: "#0ea5e9", text: "#7dd3fc" },
-  5: { bg: "rgba(168,85,247,0.15)", border: "#a855f7", text: "#d8b4fe" },
-};
-
-const TYPE_SHAPE: Record<string, string> = {
-  note: "rounded-lg",
-  concept: "rounded-full",
-  topic: "rounded-sm",
-  query: "rounded-lg border-dashed",
-};
-
-function KGNodeComponent({ data }: { data: KGNode & { highlighted: boolean; inPath: boolean } }) {
-  const clusterColor = CLUSTER_COLORS[(data.cluster_id ?? 0) % Object.keys(CLUSTER_COLORS).length] ?? CLUSTER_COLORS[0];
-  const size = Math.max(32, Math.min(80, 32 + data.pagerank * 120));
-  const shapeClass = TYPE_SHAPE[data.node_type] ?? "rounded-lg";
-
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        background: data.highlighted || data.inPath ? clusterColor.border : clusterColor.bg,
-        borderColor: data.inPath ? "#ffffff" : clusterColor.border,
-        borderWidth: data.inPath ? 2 : 1,
-        boxShadow: (data.highlighted || data.inPath) ? `0 0 16px ${clusterColor.border}88` : undefined,
-        fontSize: Math.max(8, Math.min(11, size * 0.18)),
-        transition: "all 0.2s ease",
-      }}
-      className={cn(
-        "flex items-center justify-center border text-center cursor-pointer select-none",
-        "text-[11px] font-medium leading-tight px-1",
-        shapeClass,
-      )}
-      title={data.summary ?? data.label}
-    >
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <span style={{ color: data.highlighted ? "#fff" : clusterColor.text }}>
-        {data.label.length > 14 ? data.label.slice(0, 12) + "…" : data.label}
-      </span>
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-    </div>
-  );
-}
-
-const nodeTypes = { kg: KGNodeComponent };
-
-function toFlowNodes(
-  kgNodes: KGNode[],
-  highlightedIds: Set<string>,
-  pathLabels: Set<string>,
-): Node[] {
-  return kgNodes.map((n) => ({
-    id: n.id,
-    type: "kg" as const,
-    position: { x: n.pos_x, y: n.pos_y },
-    data: {
-      ...n,
-      highlighted: highlightedIds.has(n.id),
-      inPath: pathLabels.has(n.label),
-    },
-  }));
-}
-
-function toFlowEdges(kgEdges: KGEdge[], pathLabels: Set<string>, kgNodes: KGNode[]): Edge[] {
-  const labelById = Object.fromEntries(kgNodes.map((n) => [n.id, n.label]));
-  return kgEdges.map((e) => {
-    const srcLabel = labelById[e.source_id] ?? "";
-    const tgtLabel = labelById[e.target_id] ?? "";
-    const inPath = pathLabels.has(srcLabel) && pathLabels.has(tgtLabel);
-    return {
-      id: e.id,
-      source: e.source_id,
-      target: e.target_id,
-      animated: inPath,
-      style: {
-        stroke: inPath ? "#6366f1" : e.edge_type === "similar_to" ? "#334155" : "#1e293b",
-        strokeWidth: inPath ? 2 : 1,
-        strokeDasharray: e.edge_type === "similar_to" ? "4 3" : undefined,
-        opacity: inPath ? 0.9 : 0.4,
-      },
-    };
-  });
+  onNodeClick?: (node: KGNode) => void;
 }
 
 export function KnowledgeGraphCanvas({
-  nodes: kgNodes,
-  edges: kgEdges,
-  highlightedNodeIds = new Set(),
-  highlightedPath = [],
-  onNodeClick,
+  nodes,
+  edges,
+  highlightedNodeIds,
   className,
+  onNodeClick,
 }: Props) {
-  const pathLabels = useMemo(() => new Set(highlightedPath), [highlightedPath]);
-
-  const initialNodes = useMemo(
-    () => toFlowNodes(kgNodes, highlightedNodeIds, pathLabels),
-    [kgNodes, highlightedNodeIds, pathLabels],
-  );
-  const initialEdges = useMemo(
-    () => toFlowEdges(kgEdges, pathLabels, kgNodes),
-    [kgEdges, pathLabels, kgNodes],
-  );
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const fgRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [hoveredNode, setHoveredNode] = useState<KGNode | null>(null);
 
   useEffect(() => {
-    setNodes(toFlowNodes(kgNodes, highlightedNodeIds, pathLabels));
-    setEdges(toFlowEdges(kgEdges, pathLabels, kgNodes));
-  }, [kgNodes, kgEdges, highlightedNodeIds, pathLabels, setNodes, setEdges]);
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setDimensions({ width: Math.max(width, 200), height: Math.max(height, 200) });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-  const onInit = useCallback(
-    (instance: { fitView: (opts?: { padding?: number }) => void }) => {
-      requestAnimationFrame(() => instance.fitView({ padding: 0.12 }));
-    },
-    [],
-  );
+  const graphData = useMemo(() => {
+    const gNodes = nodes.map((n) => ({
+      id: n.id,
+      label: n.label,
+      node_type: n.node_type,
+      summary: n.summary,
+      pagerank: n.pagerank,
+      cluster_id: n.cluster_id,
+      color: TYPE_COLORS[n.node_type] || "#8b9cb7",
+      val: Math.max(2, n.pagerank * 25 + 3),
+      _raw: n,
+    }));
+    const nodeIds = new Set(gNodes.map((n) => n.id));
+    const gLinks = edges
+      .filter((e) => nodeIds.has(e.source_id) && nodeIds.has(e.target_id))
+      .map((e) => ({
+        source: e.source_id,
+        target: e.target_id,
+        edge_type: e.edge_type,
+      }));
+    return { nodes: gNodes, links: gLinks };
+  }, [nodes, edges]);
 
-  const handleNodeClick = useCallback(
-    (_: unknown, node: Node) => {
-      const kg = kgNodes.find((n) => n.id === node.id);
-      if (kg && onNodeClick) onNodeClick(kg);
-    },
-    [kgNodes, onNodeClick],
-  );
+  const handleNodeClick = useCallback((node: any) => {
+    if (onNodeClick && node._raw) onNodeClick(node._raw);
+    if (fgRef.current) {
+      const distance = 120;
+      const distRatio = 1 + distance / Math.hypot(node.x || 1, node.y || 1, node.z || 1);
+      fgRef.current.cameraPosition(
+        { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
+        node,
+        1000,
+      );
+    }
+  }, [onNodeClick]);
+
+  const nodeThreeObject = useCallback((node: any) => {
+    const isHighlighted = highlightedNodeIds?.has(node.id);
+    const radius = node.val * (isHighlighted ? 1.5 : 1);
+
+    const group = new THREE.Group();
+
+    // Core sphere with improved material
+    const geometry = new THREE.SphereGeometry(radius, 32, 32);
+    const material = new THREE.MeshStandardMaterial({
+      color: node.color,
+      transparent: true,
+      opacity: isHighlighted ? 0.95 : 0.75,
+      roughness: 0.2,
+      metalness: 0.15,
+      emissive: node.color,
+      emissiveIntensity: isHighlighted ? 0.5 : 0.12,
+    });
+    const sphere = new THREE.Mesh(geometry, material);
+    group.add(sphere);
+
+    // Inner glow for all nodes (not just large ones)
+    const glowGeo = new THREE.SphereGeometry(radius * 1.8, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: node.color,
+      transparent: true,
+      opacity: isHighlighted ? 0.12 : 0.04,
+    });
+    group.add(new THREE.Mesh(glowGeo, glowMat));
+
+    // Outer ambient glow for highlighted nodes
+    if (isHighlighted) {
+      const outerGeo = new THREE.SphereGeometry(radius * 2.8, 12, 12);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: node.color,
+        transparent: true,
+        opacity: 0.06,
+      });
+      group.add(new THREE.Mesh(outerGeo, outerMat));
+    }
+
+    // Text label with background
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: createTextTexture(node.label, node.color, isHighlighted ?? false),
+        transparent: true,
+        depthWrite: false,
+        opacity: isHighlighted ? 1 : 0.9,
+      }),
+    );
+    sprite.scale.set(radius * 6, radius * 2.2, 1);
+    sprite.position.y = radius + 4;
+    group.add(sprite);
+
+    return group;
+  }, [highlightedNodeIds]);
 
   return (
-    <div className={cn("h-full w-full", className)}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onInit={onInit}
-        onNodeClick={handleNodeClick}
-        fitView
-        minZoom={0.15}
-        maxZoom={2}
-        className="bg-[#060a12]"
-      >
-        <Background gap={24} size={1} color="#1e293b" />
-        <Controls
-          showInteractive={false}
-          className="!bg-[#0f172a] !border-[#1e293b] [&>button]:!bg-[#0f172a] [&>button]:!border-[#1e293b] [&>button]:!text-slate-400 [&>button:hover]:!bg-[#1e293b]"
+    <div ref={containerRef} className={cn("relative h-full w-full overflow-hidden rounded-2xl", className)}>
+      {graphData.nodes.length > 0 && (
+        <ForceGraph3D
+          ref={fgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          nodeThreeObject={nodeThreeObject}
+          nodeThreeObjectExtend={false}
+          linkColor={() => "rgba(148,163,184,0.15)"}
+          linkWidth={0.5}
+          linkOpacity={0.4}
+          linkDirectionalParticles={2}
+          linkDirectionalParticleWidth={1.2}
+          linkDirectionalParticleSpeed={0.004}
+          linkDirectionalParticleColor={() => "rgba(94,234,212,0.5)"}
+          backgroundColor="rgba(0,0,0,0)"
+          onNodeClick={handleNodeClick}
+          onNodeHover={(node: any) => setHoveredNode(node?._raw ?? null)}
+          enableNodeDrag={true}
+          enableNavigationControls={true}
+          showNavInfo={false}
+          warmupTicks={80}
+          cooldownTicks={150}
+          d3AlphaDecay={0.018}
+          d3VelocityDecay={0.25}
         />
-        <MiniMap
-          className="!bg-[#0a0f1a]/90 !border-[#1e293b]"
-          maskColor="rgba(0,0,0,0.3)"
-          nodeColor={(n) => {
-            const data = n.data as Record<string, unknown>;
-            const cluster = (typeof data.cluster_id === "number" ? data.cluster_id : 0);
-            return CLUSTER_COLORS[cluster % Object.keys(CLUSTER_COLORS).length]?.border ?? "#6366f1";
-          }}
-        />
-      </ReactFlow>
+      )}
+
+      {/* Hover card — polished */}
+      {hoveredNode && (
+        <div className="absolute top-4 left-4 max-w-80 rounded-2xl border border-border/50 bg-card/95 backdrop-blur-2xl p-5 pointer-events-none z-10 shadow-2xl shadow-black/20 animate-fade-in">
+          <div className="flex items-center gap-3 mb-3">
+            <span
+              className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-card"
+              style={{
+                backgroundColor: TYPE_COLORS[hoveredNode.node_type],
+                boxShadow: `0 0 12px ${TYPE_COLORS[hoveredNode.node_type]}50`,
+              }}
+            />
+            <span className="text-sm font-semibold text-foreground truncate">{hoveredNode.label}</span>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-mono font-medium"
+              style={{
+                backgroundColor: `${TYPE_COLORS[hoveredNode.node_type]}15`,
+                color: TYPE_COLORS[hoveredNode.node_type],
+                border: `1px solid ${TYPE_COLORS[hoveredNode.node_type]}30`,
+              }}
+            >
+              {hoveredNode.node_type.replace("_", " ")}
+            </span>
+            {hoveredNode.pagerank > 0.1 && (
+              <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                PR: {hoveredNode.pagerank.toFixed(2)}
+              </span>
+            )}
+            {hoveredNode.cluster_id !== null && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                Cluster {hoveredNode.cluster_id}
+              </span>
+            )}
+          </div>
+          {hoveredNode.summary && (
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">
+              {hoveredNode.summary}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+function createTextTexture(text: string, color: string, highlighted: boolean): any {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  canvas.width = 512;
+  canvas.height = 96;
+
+  // Background pill
+  const label = text.length > 28 ? text.slice(0, 26) + "…" : text;
+  ctx.font = "500 22px system-ui, -apple-system, sans-serif";
+  const textWidth = ctx.measureText(label).width;
+  const pillWidth = Math.min(textWidth + 28, 500);
+  const pillHeight = 40;
+  const x = (512 - pillWidth) / 2;
+  const y = (96 - pillHeight) / 2;
+
+  // Draw rounded rect background
+  ctx.fillStyle = highlighted ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  const r = 10;
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + pillWidth - r, y);
+  ctx.quadraticCurveTo(x + pillWidth, y, x + pillWidth, y + r);
+  ctx.lineTo(x + pillWidth, y + pillHeight - r);
+  ctx.quadraticCurveTo(x + pillWidth, y + pillHeight, x + pillWidth - r, y + pillHeight);
+  ctx.lineTo(x + r, y + pillHeight);
+  ctx.quadraticCurveTo(x, y + pillHeight, x, y + pillHeight - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Draw text
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = highlighted ? "rgba(255,255,255,0.95)" : "rgba(226,232,240,0.85)";
+  ctx.fillText(label, 256, 48);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }

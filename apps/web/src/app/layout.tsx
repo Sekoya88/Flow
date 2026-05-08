@@ -30,16 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable} h-full`}>
-      <body className={`${inter.className} flex min-h-full flex-col bg-background antialiased`}>
+      <body className={`${inter.className} flow-ambient-mesh flex min-h-full flex-col antialiased text-foreground`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="relative flex min-h-full flex-1 flex-col">
-            <div className="pointer-events-none absolute inset-0 flow-grain opacity-[0.22]" aria-hidden />
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-[min(42vh,28rem)] flow-ambient-mesh"
-              aria-hidden
-            />
-            <div className="relative z-0 flex min-h-full flex-1 flex-col">{children}</div>
-          </div>
+          <div className="flow-grain pointer-events-none fixed inset-0 z-[0] opacity-[0.35]" aria-hidden />
+          <div className="relative z-10 flex min-h-full flex-1 flex-col">{children}</div>
         </ThemeProvider>
       </body>
     </html>

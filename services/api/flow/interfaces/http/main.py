@@ -25,12 +25,15 @@ from flow.infrastructure.observability.sentry import setup_sentry
 from flow.infrastructure.observability.tracing import setup_tracing
 from flow.infrastructure.queue.client import close_arq_pool, get_arq_pool
 from flow.interfaces.http.routes import (
+    ab_tests,
+    agent_versions,
     agents,
     analytics,
     auth,
     dashboard,
     executions,
     feedback,
+    golden_sets,
     health,
     kg,
     knowledge,
@@ -105,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router)
     app.include_router(workspaces.router)
     app.include_router(agents.router)
+    app.include_router(agent_versions.router)
     app.include_router(executions.router)
     app.include_router(feedback.router)
     app.include_router(knowledge.router)
@@ -117,6 +121,8 @@ def create_app() -> FastAPI:
     app.include_router(trace.router)
     app.include_router(kg.router)
     app.include_router(skills.router)
+    app.include_router(golden_sets.router)
+    app.include_router(ab_tests.router)
     return app
 
 

@@ -211,19 +211,42 @@
     border: 1px solid oklch(from var(--flow-brand) l c h / 0.2);
   }
 
+  .text-display {
+    font-size: var(--font-size-display);
+    font-weight: 600;
+    letter-spacing: -0.045em;
+    line-height: 1.04;
+  }
+
+  .text-body-lg {
+    font-size: var(--font-size-body);
+    line-height: 1.65;
+  }
+
+  .text-brand-gradient {
+    background: linear-gradient(105deg, var(--foreground) 0%, oklch(from var(--flow-brand) l c h / 0.7) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   /** Ambient mesh — uses --flow-brand hue; works in light & dark */
   .flow-ambient-mesh {
-    background:
+    background-color: var(--background);
+    background-image:
       radial-gradient(ellipse 130% 90% at 50% -25%, oklch(from var(--flow-brand) l c h / 0.22), transparent 58%),
       radial-gradient(ellipse 55% 45% at 95% 5%, oklch(0.55 0.1 264 / 0.14), transparent 52%),
       radial-gradient(ellipse 50% 40% at 5% 15%, oklch(0.48 0.08 230 / 0.12), transparent 48%);
+    background-attachment: fixed;
   }
 
   .dark .flow-ambient-mesh {
-    background:
+    background-color: var(--background);
+    background-image:
       radial-gradient(ellipse 130% 90% at 50% -25%, oklch(from var(--flow-brand) l c h / 0.28), transparent 58%),
       radial-gradient(ellipse 55% 45% at 95% 5%, oklch(0.42 0.12 264 / 0.18), transparent 52%),
       radial-gradient(ellipse 50% 40% at 5% 15%, oklch(0.38 0.1 240 / 0.14), transparent 48%);
+    background-attachment: fixed;
   }
 
   /** Hero strip: subtle brand gradient border + fill */

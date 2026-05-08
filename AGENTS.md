@@ -1,9 +1,11 @@
 ## Learned User Preferences
 
 - For substantial Flow planning work, prefer GSD-style phased output: goals, non-goals, dependencies between phases, concrete file areas (`apps/web/...`, `services/api/...`), shadcn CLI add hints where useful, testable acceptance criteria, risks and mitigations, and quick wins vs multi-day work.
-- When the user asks for planning or product copy in French, use French for that deliverable.
+- When the user asks for planning or product copy in French, use French for that deliverable. Operational and debug conversations default to French too.
 - Explain and document `docker compose`, `uv`/`pytest` under `services/api`, and `npm` under `apps/web` as run from the **Flow repository root** (the directory that contains `docker-compose.yml`, `apps/`, and `services/`) so relative `cd` steps do not fail.
-- When executing from an attached implementation plan, follow the plan as written, do not edit the plan file, and work existing todo items to completion (mark in progress, then done) rather than recreating them.
+- When executing from an attached implementation plan, follow the plan as written, do not edit the plan file, and work existing todo items to completion (mark in progress, then done) rather than recreating them. Delete the plan file when all items are done if the user requests it.
+- Git commits and pushes must **never mention Cursor** (no "Made with Cursor", no Cursor references in commit messages or PR descriptions).
+- GitHub account is **Sekoya88**; remote is `git@github.com:Sekoya88/Flow.git`, default branch `main`.
 
 ## Learned Workspace Facts
 

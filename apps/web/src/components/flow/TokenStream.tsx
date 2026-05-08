@@ -41,7 +41,7 @@ export function TokenStream({ className, placeholder }: TokenStreamProps) {
           style={{ animation: "cursor-blink 1s step-end infinite" }}
         />
       )}
-      {!isRunning && !spanRef.current?.textContent && placeholder ? (
+      {!isRunning && useStore.getState().tokens.length === 0 && placeholder ? (
         <span className="text-muted-foreground">{placeholder}</span>
       ) : null}
       <style>{`

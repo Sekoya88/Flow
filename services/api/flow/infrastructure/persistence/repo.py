@@ -780,41 +780,6 @@ class FlowRepository:
             skill_id,
         )
 
-    async def upsert_agent_skill(
-        self,
-        agent_id: UUID,
-        workspace_id: UUID,
-        name: str,
-        content_md: str,
-    ) -> UUID:
-        row = await self._pool.fetchrow(
-            """
-            INSERT INTO agent_skills (agent_id, workspace_id, name, content_md)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT DO NOTHING
-            RETURNING id
-            """,
-            agent_id,
-            workspace_id,
-            name,
-            content_md,
-        )
-        if row is not None:
-            return row["id"]
-        existing = await self._pool.fetchrow(
-            "SELECT id FROM agent_skills WHERE agent_id = $1 AND workspace_id = $2 AND name = $3",
-            agent_id, workspace_id, name,
-        )
-        await self._pool.execute(
-            """
-            UPDATE agent_skills SET content_md = $2, version = version + 1
-            WHERE id = $1
-            """,
-            existing["id"],
-            content_md,
-        )
-        return existing["id"]
-
     # ── Knowledge Graph ─────────────────────────────────────────────────────
 
     async def upsert_kg_node(
@@ -1092,6 +1057,127 @@ class FlowRepository:
             "UPDATE agent_skills SET score = LEAST(score + $1, 2.0) WHERE id = $2",
             boost, skill_id,
         )
+
+    async def insert_skill_node(
+        self, workspace_id: UUID, agent_id: UUID, skill_name: str, skill_version: int, description: str
+    ) -> UUID:
+        """Create/update a skill node in the KG."""
+        label = f"Skill: {skill_name} v{skill_version}"
+        metadata = json.dumps({"agent_id": str(agent_id), "version": skill_version})
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_nodes (workspace_id, label, node_type, summary, metadata)
+            VALUES ($1, $2, 'skill', $3, $4::jsonb)
+            ON CONFLICT (workspace_id, label, node_type) DO UPDATE SET
+                summary = EXCLUDED.summary, metadata = EXCLUDED.metadata, updated_at = now()
+            RETURNING id
+            """,
+            workspace_id, label, description[:500], metadata,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def insert_tool_call_node(
+        self,
+        workspace_id: UUID,
+        execution_id: UUID,
+        tool_name: str,
+        input_preview: str,
+        output_preview: str,
+        duration_ms: int,
+    ) -> UUID:
+        """Create a tool_call node for a tool invocation."""
+        label = f"Tool: {tool_name} ({str(execution_id)[:8]})"
+        metadata = json.dumps({
+            "execution_id": str(execution_id),
+            "tool": tool_name,
+            "input_preview": input_preview[:200],
+            "duration_ms": duration_ms,
+        })
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_nodes (workspace_id, label, node_type, summary, metadata)
+            VALUES ($1, $2, 'tool_call', $3, $4::jsonb)
+            ON CONFLICT (workspace_id, label, node_type) DO UPDATE SET
+                summary = EXCLUDED.summary, metadata = EXCLUDED.metadata, updated_at = now()
+            RETURNING id
+            """,
+            workspace_id, label, output_preview[:500], metadata,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def insert_metacog_node(
+        self,
+        workspace_id: UUID,
+        execution_id: UUID,
+        grade: int,
+        issue: str | None,
+        skill_created: str | None,
+        prediction: str | None = None,
+    ) -> UUID:
+        """Create a metacognition node from reflector output."""
+        label = f"Metacog: grade={grade} ({str(execution_id)[:8]})"
+        metadata = json.dumps({
+            "execution_id": str(execution_id),
+            "grade": grade,
+            "issue": issue,
+            "skill_created": skill_created,
+            "prediction": prediction,
+        })
+        summary = f"Grade: {grade}/5"
+        if issue:
+            summary += f" | Issue: {issue}"
+        if skill_created:
+            summary += f" | Created skill: {skill_created}"
+        if prediction:
+            summary += f" | Prediction: {prediction[:80]}"
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO kg_nodes (workspace_id, label, node_type, summary, metadata)
+            VALUES ($1, $2, 'metacog', $3, $4::jsonb)
+            ON CONFLICT (workspace_id, label, node_type) DO UPDATE SET
+                summary = EXCLUDED.summary, metadata = EXCLUDED.metadata, updated_at = now()
+            RETURNING id
+            """,
+            workspace_id, label, summary[:500], metadata,
+        )
+        assert row is not None
+        return row["id"]
+
+    # ── JEPA Predictions ──────────────────────────────────────────────────
+
+    async def store_prediction(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        user_id: UUID,
+        prediction: str,
+        execution_id: UUID,
+    ) -> None:
+        """Store a JEPA prediction for the next turn. Uses episodic_memories with [PREDICTION] prefix."""
+        await self._pool.execute(
+            """
+            INSERT INTO episodic_memories (workspace_id, agent_id, user_id, execution_id, content)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            workspace_id, agent_id, user_id, execution_id,
+            f"[PREDICTION] {prediction}",
+        )
+
+    async def get_latest_prediction(self, workspace_id: UUID, agent_id: UUID) -> str | None:
+        """Get the most recent JEPA prediction for this agent."""
+        row = await self._pool.fetchrow(
+            """
+            SELECT content FROM episodic_memories
+            WHERE workspace_id = $1 AND agent_id = $2 AND content LIKE '[PREDICTION]%'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            workspace_id, agent_id,
+        )
+        if row:
+            return row["content"].removeprefix("[PREDICTION] ")
+        return None
 
     async def list_kg_topics(self, workspace_id: "UUID") -> list[str]:
         rows = await self._pool.fetch(

@@ -15,10 +15,6 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    if (getToken()) {
-      routerRef.current.replace("/dashboard");
-      return;
-    }
     setReady(true);
   }, []);
 

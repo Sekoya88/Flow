@@ -59,15 +59,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const settingsActive = path === "/settings" || path.startsWith("/settings/");
 
   return (
-    <div className="relative flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex w-full max-w-[90rem] items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden">
+      <header className="surface-glass sticky top-0 z-50 flex h-[44px] w-full items-center justify-between border-b border-border/60 px-4">
+        <div className="flex flex-1 items-center gap-6">
           <div className="shrink-0">
             <FlowLogo href="/dashboard" variant="header" />
           </div>
 
           <nav
-            className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto overflow-y-hidden py-0.5 md:flex [&::-webkit-scrollbar]:hidden"
+            className="hidden h-full flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden md:flex [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             aria-label="Main"
           >
@@ -79,20 +79,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors lg:px-2.5 lg:text-[13px]",
+                    "flex h-full items-center gap-1.5 border-b-[1.5px] px-3 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors",
                     active
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                      ? "border-flow-brand text-flow-brand"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5 opacity-80" aria-hidden />
                   {label}
                 </Link>
               );
             })}
           </nav>
+        </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               aria-label="Open command palette (⌘K)"
@@ -111,9 +111,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                  "hidden h-9 gap-1.5 px-2 font-normal md:inline-flex",
-                  settingsActive && "border-flow-brand/40 bg-muted/50",
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "hidden h-7 gap-1.5 px-2 font-normal md:inline-flex text-[11px] uppercase tracking-wide",
+                  settingsActive && "text-flow-brand",
                 )}
                 aria-label="Account menu"
               >
@@ -208,20 +208,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SheetContent>
             </Sheet>
           </div>
-        </div>
       </header>
 
       <main className="relative flex-1 animate-fade-in">
-        <div className="mx-auto w-full max-w-[90rem] px-4 py-10 sm:px-6 md:py-14 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 md:py-10">{children}</div>
       </main>
 
-      <footer className="relative mt-auto border-t border-border/40 py-4 text-center text-[10px] uppercase tracking-wide text-muted-foreground/60">
+      <footer className="relative mt-auto border-t border-border/40 bg-background/50 py-4 text-center text-[10px] uppercase tracking-wide text-muted-foreground/60 backdrop-blur-md">
         <span>Flow · agent workspace</span>
         <span
-          className="mt-2 block font-mono text-[9px] font-normal normal-case tracking-normal text-flow-brand/90"
+          className="mt-1 block font-mono text-[9px] font-normal normal-case tracking-normal text-flow-brand/80"
           title="Present when this shell build includes the cyan-accent layout refresh"
         >
-          Shell 90rem · teal accent · trace concise/run
+          Shell 1200px · surface glass · premium nav
         </span>
       </footer>
     </div>

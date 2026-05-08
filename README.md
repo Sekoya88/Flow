@@ -9,6 +9,8 @@ Personal second brain and agent platform. Upload PDFs and documents, ask questio
 - **Ask questions** — streamed answers with inline `[1]` `[2]` citation markers
 - **See sources** — click any citation to expand the exact chunk from your document
 - **Feedback loop** — 👍/👎 on answers; negative feedback improves future retrievals
+- **Agent Metacognition** — LLM-based reflection and confidence scoring
+- **Evaluation Loop** — Golden Sets and automated A/B testing for agent variations
 - **Onboarding wizard** — guided first-run that gets you from signup to first answer in under 2 minutes
 
 ---
@@ -101,9 +103,32 @@ Worker retrieves up to 8 knowledge chunks (pgvector cosine), numbers them `[1]�
 
 ---
 
+## Agentic Evolution (Metacognition)
+
+Flow is designed as a continuously improving agentic framework. 
+
+### 1. Skills & Versioning
+Agents hold **Skills** (`SKILL.md`), which are granular sets of instructions, behaviors, and knowledge boundaries. Both Skills and overall Agent Configurations are versioned. You can:
+- Edit Skills using a markdown/YAML editor.
+- View LCS-based side-by-side diffs.
+- Restore previous snapshots of your agent if performance degrades.
+
+### 2. Golden Sets & Evaluation
+To prevent regressions, Flow supports **Golden Sets** (curated inputs and expected outputs).
+- **Run Evaluations**: A Background task runs the Golden Set items through your agent.
+- **LLM-Judge**: Uses `gpt-4o-mini` to score factual accuracy and alignment on a 0.0-1.0 scale with a grading rationale.
+- **Auto-refinement**: If an evaluation fails (score < 0.7), the system automatically drafts an improvement Proposal (e.g. "Add a skill for handling unstructured queries") that you can approve.
+
+### 3. A/B Testing
+Compare two agents head-to-head on the same Golden Set to validate prompt modifications or different routing configurations.
+
+---
+
 ## Feedback loop
 
 After each run, rate the answer (slider 0–100%). Scores below 50% automatically insert an **agent negative** — a record of the query that produced a poor result. The worker grader uses top-5 negatives as few-shot examples to avoid repeating similar bad retrievals.
+
+You can view the agent's historical confidence in a sparkline chart on the Dashboard and click any data point to drill down into the specific execution context.
 
 ---
 

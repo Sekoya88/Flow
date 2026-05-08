@@ -180,31 +180,23 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full space-y-12 animate-fade-in">
-      {/* Hero */}
-      <section className="flow-hero-surface p-6 sm:p-8">
+      {/* Hero / Header */}
+      <section className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-6 shadow-sm backdrop-blur-md sm:p-8 animate-slide-up">
         <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-flow-brand/15 blur-3xl dark:bg-flow-brand/25" aria-hidden />
-        <FlowPageHeader
-          className="relative border-0 pb-0"
-          eyebrow={
-            <Badge
-              variant="outline"
-              className="border-flow-brand/35 bg-flow-brand/10 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
-            >
-              Workspace
-            </Badge>
-          }
-          title="Dashboard"
-          description="Workspace overview and what lives in Postgres today — agents, runs, knowledge, and curator proposals."
-          actions={
-            <Link
-              href="/run"
-              className={cn(buttonVariants({ size: "lg" }), "relative shrink-0 gap-2 shadow-sm")}
-            >
-              <MessageSquare className="h-4 w-4" aria-hidden />
-              Run agent
-            </Link>
-          }
-        />
+        <div className="relative z-10 flex flex-col gap-2">
+          <Badge
+            variant="outline"
+            className="w-fit border-flow-brand/35 bg-flow-brand/10 font-mono text-[10px] uppercase tracking-wider text-flow-brand"
+          >
+            Workspace Overview
+          </Badge>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            System Dashboard
+          </h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Monitor agent executions, explore the knowledge graph, and review curator proposals in real-time.
+          </p>
+        </div>
       </section>
 
       {/* Stat tiles */}
@@ -213,17 +205,17 @@ export default function DashboardPage() {
           <Link
             key={key}
             href={href}
-            className="block transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="block transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <Card
+            <div
               className={cn(
-                "relative overflow-hidden shadow-sm transition-shadow hover:shadow-md",
-                key === "active_schedules" && c[key] > 0 && "border-flow-thinking/40",
+                "surface-glass relative flex min-h-[120px] flex-col overflow-hidden rounded-2xl p-5 transition-all hover:border-flow-brand/40 hover:shadow-md",
+                key === "active_schedules" && c[key] > 0 && "border-flow-thinking/40 bg-flow-thinking/5",
               )}
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-1 rounded-t-lg"
+                className="pointer-events-none absolute inset-x-0 top-0 h-1"
                 style={{
                   background:
                     key === "agents"
@@ -236,175 +228,162 @@ export default function DashboardPage() {
                 }}
                 aria-hidden
               />
-              <CardHeader className="pb-2 pt-5">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-mono text-4xl font-semibold tabular-nums">{c[key] ?? 0}</p>
-              </CardContent>
-            </Card>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {label}
+              </p>
+              <p className="mt-auto font-mono text-4xl font-bold tabular-nums text-foreground">
+                {c[key] ?? 0}
+              </p>
+            </div>
           </Link>
         ))}
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      {/* Feature Bento */}
+      <div className="grid gap-4 md:grid-cols-12">
         {/* Quick start */}
-        <Card className="flex flex-col items-center gap-6 border-border/80 bg-card/80 py-10 shadow-sm backdrop-blur-sm">
-          <FlowMarkAnimated className="text-flow-brand opacity-90" />
-          <div className="space-y-1 text-center">
-            <p className="text-lg font-semibold tracking-tight">Ready to run</p>
+        <div className="surface-glass flex flex-col items-center justify-center gap-6 rounded-2xl p-8 md:col-span-5 text-center animate-slide-up [animation-delay:200ms]">
+          <FlowMarkAnimated className="text-flow-brand" size={48} />
+          <div className="space-y-2">
+            <p className="text-lg font-semibold tracking-tight text-foreground">Ready to run</p>
             <p className="text-sm text-muted-foreground">
-              The agent pipeline is standing by. Send a message to begin.
+              The agent pipeline is standing by.
             </p>
           </div>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Link href="/run" className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}>
-              <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-              Run
+          <div className="flex w-full flex-col gap-2">
+            <Link href="/run" className={cn(buttonVariants({ size: "default" }), "w-full gap-2")}>
+              <MessageSquare className="h-4 w-4" aria-hidden />
+              Run Agent
             </Link>
             <Link
               href="/knowledge"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+              className={cn(buttonVariants({ variant: "outline", size: "default" }), "w-full gap-2")}
             >
-              <ScrollText className="h-3.5 w-3.5" aria-hidden />
-              Knowledge
-            </Link>
-            <Link
-              href="/onboarding"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
-            >
-              <BookOpen className="h-3.5 w-3.5" aria-hidden />
-              Setup guide
-            </Link>
-            <Link
-              href="/schedules"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
-            >
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-              Schedules
+              <ScrollText className="h-4 w-4" aria-hidden />
+              Manage Knowledge
             </Link>
           </div>
-        </Card>
+        </div>
+
+        {/* Recent runs */}
+        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-7 animate-slide-up [animation-delay:260ms]">
+          <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-6 py-4">
+            <MessageSquare className="h-4 w-4 text-flow-streaming" />
+            <h3 className="font-semibold text-foreground">Recent Executions</h3>
+          </div>
+          <div className="flex-1 overflow-auto p-0">
+            {recent.length === 0 ? (
+              <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
+                No recent executions.
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {recent.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-6 py-3.5 transition-colors hover:bg-muted/10">
+                    {r.status === "completed" ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                    ) : r.status === "failed" ? (
+                      <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    ) : (
+                      <Clock className="h-4 w-4 shrink-0 animate-pulse text-flow-streaming" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {r.user_message || <span className="text-muted-foreground italic">No message</span>}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                        <span className="rounded-full bg-muted px-1.5 py-0.5">{r.agent_name}</span>
+                        <span>{r.id.split('-')[0]}</span>
+                      </p>
+                    </div>
+                    <time className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      {new Date(r.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
 
         {/* Pending proposals */}
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-flow-thinking" aria-hidden />
-              Curator notes
-              {proposals.length > 0 && (
-                <Badge
-                  variant="outline"
-                  className="ml-auto h-5 rounded-full border-flow-thinking/30 bg-flow-thinking/10 px-2 py-0 text-[10px]"
-                >
-                  {proposals.length} pending
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-[13px]">
-              The curator flags low-confidence runs with improvement proposals.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-6 animate-slide-up [animation-delay:320ms]">
+          <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-6 py-4">
+            <Sparkles className="h-4 w-4 text-flow-thinking" aria-hidden />
+            <h3 className="font-semibold text-foreground">Curator Proposals</h3>
+            {proposals.length > 0 && (
+              <Badge
+                variant="outline"
+                className="ml-auto h-5 rounded-full border-flow-thinking/30 bg-flow-thinking/10 px-2 py-0 font-mono text-[10px] text-flow-thinking"
+              >
+                {proposals.length} pending
+              </Badge>
+            )}
+          </div>
+          <div className="p-6">
             {proposals.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No pending proposals. Run the agent and submit low-score feedback to generate curator
                 suggestions.
               </p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {proposals.slice(0, 4).map((p) => (
                   <li
                     key={p.id}
-                    className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2 text-xs leading-snug"
+                    className="rounded-xl border border-border/50 bg-background/50 p-3 text-xs leading-snug shadow-sm"
                   >
-                    <p className="line-clamp-1 font-medium text-foreground">{p.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-muted-foreground">{p.body}</p>
+                    <p className="line-clamp-1 font-semibold text-foreground">{p.title}</p>
+                    <p className="mt-1 line-clamp-2 text-muted-foreground">{p.body}</p>
+                    <p className="mt-2 font-mono text-[9px] text-muted-foreground/60">{p.id}</p>
                   </li>
                 ))}
                 {proposals.length > 4 && (
                   <Link
                     href="/proposals"
-                    className="block text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    className="mt-3 block text-center font-mono text-[11px] text-flow-brand transition-colors hover:text-flow-brand/80"
                   >
-                    +{proposals.length - 4} more →
+                    +{proposals.length - 4} MORE PROPOSALS
                   </Link>
                 )}
               </ul>
             )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent runs */}
-      {recent.length > 0 && (
-        <Card className="border-border/80 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <MessageSquare className="h-4 w-4 text-flow-streaming" />
-              Recent runs
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ul className="divide-y divide-border/40">
-              {recent.map((r) => (
-                <li key={r.id} className="flex items-center gap-3 px-6 py-3">
-                  {r.status === "completed" ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  ) : r.status === "failed" ? (
-                    <XCircle className="h-4 w-4 shrink-0 text-destructive" />
-                  ) : (
-                    <Clock className="h-4 w-4 shrink-0 animate-pulse text-flow-streaming" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{r.user_message || "(no message)"}</p>
-                    <p className="text-xs text-muted-foreground">{r.agent_name}</p>
-                  </div>
-                  <time className="shrink-0 text-[11px] text-muted-foreground">
-                    {new Date(r.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
-                  </time>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
 
       <Separator className="bg-border/60" />
 
-      {/* Postgres schema reference */}
-      <Card className="overflow-hidden border-border/80 shadow-sm">
-        <CardHeader className="space-y-1 border-b border-border/60 bg-muted/20 pb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Database className="h-4 w-4 text-flow-brand" aria-hidden />
-            <CardTitle className="text-lg">Postgres data model</CardTitle>
+        {/* Postgres schema reference */}
+        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-6 animate-slide-up [animation-delay:380ms]">
+          <div className="flex flex-col space-y-1 border-b border-border/60 bg-muted/20 px-6 py-4">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-flow-brand" aria-hidden />
+              <h3 className="font-semibold text-foreground">Postgres Data Model</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Core tables behind Flow — <span className="font-mono text-[10px] text-foreground/90">pgvector</span> for retrieval.
+            </p>
           </div>
-          <CardDescription className="text-sm leading-relaxed">
-            Core tables behind Flow —{" "}
-            <span className="font-mono text-xs text-foreground/90">pgvector</span> for retrieval,
-            LangGraph checkpoints use a dedicated pool; events stream into{" "}
-            <span className="font-mono text-xs">execution_events</span>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <Accordion multiple={false} className="w-full">
-            {POSTGRES_MODEL.map((row) => (
-              <AccordionItem key={row.table} value={row.table}>
-                <AccordionTrigger className="py-3 font-mono text-sm hover:no-underline">
-                  <span className="text-foreground">{row.table}</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <ul className="grid gap-1.5 border-l-2 border-flow-brand/25 pl-4 font-mono text-xs text-muted-foreground">
-                    {row.columns.map((col) => (
-                      <li key={col}>{col}</li>
-                    ))}
-                  </ul>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </CardContent>
-      </Card>
+          <div className="p-4">
+            <Accordion multiple={false} className="w-full">
+              {POSTGRES_MODEL.map((row) => (
+                <AccordionItem key={row.table} value={row.table} className="border-b-border/40">
+                  <AccordionTrigger className="py-3 font-mono text-xs hover:no-underline">
+                    <span className="text-foreground">{row.table}</span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ul className="grid grid-cols-2 gap-2 border-l-2 border-flow-brand/25 pl-4 font-mono text-[10px] text-muted-foreground">
+                      {row.columns.map((col) => (
+                        <li key={col} className="truncate" title={col}>{col}</li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

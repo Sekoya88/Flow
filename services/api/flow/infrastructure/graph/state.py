@@ -29,3 +29,4 @@ class FlowGraphState(TypedDict, total=False):
     approved: bool
     rag_sources: list[dict]  # [{"source_id": str, "title": str, "chunk_index": int, "preview": str}]
     reflection: dict  # added for reflector node output
+    prediction: str  # JEPA-style: reflector predicts next likely query/topic

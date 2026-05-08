@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Clock, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,9 @@ function ToolCallRow({ call }: { call: ToolCall }) {
   const color = TOOL_COLORS[call.tool] ?? "border-border/50 bg-muted/20 text-muted-foreground";
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/40">
+    <div 
+      className="overflow-hidden rounded-lg border border-border/40"
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -78,21 +81,59 @@ interface ToolCallLogProps {
 }
 
 export function ToolCallLog({ calls, className }: ToolCallLogProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: calls.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 42, // Closed height estimate
+    overscan: 5,
+  });
+
   if (calls.length === 0) return null;
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex items-center gap-2">
+    <div className={cn("space-y-2 flex flex-col h-full", className)}>
+      <div className="flex shrink-0 items-center gap-2">
         <Zap className="h-3.5 w-3.5 text-flow-brand" aria-hidden />
         <span className="text-xs font-medium text-foreground">Tool calls</span>
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
           {calls.length}
         </span>
       </div>
-      <div className="space-y-1.5">
-        {calls.map((c) => (
-          <ToolCallRow key={c.id} call={c} />
-        ))}
+      
+      <div 
+        ref={parentRef} 
+        className="flex-1 overflow-y-auto max-h-[500px]"
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const c = calls[virtualItem.index];
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                className="pb-1.5"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <ToolCallRow call={c} />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -152,7 +152,7 @@ export function GraphQueryPanel({ workspaceId, onHighlight, onPathHighlight }: P
   }
 
   return (
-    <div className="flex h-full flex-col border-l border-border/60 bg-[#080c14]" style={{ width: 360 }}>
+    <div className="flex h-full flex-col border-l border-border/60 bg-card/95 backdrop-blur-xl" style={{ width: 360 }}>
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
         <Brain className="h-3.5 w-3.5 text-flow-brand" aria-hidden />
         <span className="flex-1 text-xs font-semibold text-foreground/80">Graph Query</span>
@@ -181,8 +181,8 @@ export function GraphQueryPanel({ workspaceId, onHighlight, onPathHighlight }: P
                   className={cn(
                     "max-w-[90%] rounded-lg px-3 py-2 text-[12px] leading-relaxed",
                     m.role === "user"
-                      ? "rounded-br-sm bg-[rgba(99,102,241,0.2)] border border-[rgba(99,102,241,0.3)] text-indigo-200"
-                      : "rounded-bl-sm bg-[#0f172a] border border-border/60 text-foreground",
+                      ? "rounded-br-sm bg-flow-brand/10 border border-flow-brand/20 text-foreground"
+                      : "rounded-bl-sm bg-muted/50 border border-border/40 text-foreground",
                   )}
                 >
                   {m.text}
@@ -211,7 +211,7 @@ export function GraphQueryPanel({ workspaceId, onHighlight, onPathHighlight }: P
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendQuery()}
                 placeholder="Ask about your notes…"
-                className="h-8 text-[12px] bg-[#0f172a] border-border/60"
+                className="h-8 text-[12px]"
               />
               <Button size="icon" className="h-8 w-8 shrink-0" onClick={sendQuery} disabled={loading}>
                 <Send className="h-3.5 w-3.5" />
@@ -240,35 +240,35 @@ export function GraphQueryPanel({ workspaceId, onHighlight, onPathHighlight }: P
             </div>
           )}
 
-          <div className="rounded-lg border border-border/60 bg-[#0f172a] p-4 space-y-2">
+          <div className="rounded-xl border border-border/40 bg-muted/30 p-4 space-y-2.5">
             <p className="text-[11px] font-semibold text-foreground/80 flex items-center gap-1.5">
-              <Upload className="h-3.5 w-3.5" /> Upload .md files
+              <Upload className="h-3.5 w-3.5 text-flow-brand" /> Upload .md files
             </p>
-            <p className="text-[10px] text-muted-foreground">Wikilinks, tags, and frontmatter YAML are parsed automatically.</p>
-            <label className="block cursor-pointer rounded-md border border-dashed border-border/60 p-4 text-center text-[11px] text-muted-foreground hover:border-flow-brand/50 hover:bg-flow-brand/5 transition-colors">
+            <p className="text-[10px] text-muted-foreground">Wikilinks, tags, and frontmatter YAML are parsed.</p>
+            <label className="block cursor-pointer rounded-lg border border-dashed border-border/60 p-4 text-center text-[11px] text-muted-foreground hover:border-flow-brand/50 hover:bg-flow-brand/5 transition-colors">
               <input type="file" multiple accept=".md" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
-              Drop .md files here or click to select
+              Drop .md files or click to select
             </label>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-[#0f172a] p-4 space-y-2">
+          <div className="rounded-xl border border-border/40 bg-muted/30 p-4 space-y-2.5">
             <p className="text-[11px] font-semibold text-foreground/80 flex items-center gap-1.5">
-              <Link2 className="h-3.5 w-3.5" /> Obsidian Local REST API
+              <Link2 className="h-3.5 w-3.5 text-flow-brand" /> Obsidian Local REST API
             </p>
-            <p className="text-[10px] text-muted-foreground">Install the "Local REST API" plugin in Obsidian, then connect.</p>
-            <Input value={obsidianUrl} onChange={(e) => setObsidianUrl(e.target.value)} placeholder="http://localhost:27123" className="h-7 text-[11px] font-mono bg-[#060a12] border-border/60" />
-            <Input value={obsidianKey} onChange={(e) => setObsidianKey(e.target.value)} placeholder="API key" type="password" className="h-7 text-[11px] font-mono bg-[#060a12] border-border/60" />
-            <Input value={obsidianPath} onChange={(e) => setObsidianPath(e.target.value)} placeholder="Vault path (e.g. /AI Research)" className="h-7 text-[11px] bg-[#060a12] border-border/60" />
+            <p className="text-[10px] text-muted-foreground">Install the &quot;Local REST API&quot; plugin in Obsidian.</p>
+            <Input value={obsidianUrl} onChange={(e) => setObsidianUrl(e.target.value)} placeholder="http://localhost:27123" className="h-7 text-[11px] font-mono" />
+            <Input value={obsidianKey} onChange={(e) => setObsidianKey(e.target.value)} placeholder="API key" type="password" className="h-7 text-[11px] font-mono" />
+            <Input value={obsidianPath} onChange={(e) => setObsidianPath(e.target.value)} placeholder="Vault path (e.g. /AI Research)" className="h-7 text-[11px]" />
             <Button size="sm" className="w-full h-7 text-[11px]" onClick={handleObsidianConnect} disabled={importing}>
               {importing ? "Connecting…" : "Connect & Import"}
             </Button>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-[#0f172a] p-4 space-y-2">
+          <div className="rounded-xl border border-border/40 bg-muted/30 p-4 space-y-2.5">
             <p className="text-[11px] font-semibold text-foreground/80 flex items-center gap-1.5">
-              <RefreshCw className="h-3.5 w-3.5" /> Filesystem Sync
+              <RefreshCw className="h-3.5 w-3.5 text-flow-brand" /> Filesystem Sync
             </p>
-            <Input value={syncPath} onChange={(e) => setSyncPath(e.target.value)} placeholder="/Users/you/Obsidian/Brain" className="h-7 text-[11px] font-mono bg-[#060a12] border-border/60" />
+            <Input value={syncPath} onChange={(e) => setSyncPath(e.target.value)} placeholder="/Users/you/Obsidian/Brain" className="h-7 text-[11px] font-mono" />
             <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={handleSync} disabled={importing || !syncPath}>
               {importing ? "Syncing…" : "Sync Now"}
             </Button>

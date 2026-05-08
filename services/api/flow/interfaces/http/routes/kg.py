@@ -209,6 +209,80 @@ async def delete_node(
         raise HTTPException(status_code=404, detail="Node not found")
 
 
+@router.post("/seed", status_code=status.HTTP_201_CREATED)
+async def seed_demo_graph(
+    request: Request,
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Insert a small demo graph so the UI is immediately visible."""
+    await _assert_workspace(user_id, workspace_id, repo)
+    import uuid as _uuid
+
+    _DEMO_NODES = [
+        ("Flow Agent System", "concept", "Core orchestration layer: planner → worker → synthesizer"),
+        ("Planner", "skill", "Decomposes user queries into sub-tasks with reasoning"),
+        ("Worker", "skill", "Executes sub-tasks using tools and knowledge retrieval"),
+        ("Synthesizer", "skill", "Aggregates worker outputs into a coherent answer"),
+        ("Reflector", "metacog", "Grades answer quality, stores patterns, predicts next topic"),
+        ("Web Search", "tool_call", "Tavily-based live web search"),
+        ("Knowledge RAG", "tool_call", "Semantic retrieval over workspace documents"),
+        ("Python Sandbox", "tool_call", "Isolated code execution for data analysis"),
+        ("Memory Store", "tool_call", "Long-term episodic memory read/write"),
+        ("User Query", "trace", "Example: Summarize the latest AI research on agents"),
+        ("Agent Response", "trace", "Multi-step research with 3 sources synthesized"),
+        ("Quality Grade", "metacog", "Score: 0.87 — pattern stored for future reuse"),
+        ("Next Prediction", "metacog", "JEPA prediction: user likely asks about tool integration next"),
+        ("System Prompt", "prompt", "You are a research agent. Decompose, search, synthesize."),
+        ("Skill: Deep Research", "skill", "Multi-hop search with source triangulation"),
+    ]
+    _DEMO_EDGES = [
+        (0, 1, "has_component"), (0, 2, "has_component"), (0, 3, "has_component"), (0, 4, "has_component"),
+        (1, 2, "delegates_to"), (2, 3, "feeds_into"), (3, 4, "triggers"),
+        (2, 5, "uses_tool"), (2, 6, "uses_tool"), (2, 7, "uses_tool"), (2, 8, "uses_tool"),
+        (9, 1, "triggers"), (3, 10, "produces"), (4, 11, "produces"), (4, 12, "produces"),
+        (13, 1, "configures"), (14, 2, "enhances"),
+    ]
+
+    node_ids: list[UUID] = []
+    for label, ntype, summary in _DEMO_NODES:
+        nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"flow-demo-{workspace_id}-{label}")
+        node_ids.append(nid)
+        await repo._pool.execute(
+            """
+            INSERT INTO kg_nodes (id, workspace_id, label, node_type, summary, metadata, pos_x, pos_y)
+            VALUES ($1, $2, $3, $4, $5, '{}', $6, $7)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            nid, workspace_id, label, ntype, summary,
+            float(hash(label) % 800), float(hash(summary) % 600),
+        )
+
+    for src_idx, tgt_idx, etype in _DEMO_EDGES:
+        eid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"flow-demo-edge-{workspace_id}-{src_idx}-{tgt_idx}")
+        await repo._pool.execute(
+            """
+            INSERT INTO kg_edges (id, workspace_id, source_id, target_id, edge_type, weight)
+            VALUES ($1, $2, $3, $4, $5, 1.0)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            eid, workspace_id, node_ids[src_idx], node_ids[tgt_idx], etype,
+        )
+
+    engine = KGGraphEngine(request.app.state.pool)
+    G = await engine.load_graph(workspace_id)
+    if G.number_of_nodes() > 0:
+        engine.compute_metrics(G)
+        positions = engine.spring_positions(G)
+        pageranks = {UUID(nid): G.nodes[nid]["pagerank"] for nid in G.nodes}
+        clusters = {UUID(nid): G.nodes[nid].get("cluster_id", 0) for nid in G.nodes}
+        pos_map = {UUID(nid): positions.get(nid, (0.0, 0.0)) for nid in G.nodes}
+        await repo.bulk_update_kg_metrics(pageranks, clusters, pos_map)
+
+    return {"seeded": len(_DEMO_NODES), "edges": len(_DEMO_EDGES)}
+
+
 @router.post("/query")
 async def query_graph(
     request: Request,

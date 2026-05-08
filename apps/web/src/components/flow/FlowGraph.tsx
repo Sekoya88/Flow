@@ -3,23 +3,30 @@
 import { useStore, type NodeStatus } from "@/lib/store";
 
 const NODES = [
-  { id: "planner", label: "Planner", cx: 80, cy: 60 },
-  { id: "worker", label: "Worker", cx: 200, cy: 60 },
-  { id: "synthesizer", label: "Synthesizer", cx: 320, cy: 60 },
+  { id: "planner", label: "Planner", cx: 60, cy: 60 },
+  { id: "worker", label: "Worker", cx: 170, cy: 60 },
+  { id: "synthesizer", label: "Synthesizer", cx: 280, cy: 60 },
+  { id: "reflector", label: "Reflector", cx: 390, cy: 60 },
 ] as const;
 
 const ARCS = [
   {
     id: "plan-work",
-    from: { cx: 80, cy: 60 },
-    to: { cx: 200, cy: 60 },
-    d: "M 95 60 C 130 30, 165 30, 185 60",
+    from: { cx: 60, cy: 60 },
+    to: { cx: 170, cy: 60 },
+    d: "M 78 60 C 110 30, 140 30, 152 60",
   },
   {
     id: "work-synth",
-    from: { cx: 200, cy: 60 },
-    to: { cx: 320, cy: 60 },
-    d: "M 215 60 C 250 30, 285 30, 305 60",
+    from: { cx: 170, cy: 60 },
+    to: { cx: 280, cy: 60 },
+    d: "M 188 60 C 220 30, 250 30, 262 60",
+  },
+  {
+    id: "synth-reflect",
+    from: { cx: 280, cy: 60 },
+    to: { cx: 390, cy: 60 },
+    d: "M 298 60 C 330 30, 360 30, 372 60",
   },
 ] as const;
 
@@ -48,7 +55,7 @@ export function FlowGraph({ className }: FlowGraphProps) {
 
   return (
     <svg
-      viewBox="0 0 400 120"
+      viewBox="0 0 450 120"
       aria-label="Agent execution graph"
       role="img"
       className={className}
@@ -66,6 +73,12 @@ export function FlowGraph({ className }: FlowGraphProps) {
         >
           <path d="M 0 0 L 6 3 L 0 6 Z" fill="var(--color-border)" opacity="0.6" />
         </marker>
+        {/* Gradient for active arcs */}
+        <linearGradient id="arc-active" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="var(--color-flow-thinking)" stopOpacity="0.4" />
+          <stop offset="50%" stopColor="var(--color-flow-streaming)" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="var(--color-flow-streaming)" stopOpacity="0.4" />
+        </linearGradient>
       </defs>
 
       {/* Arcs */}
@@ -75,9 +88,10 @@ export function FlowGraph({ className }: FlowGraphProps) {
         const fromStatus = fromNode ? (nodes[fromNode.id]?.status ?? "idle") : "idle";
         const toStatus = toNode ? (nodes[toNode.id]?.status ?? "idle") : "idle";
         const isActive = fromStatus === "streaming" || fromStatus === "thinking" || toStatus === "thinking";
+        const isDone = fromStatus === "done";
         const arcColor = isActive
-          ? "var(--color-flow-streaming)"
-          : fromStatus === "done"
+          ? "url(#arc-active)"
+          : isDone
             ? "var(--color-flow-done)"
             : "var(--color-border)";
 
@@ -87,10 +101,10 @@ export function FlowGraph({ className }: FlowGraphProps) {
               d={arc.d}
               fill="none"
               stroke={arcColor}
-              strokeWidth={isActive ? 2 : 1.5}
-              strokeOpacity={isActive ? 0.9 : 0.4}
+              strokeWidth={isActive ? 2.5 : 1.5}
+              strokeOpacity={isActive ? 0.9 : isDone ? 0.5 : 0.3}
               markerEnd="url(#arrowhead)"
-              style={{ transition: "stroke 0.4s ease, stroke-opacity 0.4s ease" }}
+              style={{ transition: "stroke 0.4s ease, stroke-opacity 0.4s ease, stroke-width 0.3s ease" }}
             />
             {/* Animated dot riding the arc when active */}
             {isActive && (
@@ -131,7 +145,7 @@ export function FlowGraph({ className }: FlowGraphProps) {
             <circle
               cx={node.cx}
               cy={node.cy}
-              r="18"
+              r="16"
               fill="var(--color-card)"
               stroke={color}
               strokeWidth={isActive ? 2 : 1.5}
@@ -143,9 +157,9 @@ export function FlowGraph({ className }: FlowGraphProps) {
 
             {/* Status dot */}
             <circle
-              cx={node.cx + 12}
-              cy={node.cy - 12}
-              r="5"
+              cx={node.cx + 11}
+              cy={node.cy - 11}
+              r="4"
               fill={color}
               style={{ transition: "fill 0.3s ease" }}
             />
@@ -153,9 +167,9 @@ export function FlowGraph({ className }: FlowGraphProps) {
             {/* Label */}
             <text
               x={node.cx}
-              y={node.cy + 36}
+              y={node.cy + 32}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="9"
               fill="var(--color-muted-foreground)"
               fontFamily="var(--font-sans)"
               style={{ userSelect: "none" }}
@@ -168,7 +182,7 @@ export function FlowGraph({ className }: FlowGraphProps) {
               x={node.cx}
               y={node.cy + 4}
               textAnchor="middle"
-              fontSize="11"
+              fontSize="10"
               fontWeight="600"
               fill={isActive ? color : "var(--color-foreground)"}
               fontFamily="var(--font-sans)"

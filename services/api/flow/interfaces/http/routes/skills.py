@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from flow.application.skill_parser import parse_skill_md
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 
@@ -24,10 +25,14 @@ class SkillOut(BaseModel):
     name: str
     version: int
     content_md: str
-    active: bool
-    score: float
-    use_count: int
-    created_at: str
+    description: str = ""
+    allowed_tools: list[str] = []
+    triggers: list[str] = []
+    metadata: dict = {}
+    active: bool = True
+    score: float = 1.0
+    use_count: int = 0
+    created_at: str = ""
 
 
 @router.get("")
@@ -38,21 +43,24 @@ async def list_skills(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     rows = await repo.list_active_skills(agent_id, workspace_id)
-    return {
-        "skills": [
-            {
-                "id": str(r["id"]),
-                "name": r["name"],
-                "version": r["version"],
-                "content_md": r["content_md"],
-                "active": True,
-                "score": r.get("score", 1.0) if hasattr(r, "get") else 1.0,
-                "use_count": r.get("use_count", 0) if hasattr(r, "get") else 0,
-                "created_at": r["created_at"].isoformat(),
-            }
-            for r in rows
-        ]
-    }
+    skills = []
+    for r in rows:
+        parsed = parse_skill_md(r["content_md"])
+        skills.append({
+            "id": str(r["id"]),
+            "name": parsed.name if parsed.name != "unnamed" else r["name"],
+            "version": r["version"],
+            "content_md": r["content_md"],
+            "description": parsed.description,
+            "allowed_tools": parsed.allowed_tools,
+            "triggers": parsed.triggers,
+            "metadata": parsed.metadata,
+            "active": True,
+            "score": r.get("score", 1.0) if hasattr(r, "get") else 1.0,
+            "use_count": r.get("use_count", 0) if hasattr(r, "get") else 0,
+            "created_at": r["created_at"].isoformat(),
+        })
+    return {"skills": skills}
 
 
 @router.post("")

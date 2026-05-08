@@ -40,7 +40,7 @@ def _emit_tool_call(
     duration_ms: int,
     status: str = "success",
 ) -> None:
-    """Publish a tool_call SSE event. No-op when stream_hub is unavailable."""
+    """Publish a tool_call SSE event and write a KG node. No-op when stream_hub is unavailable."""
     if ctx.stream_hub is None or ctx.execution_id is None:
         return
     ctx.stream_hub.publish(
@@ -54,6 +54,22 @@ def _emit_tool_call(
             "status": status,
         },
     )
+
+    # Write tool_call node to KG (fire-and-forget)
+    import asyncio
+
+    try:
+        repo = FlowRepository(ctx.pool)
+        asyncio.ensure_future(repo.insert_tool_call_node(
+            workspace_id=ctx.workspace_id,
+            execution_id=ctx.execution_id,
+            tool_name=tool,
+            input_preview=str(input_data)[:200],
+            output_preview=str(output)[:200],
+            duration_ms=duration_ms,
+        ))
+    except Exception:
+        pass
 
 
 DEFAULT_TOOLS = {"retrieve": True, "sandbox": True, "long_term_memory": True}
@@ -191,18 +207,40 @@ def make_planner(ctx: GraphContext):
                 except Exception:
                     pass  # reasoning bank query is best-effort
 
-            # Read active agent skills
+            # Read active agent skills (progressive disclosure)
             skills_block = ""
             try:
+                from flow.application.skill_parser import parse_skill_md, skill_matches_query
                 skills = await repo.list_active_skills(ctx.agent_id, ctx.workspace_id)
                 if skills:
-                    skill_lines = []
+                    matched_skills = []
                     for s in skills:
-                        skill_lines.append(f"[Skill: {s['name']} v{s['version']}]\n{s['content_md'][:500]}")
-                        await repo.increment_skill_use(s["id"])
-                    skills_block = "\n\n".join(skill_lines)
+                        parsed = parse_skill_md(s["content_md"])
+                        if skill_matches_query(parsed, user_text):
+                            matched_skills.append((s, parsed))
+                            await repo.increment_skill_use(s["id"])
+
+                    if matched_skills:
+                        skill_lines = []
+                        for s_row, parsed in matched_skills:
+                            skill_lines.append(
+                                f"[Skill: {parsed.name} v{parsed.version}]\n"
+                                f"Description: {parsed.description}\n"
+                                f"Allowed tools: {', '.join(parsed.allowed_tools) or 'any'}\n\n"
+                                f"{parsed.body_md[:800]}"
+                            )
+                        skills_block = "\n\n---\n\n".join(skill_lines)
             except Exception:
-                pass  # skills query is best-effort
+                pass
+
+            # JEPA: read prediction from previous metacognition
+            prediction_hint = ""
+            try:
+                last_pred = await repo.get_latest_prediction(ctx.workspace_id, ctx.agent_id)
+                if last_pred:
+                    prediction_hint = f"\n\n[METACOGNITION] Previous run predicted this topic: {last_pred}"
+            except Exception:
+                pass
 
             if llm is None:
                 plan = "Offline plan: clarify goal, gather facts, draft answer."
@@ -218,6 +256,8 @@ def make_planner(ctx: GraphContext):
                     )
                 if skills_block:
                     system += f"\n\nAGENT SKILLS (apply these guidelines):\n{skills_block}"
+                if prediction_hint:
+                    system += prediction_hint
                 out = await llm.ainvoke([
                     SystemMessage(content=system),
                     HumanMessage(content=user_text),
@@ -367,13 +407,15 @@ def make_reflector(ctx: GraphContext):
     repo = FlowRepository(ctx.pool)
 
     _REFLECTION_PROMPT = """\
-You are a quality reflector. Given the user question, the plan, and the final answer, do:
-1. Grade the answer quality from 1-5 (1=terrible, 5=excellent).
-2. If grade >= 4 AND the answer used a novel approach, suggest a reusable skill (name + short markdown content) for future runs.
-3. If grade <= 2, note what went wrong in one sentence.
+You are a metacognition node implementing JEPA-style self-improvement. Given the user question, plan, and answer:
+
+1. GRADE: Rate answer quality 1-5.
+2. PREDICTION: Predict the user's most likely follow-up question or topic (1 sentence). This helps the agent pre-load relevant skills and context for the next turn.
+3. SKILL: If grade >= 4 and the approach was novel/reusable, suggest a skill.
+4. ISSUE: If grade <= 2, note what went wrong.
 
 Output ONLY valid JSON:
-{{"grade": <int>, "skill_suggestion": {{"name": "...", "content": "..."}} | null, "issue": "..." | null}}
+{{"grade": <int>, "prediction": "likely next question or topic", "skill_suggestion": {{"name": "kebab-case-name", "description": "When to use this skill", "triggers": ["trigger phrase 1"], "body": "## Instructions\\n..."}} | null, "issue": "..." | null}}
 """
 
     @_traceable(name="flow.reflector", run_type="chain")
@@ -409,21 +451,61 @@ Output ONLY valid JSON:
                 skill_sug = data.get("skill_suggestion")
                 if skill_sug and isinstance(skill_sug, dict) and grade >= 4:
                     sname = skill_sug.get("name", "").strip()
-                    scontent = skill_sug.get("content", "").strip()
-                    if sname and scontent:
+                    sdesc = skill_sug.get("description", "").strip()
+                    striggers = skill_sug.get("triggers", [])
+                    sbody = skill_sug.get("body", "").strip()
+                    if sname and sbody:
+                        from flow.application.skill_parser import ParsedSkill
+                        skill = ParsedSkill(
+                            name=sname,
+                            description=sdesc,
+                            triggers=striggers if isinstance(striggers, list) else [],
+                            metadata={"author": "flow-reflector", "auto_generated": True},
+                            body_md=sbody,
+                        )
                         try:
                             await repo.upsert_agent_skill(
                                 agent_id=ctx.agent_id,
                                 workspace_id=ctx.workspace_id,
                                 name=sname,
-                                content_md=scontent,
+                                content_md=skill.to_frontmatter_md(),
                             )
                             _node_logger.info("reflector.skill_created", skill=sname, grade=grade)
                         except Exception:
                             pass
 
+                prediction = data.get("prediction", "")
+
+                # Write metacog node to KG (best-effort)
+                if ctx.execution_id is not None:
+                    try:
+                        _skill_name = skill_sug.get("name") if (skill_sug and isinstance(skill_sug, dict) and grade >= 4) else None
+                        await repo.insert_metacog_node(
+                            workspace_id=ctx.workspace_id,
+                            execution_id=ctx.execution_id,
+                            grade=grade,
+                            issue=data.get("issue"),
+                            skill_created=_skill_name,
+                            prediction=prediction or None,
+                        )
+                    except Exception:
+                        pass
+
+                # Store prediction for next run (JEPA-style)
+                if prediction and ctx.execution_id:
+                    try:
+                        await repo.store_prediction(
+                            workspace_id=ctx.workspace_id,
+                            agent_id=ctx.agent_id,
+                            user_id=ctx.user_id,
+                            prediction=prediction,
+                            execution_id=ctx.execution_id,
+                        )
+                    except Exception:
+                        pass
+
                 _node_logger.info("node.done", node="reflector", grade=grade, duration_ms=int((time.monotonic() - _t0) * 1000))
-                return {"reflection": data}
+                return {"reflection": data, "prediction": prediction}
             except Exception as exc:
                 _node_logger.debug("reflector failed: %s", exc)
                 return {"reflection": {"grade": 3, "error": str(exc)}}

@@ -26,13 +26,13 @@ export function FlowMark({ size, className }: { size: number; className?: string
   );
 }
 
-export const FlowMarkAnimated = forwardRef<SVGSVGElement, { className?: string }>(
-  function FlowMarkAnimated({ className }, ref) {
+export const FlowMarkAnimated = forwardRef<SVGSVGElement, { className?: string; size?: number | string }>(
+  function FlowMarkAnimated({ className, size = 64 }, ref) {
     return (
       <svg
         ref={ref}
-        width="64"
-        height="64"
+        width={size}
+        height={size}
         viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
