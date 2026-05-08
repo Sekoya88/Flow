@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 from uuid import UUID
 
@@ -32,15 +31,20 @@ async def create_version(
     agent = await _get_agent(repo, agent_id, user_id)
     workspace_id = agent["workspace_id"]
 
-    version_id = await snapshot_genome(
-        pool=repo._pool,
-        agent_id=agent_id,
-        workspace_id=workspace_id,
-        trigger=VersionTrigger.MANUAL,
-        version_label=body.version_label.strip(),
-        created_by=user_id,
-        status=VersionStatus.ACTIVE,
-    )
+    try:
+        version_id = await snapshot_genome(
+            pool=repo._pool,
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            trigger=VersionTrigger.MANUAL,
+            version_label=body.version_label.strip(),
+            created_by=user_id,
+            status=VersionStatus.ACTIVE,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to create version snapshot")
     return {"id": str(version_id), "version_label": body.version_label.strip()}
 
 
@@ -100,17 +104,14 @@ async def restore_version(
         raise HTTPException(status_code=404, detail="version not found")
 
     # Auto-save current config before restoring
-    current_config = dict(agent["config"]) if isinstance(agent["config"], dict) else {}
-    await repo._pool.execute(
-        """
-        INSERT INTO agent_versions (agent_id, version_label, config_snapshot, template, created_by)
-        VALUES ($1, $2, $3::jsonb, $4, $5)
-        """,
-        agent_id,
-        f"auto-save before restore to {target['version_label']}",
-        json.dumps(current_config),
-        agent["template"],
-        user_id,
+    await snapshot_genome(
+        pool=repo._pool,
+        agent_id=agent_id,
+        workspace_id=workspace_id,
+        trigger=VersionTrigger.MANUAL,
+        version_label=f"auto-save before restore to {target['version_label']}",
+        created_by=user_id,
+        status=VersionStatus.ACTIVE,
     )
 
     # Restore

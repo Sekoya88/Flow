@@ -15,7 +15,7 @@ _SCORE_EPSILON = 1e-9
 
 def _auto_label(trigger: VersionTrigger) -> str:
     """Generate a human-readable version label from a trigger type."""
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     if trigger == VersionTrigger.SKILL_CREATED:
         return f"auto-skill-{now.strftime('%Y-%m-%dT%H:%M')}"
     elif trigger == VersionTrigger.EVAL_PASS:
@@ -119,7 +119,7 @@ async def activate_genome(
             await conn.execute(
                 "UPDATE agent_versions SET status = 'archived' "
                 "WHERE agent_id = $1 AND status = 'active' "
-                "AND agent_id IN (SELECT id FROM agents WHERE id = $1 AND workspace_id = $2)",
+                "AND EXISTS (SELECT 1 FROM agents WHERE id = $1 AND workspace_id = $2)",
                 agent_id, workspace_id,
             )
             row = await conn.fetchrow(

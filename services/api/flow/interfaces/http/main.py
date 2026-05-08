@@ -46,6 +46,7 @@ from flow.interfaces.http.routes import (
     tools,
     trace,
     workspaces,
+    evaluations,
 )
 
 logger = get_logger(__name__)
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(skills.router)
     app.include_router(golden_sets.router)
     app.include_router(ab_tests.router)
+    app.include_router(evaluations.router)
     return app
 
 

@@ -40,7 +40,7 @@ class AgentPatchIn(BaseModel):
     """Partial agent update: display name, system prompt, and/or tool toggles."""
 
     name: str | None = Field(None, min_length=1, max_length=200)
-    system_prompt: str | None = None
+    system_prompt: str | None = Field(default=None, min_length=1)
     retrieve: bool | None = None
     sandbox: bool | None = None
     long_term_memory: bool | None = None

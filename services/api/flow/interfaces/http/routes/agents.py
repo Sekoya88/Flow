@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 from flow.application.genome_service import snapshot_genome
 from flow.config import Settings
@@ -230,14 +233,17 @@ async def patch_agent(
         ok = await repo.update_agent_config(agent_id, workspace_id, cfg)
         if not ok:
             raise HTTPException(status_code=500, detail="update failed")
-        await snapshot_genome(
-            pool=repo._pool,
-            agent_id=agent_id,
-            workspace_id=workspace_id,
-            trigger=VersionTrigger.CONFIG_PATCH,
-            created_by=user_id,
-            status=VersionStatus.ACTIVE,
-        )
+        try:
+            await snapshot_genome(
+                pool=repo._pool,
+                agent_id=agent_id,
+                workspace_id=workspace_id,
+                trigger=VersionTrigger.CONFIG_PATCH,
+                created_by=user_id,
+                status=VersionStatus.ACTIVE,
+            )
+        except Exception:
+            logger.warning("genome.snapshot_failed", exc_info=True)
     fresh = await repo.get_agent(agent_id, workspace_id)
     assert fresh is not None
     raw_cfg = fresh["config"]
