@@ -8,11 +8,16 @@ import json
 import logging
 import os
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from openai import AsyncOpenAI
 from flow.application.curator import check_regression_and_propose
-from flow.application.genome_service import _maybe_snapshot_eval_pass, get_active_genome
+from flow.application.genome_service import (
+    _create_genome_proposal,
+    _maybe_snapshot_eval_pass,
+    get_active_genome,
+    get_previous_active_genome,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +232,7 @@ async def auto_eval_tick(ctx: dict) -> None:
         version_label = active_genome.version_label if active_genome else "v1.0"
 
         try:
-            await evaluate_golden_set(
+            result = await evaluate_golden_set(
                 pool=pool,
                 golden_set_id=gset["id"],
                 agent_id=agent["id"],
@@ -236,6 +241,42 @@ async def auto_eval_tick(ctx: dict) -> None:
                 user_id=user_id,
                 client=client,
             )
+            candidate_id_str = result.get("candidate_version_id")
+            if candidate_id_str and user_id:
+                from uuid import UUID as _UUID
+                from flow.application.ab_runner import ABTestRunner
+                candidate_id = _UUID(candidate_id_str)
+                prev_genome = await get_previous_active_genome(pool, agent["id"])
+                if prev_genome and prev_genome.id:
+                    test_id = uuid4()
+                    await pool.execute(
+                        "INSERT INTO ab_tests "
+                        "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
+                        "VALUES ($1, $2, $3, $4, $4, 'running')",
+                        test_id, ws_id, gset["id"], agent["id"],
+                    )
+                    summary = await ABTestRunner(pool, client).run(
+                        test_id=test_id,
+                        golden_set_id=gset["id"],
+                        version_a_id=prev_genome.id,
+                        version_b_id=candidate_id,
+                        agent_id=agent["id"],
+                    )
+                    if summary.significant and summary.winner_version_id == candidate_id:
+                        await _create_genome_proposal(
+                            pool=pool,
+                            workspace_id=ws_id,
+                            user_id=user_id,
+                            candidate_version_id=candidate_id,
+                            title=f"Eval improvement: +{summary.delta:.3f} avg score",
+                            body=(
+                                f"Candidate {summary.version_b.version_label} scored "
+                                f"{summary.version_b.avg_score:.3f} vs previous "
+                                f"{summary.version_a.avg_score:.3f} "
+                                f"(A/B test {test_id}, delta={summary.delta:.3f}). "
+                                "Approve to promote."
+                            ),
+                        )
         except Exception as exc:
             logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)
 
