@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -105,7 +105,13 @@ export function AgentDetailDrawer({
   onToolToggle,
 }: AgentDetailDrawerProps) {
   const router = useRouter();
-  const tools = useMemo(() => (agent ? getTools(agent.config) : {}), [agent]);
+  const [localTools, setLocalTools] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (agent) setLocalTools(getTools(agent.config));
+  }, [agent]);
+
+  const tools = localTools;
 
   // ── Version state ──
   const [versions, setVersions] = useState<AgentVersion[]>([]);
@@ -301,6 +307,7 @@ export function AgentDetailDrawer({
                           size="sm"
                           checked={enabled}
                           onCheckedChange={(checked: boolean) => {
+                            setLocalTools((prev) => ({ ...prev, [key]: checked }));
                             onToolToggle?.(agent.id, key, checked);
                           }}
                         />
