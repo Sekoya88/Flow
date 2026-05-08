@@ -12,6 +12,7 @@ from uuid import UUID
 
 from openai import AsyncOpenAI
 from flow.application.curator import check_regression_and_propose
+from flow.application.genome_service import _maybe_snapshot_eval_pass, get_active_genome
 
 logger = logging.getLogger(__name__)
 
@@ -161,8 +162,9 @@ async def evaluate_golden_set(
     avg_score = sum(scores) / scored if scored else 0.0
     pass_rate = len([s for s in scores if s >= 0.7]) / scored if scored else 0.0
 
+    candidate_version_id = None
     if workspace_id and user_id:
-        # Phase 3.3 / 4.1: Regression & Auto-refinement check
+        # Regression & Auto-refinement check
         await check_regression_and_propose(
             pool=pool,
             golden_set_id=golden_set_id,
@@ -174,10 +176,66 @@ async def evaluate_golden_set(
             openai_api_key=os.environ.get("OPENAI_API_KEY"),
         )
 
+        # Snapshot genome as CANDIDATE if pass_rate is acceptable and score improved
+        if pass_rate >= 0.7:
+            try:
+                candidate_version_id = await _maybe_snapshot_eval_pass(
+                    pool=pool,
+                    agent_id=agent_id,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    avg_score=avg_score,
+                    pass_rate=pass_rate,
+                )
+            except Exception:
+                logger.warning("genome.eval_snapshot_failed", exc_info=True)
+
     return {
         "total_items": total,
         "scored_items": scored,
         "avg_score": round(avg_score, 3),
         "pass_rate": round(pass_rate, 3),
         "results": results,
+        "candidate_version_id": str(candidate_version_id) if candidate_version_id else None,
     }
+
+async def auto_eval_tick(ctx: dict) -> None:
+    """Cron job that runs nightly to evaluate all workspaces against their golden datasets."""
+    pool = ctx["pool"]
+    workspaces = await pool.fetch("SELECT id FROM workspaces")
+    client = AsyncOpenAI(api_key=os.environ.get("FLOW_OPENAI_API_KEY"))
+    
+    for ws in workspaces:
+        ws_id = ws["id"]
+        # Find active agent
+        agent = await pool.fetchrow("SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id)
+        if not agent:
+            continue
+        
+        # Find golden set
+        gset = await pool.fetchrow("SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id)
+        if not gset:
+            continue
+            
+        logger.info("cron.auto_eval_tick.running workspace_id=%s agent_id=%s", ws_id, agent["id"])
+        # Find a user to assign proposals to
+        user = await pool.fetchrow("SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id)
+        user_id = user["user_id"] if user else None
+
+        # Resolve current active genome version label (falls back to "v1.0" if none)
+        active_genome = await get_active_genome(pool, agent["id"])
+        version_label = active_genome.version_label if active_genome else "v1.0"
+
+        try:
+            await evaluate_golden_set(
+                pool=pool,
+                golden_set_id=gset["id"],
+                agent_id=agent["id"],
+                agent_version_label=version_label,
+                workspace_id=ws_id,
+                user_id=user_id,
+                client=client,
+            )
+        except Exception as exc:
+            logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)
+
