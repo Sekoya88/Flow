@@ -147,17 +147,19 @@ export function KnowledgeGraphCanvas({
       group.add(new THREE.Mesh(outerGeo, outerMat));
     }
 
-    // Text label with background
+    // Text label with background — floor prevents invisible labels on tiny nodes
+    const labelW = Math.max(radius * 6, 16);
+    const labelH = Math.max(radius * 2.2, 6);
     const sprite = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: createTextTexture(node.label, node.color, isHighlighted ?? false),
         transparent: true,
         depthWrite: false,
-        opacity: isHighlighted ? 1 : 0.9,
+        opacity: isHighlighted ? 1 : 0.92,
       }),
     );
-    sprite.scale.set(radius * 6, radius * 2.2, 1);
-    sprite.position.y = radius + 4;
+    sprite.scale.set(labelW, labelH, 1);
+    sprite.position.y = radius + 5;
     group.add(sprite);
 
     return group;
@@ -248,8 +250,8 @@ function createTextTexture(text: string, color: string, highlighted: boolean): a
   canvas.height = 96;
 
   // Background pill
-  const label = text.length > 28 ? text.slice(0, 26) + "…" : text;
-  ctx.font = "500 22px system-ui, -apple-system, sans-serif";
+  const label = text.length > 32 ? text.slice(0, 30) + "…" : text;
+  ctx.font = "600 26px system-ui, -apple-system, sans-serif";
   const textWidth = ctx.measureText(label).width;
   const pillWidth = Math.min(textWidth + 28, 500);
   const pillHeight = 40;
