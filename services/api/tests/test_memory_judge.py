@@ -1,5 +1,7 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
+
+from flow.infrastructure.llm.stub import StubChatModel
 
 
 @pytest.mark.asyncio
@@ -7,10 +9,9 @@ async def test_extract_facts_returns_list():
     """should extract facts list when LLM returns valid JSON"""
     from flow.application.memory_judge import extract_facts_from_answer
 
-    mock_llm = AsyncMock()
-    mock_llm.ainvoke.return_value = MagicMock(content='["Fact A", "Fact B"]')
+    stub_llm = StubChatModel(responses=['["Fact A", "Fact B"]'])
 
-    result = await extract_facts_from_answer(mock_llm, "What is X?", "X is Y and Z.")
+    result = await extract_facts_from_answer(stub_llm, "What is X?", "X is Y and Z.")
     assert isinstance(result, list)
     assert len(result) == 2
     assert "Fact A" in result
@@ -21,10 +22,9 @@ async def test_extract_facts_handles_bad_json():
     """should return empty list when LLM returns non-JSON"""
     from flow.application.memory_judge import extract_facts_from_answer
 
-    mock_llm = AsyncMock()
-    mock_llm.ainvoke.return_value = MagicMock(content="not json at all")
+    stub_llm = StubChatModel(responses=["not json at all"])
 
-    result = await extract_facts_from_answer(mock_llm, "Q", "A")
+    result = await extract_facts_from_answer(stub_llm, "Q", "A")
     assert result == []
 
 

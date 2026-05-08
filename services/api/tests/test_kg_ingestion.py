@@ -1,6 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
+
+from flow.infrastructure.llm.stub import StubChatModel
 
 
 @pytest.mark.asyncio
@@ -13,21 +15,19 @@ async def test_full_ingestion_creates_note_node():
     node_id = uuid4()
 
     mock_repo = AsyncMock()
-    mock_repo.get_kg_node_by_label.return_value = None   # not duplicate
+    mock_repo.get_kg_node_by_label.return_value = None
     mock_repo.upsert_kg_node.return_value = node_id
     mock_repo.upsert_kg_edge.return_value = uuid4()
     mock_repo.list_kg_topics.return_value = ["AI", "Engineering"]
     mock_repo.vector_search_kg.return_value = []
 
-    mock_llm = AsyncMock()
-    # extract_entities response
-    mock_llm.ainvoke.side_effect = [
-        MagicMock(content='{"entities": ["LangGraph", "agents"]}'),
-        MagicMock(content='{"topic": "AI"}'),
-        MagicMock(content="A note about LangGraph framework."),
-    ]
+    stub_llm = StubChatModel(responses=[
+        '{"entities": ["LangGraph", "agents"]}',
+        '{"topic": "AI"}',
+        "A note about LangGraph framework.",
+    ])
 
-    with patch("flow.application.kg_ingestion_graph.ChatOpenAI", return_value=mock_llm), \
+    with patch("flow.application.kg_ingestion_graph.ChatOpenAI", return_value=stub_llm), \
          patch("flow.application.kg_ingestion_graph.embed_texts", new_callable=AsyncMock) as mock_emb:
         mock_emb.return_value = [[0.1] * 1536]
 

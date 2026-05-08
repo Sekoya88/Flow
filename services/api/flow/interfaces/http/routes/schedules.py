@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -10,6 +11,36 @@ from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
+
+
+_SYSTEM_CRON_JOBS = [
+    {
+        "name": "scheduler_tick",
+        "cron_expr": "* * * * *",
+        "human_readable": "Every minute",
+        "description": "Enqueues enabled agent schedules that are due",
+    },
+    {
+        "name": "auto_eval_tick",
+        "cron_expr": "0 3 * * *",
+        "human_readable": "Every day at 3:00 AM UTC",
+        "description": "Runs nightly golden set evaluation across all workspaces",
+    },
+]
+
+
+def _next_run_for(cron_expr: str) -> str:
+    now = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+    if cron_expr == "* * * * *":
+        nxt = now + datetime.timedelta(minutes=1)
+    elif cron_expr == "0 3 * * *":
+        candidate = now.replace(hour=3, minute=0)
+        if candidate <= now:
+            candidate += datetime.timedelta(days=1)
+        nxt = candidate
+    else:
+        nxt = now + datetime.timedelta(minutes=1)
+    return nxt.isoformat() + "Z"
 
 
 class ScheduleCreateIn(BaseModel):
@@ -26,6 +57,19 @@ class ScheduleCreateIn(BaseModel):
 
 class ScheduleToggleIn(BaseModel):
     enabled: bool
+
+
+@router.get("/cron-jobs")
+async def list_cron_jobs(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+) -> dict:
+    """List system ARQ cron jobs with next scheduled run time."""
+    return {
+        "cron_jobs": [
+            {**job, "next_run": _next_run_for(job["cron_expr"])}
+            for job in _SYSTEM_CRON_JOBS
+        ]
+    }
 
 
 @router.post("")

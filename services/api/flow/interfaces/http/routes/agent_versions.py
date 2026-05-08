@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from flow.application.genome_service import snapshot_genome
+from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 
@@ -28,21 +29,23 @@ async def create_version(
 ) -> dict:
     """Snapshot the current agent config as a named version."""
     agent = await _get_agent(repo, agent_id, user_id)
-    config = dict(agent["config"]) if isinstance(agent["config"], dict) else {}
+    workspace_id = agent["workspace_id"]
 
-    vid = await repo._pool.fetchval(
-        """
-        INSERT INTO agent_versions (agent_id, version_label, config_snapshot, template, created_by)
-        VALUES ($1, $2, $3::jsonb, $4, $5)
-        RETURNING id
-        """,
-        agent_id,
-        body.version_label.strip(),
-        json.dumps(config),
-        agent["template"],
-        user_id,
-    )
-    return {"id": str(vid), "version_label": body.version_label.strip()}
+    try:
+        version_id = await snapshot_genome(
+            pool=repo._pool,
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            trigger=VersionTrigger.MANUAL,
+            version_label=body.version_label.strip(),
+            created_by=user_id,
+            status=VersionStatus.ACTIVE,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to create version snapshot")
+    return {"id": str(version_id), "version_label": body.version_label.strip()}
 
 
 @router.get("")
@@ -101,17 +104,14 @@ async def restore_version(
         raise HTTPException(status_code=404, detail="version not found")
 
     # Auto-save current config before restoring
-    current_config = dict(agent["config"]) if isinstance(agent["config"], dict) else {}
-    await repo._pool.execute(
-        """
-        INSERT INTO agent_versions (agent_id, version_label, config_snapshot, template, created_by)
-        VALUES ($1, $2, $3::jsonb, $4, $5)
-        """,
-        agent_id,
-        f"auto-save before restore to {target['version_label']}",
-        json.dumps(current_config),
-        agent["template"],
-        user_id,
+    await snapshot_genome(
+        pool=repo._pool,
+        agent_id=agent_id,
+        workspace_id=workspace_id,
+        trigger=VersionTrigger.MANUAL,
+        version_label=f"auto-save before restore to {target['version_label']}",
+        created_by=user_id,
+        status=VersionStatus.ACTIVE,
     )
 
     # Restore

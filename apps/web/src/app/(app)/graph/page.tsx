@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Expand, Maximize2, Minimize2, Network, Sparkles } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, Sparkles, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
@@ -45,6 +45,7 @@ export default function GraphPage() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
 
   const typesKey = useMemo(() => Array.from(activeTypes).sort().join(","), [activeTypes]);
 
@@ -160,6 +161,7 @@ export default function GraphPage() {
           highlightedNodeIds={highlightedIds}
           highlightedPath={pathLabels}
           className="flex-1 h-full w-full"
+          onNodeClick={(n) => setSelectedNode((prev) => prev?.id === n.id ? null : n)}
         />
       )}
 
@@ -251,6 +253,159 @@ export default function GraphPage() {
           />
         </div>
       )}
+
+      {/* Node detail panel */}
+      {selectedNode && !panelOpen && (
+        <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+      )}
+      {selectedNode && panelOpen && (
+        <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} offset />
+      )}
+      </div>
+    </div>
+  );
+}
+
+const NODE_TYPE_ICONS: Record<string, React.ReactNode> = {
+  skill: <Zap className="h-3.5 w-3.5" />,
+  tool_call: <Cpu className="h-3.5 w-3.5" />,
+  trace: <GitBranch className="h-3.5 w-3.5" />,
+  prompt: <BookOpen className="h-3.5 w-3.5" />,
+};
+
+function NodeDetailPanel({ node, onClose, offset }: { node: KGNode; onClose: () => void; offset?: boolean }) {
+  const color = TYPE_DOT_COLORS[node.node_type] ?? "#94a3b8";
+  const skills = (node.metadata?.skills as string[] | undefined) ?? [];
+  const tools = (node.metadata?.tools as string[] | undefined) ?? [];
+  const contentMd = (node.metadata?.content_md ?? node.metadata?.content ?? node.metadata?.body) as string | undefined;
+  const sourcePath = node.source_path;
+  const metaKeys = Object.keys(node.metadata ?? {}).filter(
+    (k) => !["skills", "tools", "content_md", "content", "body"].includes(k),
+  );
+
+  return (
+    <div
+      className={cn(
+        "absolute bottom-4 z-40 animate-fade-in",
+        offset ? "right-[320px]" : "right-4",
+      )}
+      style={{ maxWidth: 340, minWidth: 280 }}
+    >
+      <div className="rounded-2xl border border-border/50 bg-card/95 backdrop-blur-2xl shadow-2xl shadow-black/30 overflow-hidden">
+        {/* Header */}
+        <div
+          className="flex items-start justify-between gap-3 p-4 pb-3"
+          style={{ borderBottom: `1px solid ${color}18` }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: `${color}18`, color }}
+            >
+              {NODE_TYPE_ICONS[node.node_type] ?? <Network className="h-3.5 w-3.5" />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate leading-tight">{node.label}</p>
+              <span
+                className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono font-medium mt-0.5"
+                style={{ backgroundColor: `${color}14`, color, border: `1px solid ${color}28` }}
+              >
+                {node.node_type.replace("_", " ")}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3 max-h-72 overflow-y-auto">
+          {/* Summary */}
+          {node.summary && (
+            <p className="text-xs text-muted-foreground leading-relaxed">{node.summary}</p>
+          )}
+
+          {/* Content preview */}
+          {contentMd && (
+            <div className="rounded-lg bg-muted/40 border border-border/40 p-2.5">
+              <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1">Content</p>
+              <p className="text-xs text-foreground/80 leading-relaxed line-clamp-5 font-mono whitespace-pre-wrap">
+                {contentMd.slice(0, 500)}{contentMd.length > 500 ? "…" : ""}
+              </p>
+            </div>
+          )}
+
+          {/* Skills list */}
+          {skills.length > 0 && (
+            <div>
+              <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1.5">Skills</p>
+              <div className="flex flex-wrap gap-1">
+                {skills.map((s) => (
+                  <span
+                    key={s}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: `${TYPE_DOT_COLORS.skill}14`, color: TYPE_DOT_COLORS.skill, border: `1px solid ${TYPE_DOT_COLORS.skill}28` }}
+                  >
+                    <Zap className="h-2.5 w-2.5" />
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tools list */}
+          {tools.length > 0 && (
+            <div>
+              <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1.5">Tools</p>
+              <div className="flex flex-wrap gap-1">
+                {tools.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: `${TYPE_DOT_COLORS.tool_call}14`, color: TYPE_DOT_COLORS.tool_call, border: `1px solid ${TYPE_DOT_COLORS.tool_call}28` }}
+                  >
+                    <Cpu className="h-2.5 w-2.5" />
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Source path */}
+          {sourcePath && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <BookOpen className="h-3 w-3 shrink-0" />
+              <span className="truncate font-mono">{sourcePath}</span>
+            </div>
+          )}
+
+          {/* Pagerank */}
+          {node.pagerank > 0 && (
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground/60 font-mono pt-1 border-t border-border/30">
+              <span>PageRank</span>
+              <span className="tabular-nums">{node.pagerank.toFixed(4)}</span>
+            </div>
+          )}
+
+          {/* Extra metadata keys */}
+          {metaKeys.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-border/30">
+              {metaKeys.slice(0, 5).map((k) => (
+                <div key={k} className="flex items-start gap-2 text-[10px]">
+                  <span className="text-muted-foreground/50 font-mono shrink-0 pt-px">{k}</span>
+                  <span className="text-muted-foreground/80 font-mono truncate">
+                    {String(node.metadata[k]).slice(0, 60)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

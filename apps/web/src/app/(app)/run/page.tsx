@@ -10,6 +10,8 @@ import {
   Sparkles,
   Settings2,
   User,
+  Target,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -78,6 +80,9 @@ export default function RunPage() {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [citations, setCitations] = useState<CitationSource[]>([]);
   const [showInspector, setShowInspector] = useState(true);
+  const [goldenSetId, setGoldenSetId] = useState<string | null>(null);
+  const [markedItems, setMarkedItems] = useState<Set<number>>(new Set());
+  const [markingIdx, setMarkingIdx] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -93,10 +98,17 @@ export default function RunPage() {
         setWsId(w.id);
         return apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${w.id}/agents`);
       })
-      .then((a) => {
-        if (!a?.agents?.length) return;
-        setAgents(a.agents);
-        setAgentId(a.agents[0].id);
+      .then(async (a) => {
+        if (a?.agents?.length) {
+          setAgents(a.agents);
+          setAgentId(a.agents[0].id);
+        }
+        try {
+          const setsData = await apiFetch<{ sets: { id: string }[] }>("/api/v1/golden-sets");
+          if (setsData.sets && setsData.sets.length > 0) {
+            setGoldenSetId(setsData.sets[0].id);
+          }
+        } catch { /* ignore */ }
       })
       .finally(() => setBootDone(true));
   }, [router]);
@@ -202,6 +214,30 @@ export default function RunPage() {
     }
   }, [run]);
 
+  const handleMarkAsGolden = useCallback(async (msgIndex: number) => {
+    if (!goldenSetId || msgIndex === 0) return;
+    const assistantMsg = messages[msgIndex];
+    const userMsg = messages[msgIndex - 1];
+    if (userMsg.role !== "user" || assistantMsg.role !== "assistant") return;
+
+    setMarkingIdx(msgIndex);
+    try {
+      await apiFetch(`/api/v1/golden-sets/${goldenSetId}/items`, {
+        method: "POST",
+        json: {
+          input_text: userMsg.content,
+          expected_output: assistantMsg.content,
+          scoring_criteria: "Generated from chat",
+        },
+      });
+      setMarkedItems((prev) => new Set(prev).add(msgIndex));
+    } catch {
+      // ignore
+    } finally {
+      setMarkingIdx(null);
+    }
+  }, [goldenSetId, messages]);
+
   if (!bootDone) {
     return (
       <div className="flex h-[calc(100vh-48px)] items-center justify-center">
@@ -274,15 +310,42 @@ export default function RunPage() {
                         <Bot className="h-4 w-4 text-flow-brand" />
                       </div>
                     )}
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed",
-                        msg.role === "user"
-                          ? "rounded-br-md bg-flow-brand text-white shadow-md shadow-flow-brand/20"
-                          : "surface-glass rounded-bl-md text-foreground shadow-sm",
+                    <div className="flex flex-col gap-1.5 max-w-[80%]">
+                      <div
+                        className={cn(
+                          "rounded-2xl px-5 py-3.5 text-sm leading-relaxed",
+                          msg.role === "user"
+                            ? "rounded-br-md bg-flow-brand text-white shadow-md shadow-flow-brand/20"
+                            : "surface-glass rounded-bl-md text-foreground shadow-sm",
+                        )}
+                      >
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                      {msg.role === "assistant" && goldenSetId && (
+                        <div className="flex justify-start pl-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
+                              markedItems.has(i)
+                                ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
+                                : "text-muted-foreground/50 hover:text-flow-brand hover:bg-flow-brand/10"
+                            )}
+                            disabled={markedItems.has(i) || markingIdx === i}
+                            onClick={() => void handleMarkAsGolden(i)}
+                          >
+                            {markingIdx === i ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : markedItems.has(i) ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <Target className="h-3 w-3" />
+                            )}
+                            {markedItems.has(i) ? "Added to Golden" : "Mark as Golden"}
+                          </Button>
+                        </div>
                       )}
-                    >
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
                     {msg.role === "user" && (
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">

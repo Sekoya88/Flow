@@ -473,6 +473,36 @@ Output ONLY valid JSON:
                             _node_logger.info("reflector.skill_created", skill=sname, grade=grade)
                         except Exception:
                             pass
+                        else:
+                            # Snapshot genome as CANDIDATE + create proposal for human review
+                            try:
+                                from flow.application.genome_service import (
+                                    _create_genome_proposal,
+                                    snapshot_genome,
+                                )
+                                from flow.domain.genome import VersionStatus, VersionTrigger
+                                candidate_id = await snapshot_genome(
+                                    pool=ctx.pool,
+                                    agent_id=ctx.agent_id,
+                                    workspace_id=ctx.workspace_id,
+                                    trigger=VersionTrigger.SKILL_CREATED,
+                                    created_by=None,
+                                    status=VersionStatus.CANDIDATE,
+                                )
+                                await _create_genome_proposal(
+                                    pool=ctx.pool,
+                                    workspace_id=ctx.workspace_id,
+                                    user_id=ctx.user_id,
+                                    candidate_version_id=candidate_id,
+                                    title=f"New skill learned: {sname}",
+                                    body=(
+                                        f"Reflector grade {grade}/5. "
+                                        f"Skill '{sname}' auto-created. "
+                                        "Approve to promote this genome version to active."
+                                    ),
+                                )
+                            except Exception:
+                                _node_logger.warning("genome.snapshot_failed_after_skill", exc_info=True)
 
                 prediction = data.get("prediction", "")
 

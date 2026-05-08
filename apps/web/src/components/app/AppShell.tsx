@@ -17,6 +17,7 @@ import {
   Settings,
   Sparkles,
   Workflow,
+  CheckCircle,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -48,6 +49,7 @@ const primaryNav = [
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
+  { href: "/evals", label: "Evals", icon: CheckCircle },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 

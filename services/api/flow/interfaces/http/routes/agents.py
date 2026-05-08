@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+logger = logging.getLogger(__name__)
+
+from flow.application.genome_service import snapshot_genome
 from flow.config import Settings
+from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.schemas import AgentCreateIn, AgentPatchIn, ExecuteIn, VibeIn
@@ -211,19 +216,34 @@ async def patch_agent(
     agent = await repo.get_agent(agent_id, workspace_id)
     assert agent is not None
     tool_keys = ("retrieve", "sandbox", "long_term_memory", "tavily_search", "fetch_webpage", "arxiv_search", "hf_papers")
-    if any(k in data for k in tool_keys):
+    config_changed = any(k in data for k in tool_keys) or data.get("system_prompt") is not None
+    if config_changed:
         raw_cfg = agent["config"]
         cfg = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
-        tools = {**(cfg.get("tools") if isinstance(cfg.get("tools"), dict) else {})}
-        defaults = {"retrieve": True, "sandbox": True, "long_term_memory": True, "tavily_search": False, "fetch_webpage": False, "arxiv_search": False, "hf_papers": False}
-        merged = {**defaults, **tools}
-        for field in tool_keys:
-            if field in data and data[field] is not None:
-                merged[field] = data[field]
-        cfg["tools"] = merged
+        if any(k in data for k in tool_keys):
+            tools = {**(cfg.get("tools") if isinstance(cfg.get("tools"), dict) else {})}
+            defaults = {"retrieve": True, "sandbox": True, "long_term_memory": True, "tavily_search": False, "fetch_webpage": False, "arxiv_search": False, "hf_papers": False}
+            merged = {**defaults, **tools}
+            for field in tool_keys:
+                if field in data and data[field] is not None:
+                    merged[field] = data[field]
+            cfg["tools"] = merged
+        if data.get("system_prompt") is not None:
+            cfg["system_prompt"] = data["system_prompt"]
         ok = await repo.update_agent_config(agent_id, workspace_id, cfg)
         if not ok:
             raise HTTPException(status_code=500, detail="update failed")
+        try:
+            await snapshot_genome(
+                pool=repo._pool,
+                agent_id=agent_id,
+                workspace_id=workspace_id,
+                trigger=VersionTrigger.CONFIG_PATCH,
+                created_by=user_id,
+                status=VersionStatus.ACTIVE,
+            )
+        except Exception:
+            logger.warning("genome.snapshot_failed", exc_info=True)
     fresh = await repo.get_agent(agent_id, workspace_id)
     assert fresh is not None
     raw_cfg = fresh["config"]

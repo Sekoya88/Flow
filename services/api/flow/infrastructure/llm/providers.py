@@ -15,6 +15,13 @@ def get_chat_model(model_config: dict[str, Any], fallback_api_keys: dict[str, st
     model = model_config.get("model", "gpt-4o-mini")
     temperature = float(model_config.get("temperature", 0.2))
 
+    if provider == "stub":
+        import os
+        if os.environ.get("FLOW_ENV", "production") not in ("test", "development"):
+            raise RuntimeError("StubChatModel is only available in test/development environments")
+        from flow.infrastructure.llm.stub import StubChatModel
+        return StubChatModel(responses=model_config.get("responses", []))
+
     if provider == "anthropic":
         api_key = model_config.get("api_key") or fallback_api_keys.get("anthropic")
         if not api_key:
