@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from flow.application.genome_service import activate_genome
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import ProposalActionIn
@@ -57,4 +58,17 @@ async def act_on_proposal(
     ok = await repo.set_proposal_status(proposal_id, ws, body.status)
     if not ok:
         raise HTTPException(status_code=404, detail="proposal not found")
+    if body.status == "approved":
+        version_row = await repo._pool.fetchrow(
+            "SELECT id, agent_id FROM agent_versions "
+            "WHERE proposal_id = $1 AND status = 'candidate'",
+            proposal_id,
+        )
+        if version_row:
+            await activate_genome(
+                pool=repo._pool,
+                version_id=version_row["id"],
+                agent_id=version_row["agent_id"],
+                workspace_id=ws,
+            )
     return {"ok": True}

@@ -9,6 +9,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from flow.application.genome_service import snapshot_genome
+from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 
@@ -28,21 +30,18 @@ async def create_version(
 ) -> dict:
     """Snapshot the current agent config as a named version."""
     agent = await _get_agent(repo, agent_id, user_id)
-    config = dict(agent["config"]) if isinstance(agent["config"], dict) else {}
+    workspace_id = agent["workspace_id"]
 
-    vid = await repo._pool.fetchval(
-        """
-        INSERT INTO agent_versions (agent_id, version_label, config_snapshot, template, created_by)
-        VALUES ($1, $2, $3::jsonb, $4, $5)
-        RETURNING id
-        """,
-        agent_id,
-        body.version_label.strip(),
-        json.dumps(config),
-        agent["template"],
-        user_id,
+    version_id = await snapshot_genome(
+        pool=repo._pool,
+        agent_id=agent_id,
+        workspace_id=workspace_id,
+        trigger=VersionTrigger.MANUAL,
+        version_label=body.version_label.strip(),
+        created_by=user_id,
+        status=VersionStatus.ACTIVE,
     )
-    return {"id": str(vid), "version_label": body.version_label.strip()}
+    return {"id": str(version_id), "version_label": body.version_label.strip()}
 
 
 @router.get("")
