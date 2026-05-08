@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from flow.application.genome_service import activate_genome
+logger = logging.getLogger(__name__)
+
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import ProposalActionIn
@@ -55,20 +57,50 @@ async def act_on_proposal(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     ws = await _workspace_for_user(repo, user_id)
-    ok = await repo.set_proposal_status(proposal_id, ws, body.status)
-    if not ok:
-        raise HTTPException(status_code=404, detail="proposal not found")
-    if body.status == "approved":
-        version_row = await repo._pool.fetchrow(
-            "SELECT id, agent_id FROM agent_versions "
-            "WHERE proposal_id = $1 AND status = 'candidate'",
-            proposal_id,
-        )
-        if version_row:
-            await activate_genome(
-                pool=repo._pool,
-                version_id=version_row["id"],
-                agent_id=version_row["agent_id"],
-                workspace_id=ws,
+
+    async with repo._pool.acquire() as conn:
+        async with conn.transaction():
+            updated = await conn.fetchrow(
+                "UPDATE proposals SET status = $3 "
+                "WHERE id = $1 AND workspace_id = $2 RETURNING id",
+                proposal_id, ws, body.status,
             )
+            if not updated:
+                raise HTTPException(status_code=404, detail="proposal not found")
+
+            if body.status == "approved":
+                version_row = await conn.fetchrow(
+                    "SELECT av.id, av.agent_id FROM agent_versions av "
+                    "JOIN agents a ON a.id = av.agent_id "
+                    "WHERE av.proposal_id = $1 AND av.status = 'candidate' AND a.workspace_id = $2",
+                    proposal_id, ws,
+                )
+                if version_row:
+                    await conn.execute(
+                        "UPDATE agent_versions SET status = 'archived' "
+                        "WHERE agent_id = $1 AND status = 'active' "
+                        "AND EXISTS (SELECT 1 FROM agents WHERE id = $1 AND workspace_id = $2)",
+                        version_row["agent_id"], ws,
+                    )
+                    snap = await conn.fetchrow(
+                        "UPDATE agent_versions SET status = 'active' "
+                        "WHERE id = $1 AND agent_id = $2 RETURNING config_snapshot, template",
+                        version_row["id"], version_row["agent_id"],
+                    )
+                    if snap:
+                        await conn.execute(
+                            "UPDATE agents SET config = $1, template = $2 "
+                            "WHERE id = $3 AND workspace_id = $4",
+                            snap["config_snapshot"], snap["template"],
+                            version_row["agent_id"], ws,
+                        )
+                        logger.info(
+                            "genome.activated_via_proposal",
+                            extra={
+                                "proposal_id": str(proposal_id),
+                                "version_id": str(version_row["id"]),
+                                "agent_id": str(version_row["agent_id"]),
+                            },
+                        )
+
     return {"ok": True}
