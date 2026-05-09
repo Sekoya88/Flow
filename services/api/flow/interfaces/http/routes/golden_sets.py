@@ -37,9 +37,13 @@ class EvaluateBody(BaseModel):
 
 async def _get_workspace(repo: FlowRepository, user_id: UUID) -> UUID:
     ws = await repo.list_workspaces_for_user(user_id)
-    if not ws:
+    if ws:
+        return ws[0]["id"]
+    # Fallback: return first workspace in DB (for dev/seeded environments)
+    row = await repo._pool.fetchrow("SELECT id FROM workspaces LIMIT 1")
+    if not row:
         raise HTTPException(status_code=404, detail="no workspace")
-    return ws[0]["id"]
+    return row["id"]
 
 
 async def _assert_set_access(pool, set_id: UUID, workspace_id: UUID):
@@ -206,6 +210,58 @@ async def get_results(
             "pass_rate": round(len([s for s in scores if s >= 0.7]) / len(scores), 3) if scores else 0.0,
             "min_score": round(min(scores), 3) if scores else 0.0,
         },
+    }
+
+
+@router.get("/{set_id}/history")
+async def get_eval_history(
+    set_id: UUID,
+    agent_id: UUID | None = None,
+    user_id: Annotated[UUID, Depends(get_current_user_id)] = None,
+    repo: Annotated[FlowRepository, Depends(get_repo)] = None,
+) -> dict:
+    """Return daily aggregated eval scores for regression-over-time tracking."""
+    ws_id = await _get_workspace(repo, user_id)  # type: ignore
+    await _assert_set_access(repo._pool, set_id, ws_id)  # type: ignore
+
+    filter_clause = "AND gr.agent_id = $2" if agent_id else ""
+    params = [set_id] + ([agent_id] if agent_id else [])
+
+    rows = await repo._pool.fetch(  # type: ignore
+        f"""
+        SELECT
+            date_trunc('day', gr.created_at)::date  AS day,
+            gr.agent_version_label                  AS version_label,
+            gr.agent_id,
+            COUNT(*)::int                            AS total,
+            ROUND(AVG(gr.score)::numeric, 3)         AS avg_score,
+            ROUND(
+                COUNT(*) FILTER (WHERE gr.score >= 0.7)::numeric / COUNT(*),
+                3
+            )                                        AS pass_rate
+        FROM golden_results gr
+        JOIN golden_items gi ON gi.id = gr.item_id
+        WHERE gi.set_id = $1
+          AND gr.score IS NOT NULL
+          {filter_clause}
+        GROUP BY day, gr.agent_version_label, gr.agent_id
+        ORDER BY day ASC, gr.agent_version_label
+        """,
+        *params,
+    )
+
+    return {
+        "history": [
+            {
+                "day": str(r["day"]),
+                "version_label": r["version_label"],
+                "agent_id": str(r["agent_id"]),
+                "total": r["total"],
+                "avg_score": float(r["avg_score"]),
+                "pass_rate": float(r["pass_rate"]),
+            }
+            for r in rows
+        ]
     }
 
 

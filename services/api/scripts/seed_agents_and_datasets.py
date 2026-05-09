@@ -641,12 +641,7 @@ GOLDEN_SETS: dict[str, dict] = {
 # Main seeding function
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def seed(pool: asyncpg.Pool) -> None:
-    workspace = await pool.fetchrow("SELECT id FROM workspaces LIMIT 1")
-    if not workspace:
-        logger.error("no_workspace", message="No workspace found. Run migrations and create a user first.")
-        return
-    workspace_id = workspace["id"]
+async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seeding", workspace_id=str(workspace_id))
 
     seeded_agents: dict[str, uuid.UUID] = {}
@@ -703,6 +698,15 @@ async def seed(pool: asyncpg.Pool) -> None:
                 )
 
     logger.info("seed.done", agents=len(seeded_agents), golden_sets=len(GOLDEN_SETS))
+
+
+async def seed(pool: asyncpg.Pool) -> None:
+    workspaces = await pool.fetch("SELECT id FROM workspaces")
+    if not workspaces:
+        logger.error("no_workspace", message="No workspace found. Run migrations and create a user first.")
+        return
+    for ws in workspaces:
+        await seed_workspace(pool, ws["id"])
 
 
 async def main() -> None:
