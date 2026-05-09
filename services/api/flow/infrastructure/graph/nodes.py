@@ -72,7 +72,15 @@ def _emit_tool_call(
         pass
 
 
-DEFAULT_TOOLS = {"retrieve": True, "sandbox": True, "long_term_memory": True}
+DEFAULT_TOOLS = {
+    "retrieve": True,
+    "sandbox": True,
+    "long_term_memory": True,
+    "tavily_search": False,
+    "fetch_webpage": False,
+    "arxiv_search": False,
+    "hf_papers": False,
+}
 
 
 def _resolved_tools(cfg: dict[str, Any]) -> dict[str, bool]:
@@ -86,7 +94,8 @@ def _resolved_tools(cfg: dict[str, Any]) -> dict[str, bool]:
 
 def _get_llm(ctx: GraphContext):
     from flow.infrastructure.llm.providers import get_chat_model
-    model_config = ctx.agent_config.get("model", {}) if ctx.agent_config else {}
+    cfg = ctx.agent_config or {}
+    model_config = cfg.get("llm_config") or cfg.get("model") or {}
     if not model_config:
         model_config = {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2}
     return get_chat_model(

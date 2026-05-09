@@ -33,6 +33,7 @@ AGENTS = [
         "name": "Research Analyst",
         "template": "deer_flow",
         "config": {
+            "template": "deer_flow",
             "system_prompt": (
                 "You are a rigorous Research Analyst. When asked a research question you:\n"
                 "1. Search arXiv for recent papers (last 6 months preferred).\n"
@@ -81,6 +82,7 @@ AGENTS = [
         "name": "Code Review Agent",
         "template": "tool-agent",
         "config": {
+            "template": "tool-agent",
             "system_prompt": (
                 "You are an expert Code Reviewer with 15+ years of experience in Python, TypeScript, "
                 "and distributed systems. When given code:\n"
@@ -129,6 +131,7 @@ AGENTS = [
         "name": "Daily AI Briefing",
         "template": "linear-3",
         "config": {
+            "template": "linear-3",
             "system_prompt": (
                 "You are the Daily AI Briefing Agent. Every morning you:\n"
                 "1. Pull trending papers from HuggingFace Daily Papers.\n"
@@ -176,6 +179,7 @@ AGENTS = [
         "name": "Knowledge Curator",
         "template": "deer_flow",
         "config": {
+            "template": "deer_flow",
             "system_prompt": (
                 "You are a Knowledge Curator specialized in building and maintaining knowledge graphs. "
                 "When given a topic or document:\n"
@@ -227,6 +231,7 @@ AGENTS = [
         "name": "Data Analyst",
         "template": "tool-agent",
         "config": {
+            "template": "tool-agent",
             "system_prompt": (
                 "You are a Data Analyst with expertise in Python (pandas, numpy, matplotlib, scipy). "
                 "When given data or an analysis request:\n"
