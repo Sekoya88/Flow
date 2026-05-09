@@ -684,8 +684,8 @@ async def seed(pool: asyncpg.Pool) -> None:
         else:
             set_id = uuid.uuid4()
             await pool.execute(
-                "INSERT INTO golden_sets (id, workspace_id, agent_id, name, description) VALUES ($1, $2, $3, $4, $5)",
-                set_id, workspace_id, agent_id, gs_def["name"], gs_def["description"],
+                "INSERT INTO golden_sets (id, workspace_id, name, description) VALUES ($1, $2, $3, $4)",
+                set_id, workspace_id, gs_def["name"], gs_def["description"],
             )
             logger.info("golden_set.created", name=gs_def["name"], items=len(gs_def["items"]))
 
