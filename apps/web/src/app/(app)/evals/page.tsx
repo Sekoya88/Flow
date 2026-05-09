@@ -33,8 +33,8 @@ import { cn } from "@/lib/utils";
 type GoldenSet = { id: string; name: string; description: string; item_count: number; created_at: string };
 type GoldenItem = { id: string; input_text: string; expected_output: string; scoring_criteria: string };
 type AgentRow = { id: string; name: string; template: string; config: Record<string, unknown> };
-type EvalLog = { id: string; kind: "info" | "success" | "warning" | "error" | "done"; message?: string; results?: unknown; timestamp: string };
-type HistoryPoint = { day: string; version_label: string; avg_score: number; pass_rate: number; total: number };
+type EvalLog = { id: string; kind: "info" | "success" | "warning" | "error" | "done" | "item_result" | "progress" | "summary"; message?: string; results?: unknown; score?: number; timestamp: string };
+type HistoryPoint = { run_id: string; run_at: string; version_label: string; avg_score: number; pass_rate: number; total: number };
 
 // ── Sparkline ────────────────────────────────────────────────────────
 
@@ -205,7 +205,7 @@ export default function EvalsPage() {
         for (const line of dec.decode(value).split("\n").filter((l) => l.startsWith("data: "))) {
           try {
             const data = JSON.parse(line.slice(6));
-            setLogs((p) => [...p, { id: Math.random().toString(), kind: data.kind, message: data.message, results: data.results, timestamp: new Date().toLocaleTimeString() }]);
+            setLogs((p) => [...p, { id: Math.random().toString(), kind: data.kind, message: data.message, results: data.results, score: data.score, timestamp: new Date().toLocaleTimeString() }]);
             if (data.kind === "done") { setResults(data.results); setRunning(false); }
           } catch { /* skip */ }
         }
@@ -482,15 +482,27 @@ export default function EvalsPage() {
                 </>
               )}
               {hasHistory && !results && (
-                <div className="flex items-center gap-4">
-                  <span className="text-[11px] text-muted-foreground">History:</span>
-                  {history.slice(-6).map((pt, i) => (
-                    <div key={i} className="flex flex-col items-center gap-0.5">
-                      <span className={cn("text-xs font-bold tabular-nums", pt.pass_rate >= 0.7 ? "text-emerald-400" : "text-red-400")}>{(pt.pass_rate * 100).toFixed(0)}%</span>
-                      <span className="text-[9px] text-muted-foreground/50">{pt.day.slice(5)}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-[11px] text-muted-foreground">Last {history.length} run{history.length !== 1 ? "s" : ""}:</span>
+                  {history.slice(-6).map((pt, i) => {
+                    const d = new Date(pt.run_at);
+                    const label = `${(d.getMonth()+1)}/${d.getDate()} ${d.getHours()}h`;
+                    return (
+                      <div key={pt.run_id} className="flex flex-col items-center gap-0.5" title={`${pt.version_label} — ${(pt.pass_rate*100).toFixed(0)}% pass`}>
+                        <span className={cn("text-xs font-bold tabular-nums", pt.pass_rate >= 0.7 ? "text-emerald-400" : "text-red-400")}>{(pt.pass_rate * 100).toFixed(0)}%</span>
+                        <span className="text-[9px] text-muted-foreground/50">{label}</span>
+                      </div>
+                    );
+                  })}
                   <Sparkline data={history.map((p) => p.pass_rate)} uid={selectedSetId ?? "s"} />
+                  {history.length >= 2 && (() => {
+                    const delta = history[history.length-1].pass_rate - history[history.length-2].pass_rate;
+                    return delta >= 0.01
+                      ? <span className="flex items-center gap-0.5 text-[10px] text-emerald-400 font-medium"><TrendingUp className="h-3 w-3" /> +{(delta*100).toFixed(0)}%</span>
+                      : delta <= -0.01
+                      ? <span className="flex items-center gap-0.5 text-[10px] text-red-400 font-medium"><TrendingDown className="h-3 w-3" /> {(delta*100).toFixed(0)}%</span>
+                      : null;
+                  })()}
                 </div>
               )}
             </div>
@@ -516,19 +528,24 @@ export default function EvalsPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {logs.map((log) => (
+                  <div className="flex flex-col gap-1">
+                    {logs.filter((l) => l.kind !== "done").map((log) => (
                       <div key={log.id} className="flex items-start gap-3">
-                        <span className="text-muted-foreground/30 w-16 shrink-0 text-[10px] pt-px tabular-nums">{log.timestamp}</span>
+                        <span className="text-muted-foreground/30 w-14 shrink-0 text-[10px] pt-px tabular-nums">{log.timestamp}</span>
                         <span className={cn("text-[11px] leading-relaxed",
                           log.kind === "error" && "text-red-400",
                           log.kind === "warning" && "text-amber-400",
                           log.kind === "success" && "text-emerald-400",
-                          log.kind === "done" && "text-sky-400",
-                          log.kind === "info" && "text-zinc-300",
+                          log.kind === "summary" && "text-sky-300 font-medium",
+                          log.kind === "item_result" && (log.score !== undefined && log.score >= 0.7 ? "text-emerald-400/80" : "text-red-400/80"),
+                          log.kind === "progress" && "text-zinc-500",
+                          log.kind === "info" && "text-zinc-400",
                         )}>
-                          {log.kind === "error" && "✗ "}{log.kind === "warning" && "⚠ "}{log.kind === "success" && "✓ "}{log.kind === "done" && "● "}
-                          {log.message || (log.kind === "done" && "Evaluation complete.")}
+                          {log.kind === "error" && "✗ "}
+                          {log.kind === "warning" && "⚠ "}
+                          {log.kind === "success" && "✓ "}
+                          {log.kind === "summary" && "▶ "}
+                          {log.message}
                         </span>
                       </div>
                     ))}
@@ -546,19 +563,24 @@ export default function EvalsPage() {
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {results.results.map((r: any, i: number) => (
-                    <div key={i} className="flex gap-2.5 rounded-xl border border-border/30 bg-card/50 p-3">
-                      <div className={cn("shrink-0 w-10 flex flex-col items-center justify-center rounded-lg py-1.5 text-center",
-                        r.score >= 0.7 ? "bg-emerald-500/10" : "bg-red-500/10"
-                      )}>
-                        <span className={cn("text-sm font-bold tabular-nums", r.score >= 0.7 ? "text-emerald-400" : "text-red-400")}>
-                          {Math.round(r.score * 100)}
-                        </span>
-                        <span className="text-[8px] text-muted-foreground">/100</span>
+                    <div key={i} className="rounded-xl border border-border/30 bg-card/50 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("shrink-0 w-9 flex flex-col items-center justify-center rounded-lg py-1 text-center",
+                          r.score >= 0.7 ? "bg-emerald-500/10" : "bg-red-500/10"
+                        )}>
+                          <span className={cn("text-sm font-bold tabular-nums", r.score >= 0.7 ? "text-emerald-400" : "text-red-400")}>
+                            {Math.round(r.score * 100)}
+                          </span>
+                          <span className="text-[8px] text-muted-foreground">/100</span>
+                        </div>
+                        <p className="text-[11px] font-medium text-foreground/90 line-clamp-2 flex-1">"{r.input_text?.slice(0, 60)}"</p>
                       </div>
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <p className="text-[11px] font-medium text-foreground/90 line-clamp-1">"{r.input_text?.slice(0, 50)}"</p>
-                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-3">{r.rationale}</p>
-                      </div>
+                      {r.actual_output && (
+                        <p className="text-[10px] text-sky-400/70 leading-relaxed line-clamp-3 bg-sky-500/5 rounded px-2 py-1.5 border border-sky-500/10">
+                          {r.actual_output}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2 italic">{r.rationale}</p>
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,12 @@
 """LLM-judge evaluator for golden set items.
 
 Uses gpt-4o-mini to score actual vs expected output on a 0.0–1.0 scale.
+
+Evaluation flow:
+  1. For each golden item, invoke the agent's own LLM with its system prompt.
+  2. Score the real output against the expected answer.
+  3. INSERT a new golden_results row (never UPDATE) so history accumulates.
+  4. Trigger regression/genome snapshot logic on the aggregate.
 """
 from __future__ import annotations
 
@@ -77,6 +83,45 @@ Actual answer:
         return {"score": 0.0, "rationale": f"Evaluation error: {exc}"}
 
 
+async def run_agent_on_item(
+    input_text: str,
+    system_prompt: str,
+    llm_config: dict[str, Any],
+    *,
+    openai_api_key: str | None = None,
+    anthropic_api_key: str | None = None,
+) -> str:
+    """Invoke the agent's own LLM on a single golden item input.
+
+    Runs the LLM directly (no tools/graph) for fast, reproducible evals.
+    Returns the model text response.
+    """
+    from flow.infrastructure.llm.providers import get_chat_model
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    llm = get_chat_model(
+        llm_config,
+        fallback_api_keys={
+            "openai": openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY"),
+            "anthropic": anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY"),
+        },
+    )
+    if llm is None:
+        return "[no LLM configured — set FLOW_OPENAI_API_KEY or ANTHROPIC_API_KEY]"
+
+    messages = []
+    if system_prompt:
+        messages.append(SystemMessage(content=system_prompt))
+    messages.append(HumanMessage(content=input_text))
+
+    try:
+        result = await llm.ainvoke(messages)
+        return str(result.content)
+    except Exception as exc:
+        logger.warning("run_agent_on_item failed: %s", exc)
+        return f"[LLM error: {exc}]"
+
+
 async def evaluate_golden_set(
     pool: Any,
     golden_set_id: UUID,
@@ -86,20 +131,24 @@ async def evaluate_golden_set(
     user_id: UUID | None = None,
     *,
     client: AsyncOpenAI | None = None,
+    eval_run_id: UUID | None = None,
+    system_prompt: str = "",
+    llm_config: dict[str, Any] | None = None,
+    openai_api_key: str | None = None,
 ) -> dict[str, Any]:
-    """Run all items in a golden set against stored execution outputs.
-    
-    This is called *after* executions have already been run — it judges
-    the outputs stored in golden_results where actual_output is NULL.
-    For direct evaluation without a prior execution, supply actual_output
-    manually by calling judge_single.
-    
+    """Run all items in a golden set through the agent LLM, score, and store.
+
+    Always INSERTs new golden_results rows — never overwrites history.
+    Each call creates a fresh eval_run_id so runs are distinguishable.
+
     Returns aggregate stats + per-item results.
     """
     if client is None:
-        client = AsyncOpenAI()
+        client = AsyncOpenAI(api_key=openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY"))
 
-    # Fetch all items in the set
+    run_id = eval_run_id or uuid4()
+    effective_llm_config = llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
+
     items = await pool.fetch(
         """
         SELECT gi.id, gi.input_text, gi.expected_output, gi.scoring_criteria
@@ -114,50 +163,43 @@ async def evaluate_golden_set(
     scores = []
 
     for item in items:
-        # Check if there's an actual_output in golden_results for this item+agent
-        existing = await pool.fetchrow(
-            """
-            SELECT id, actual_output FROM golden_results
-            WHERE item_id = $1 AND agent_id = $2
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            item["id"], agent_id,
+        actual_output = await run_agent_on_item(
+            input_text=item["input_text"],
+            system_prompt=system_prompt,
+            llm_config=effective_llm_config,
+            openai_api_key=openai_api_key,
         )
-
-        if not existing or not existing["actual_output"]:
-            results.append({
-                "item_id": str(item["id"]),
-                "input_text": item["input_text"][:100],
-                "score": None,
-                "rationale": "No execution output found",
-            })
-            continue
 
         judgment = await judge_single(
             item["input_text"],
             item["expected_output"],
-            existing["actual_output"],
+            actual_output,
             item["scoring_criteria"],
             client=client,
         )
 
-        # Update the result row
+        # Always INSERT — history accumulates across runs
         await pool.execute(
             """
-            UPDATE golden_results
-            SET score = $1, grading_rationale = $2, agent_version_label = $3
-            WHERE id = $4
+            INSERT INTO golden_results
+                (item_id, agent_id, agent_version_label, actual_output,
+                 score, grading_rationale, eval_run_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             """,
+            item["id"],
+            agent_id,
+            agent_version_label,
+            actual_output,
             judgment["score"],
             judgment["rationale"],
-            agent_version_label,
-            existing["id"],
+            run_id,
         )
 
         scores.append(judgment["score"])
         results.append({
             "item_id": str(item["id"]),
-            "input_text": item["input_text"][:100],
+            "input_text": item["input_text"][:120],
+            "actual_output": actual_output[:200],
             "score": judgment["score"],
             "rationale": judgment["rationale"],
         })
@@ -169,7 +211,6 @@ async def evaluate_golden_set(
 
     candidate_version_id = None
     if workspace_id and user_id:
-        # Regression & Auto-refinement check
         await check_regression_and_propose(
             pool=pool,
             golden_set_id=golden_set_id,
@@ -178,10 +219,9 @@ async def evaluate_golden_set(
             results=results,
             workspace_id=workspace_id,
             user_id=user_id,
-            openai_api_key=os.environ.get("OPENAI_API_KEY"),
+            openai_api_key=openai_api_key,
         )
 
-        # Snapshot genome as CANDIDATE if pass_rate is acceptable and score improved
         if pass_rate >= 0.7:
             try:
                 candidate_version_id = await _maybe_snapshot_eval_pass(
@@ -196,6 +236,7 @@ async def evaluate_golden_set(
                 logger.warning("genome.eval_snapshot_failed", exc_info=True)
 
     return {
+        "eval_run_id": str(run_id),
         "total_items": total,
         "scored_items": scored,
         "avg_score": round(avg_score, 3),
@@ -204,32 +245,44 @@ async def evaluate_golden_set(
         "candidate_version_id": str(candidate_version_id) if candidate_version_id else None,
     }
 
+
 async def auto_eval_tick(ctx: dict) -> None:
-    """Cron job that runs nightly to evaluate all workspaces against their golden datasets."""
+    """Cron job: nightly golden set evaluation across all workspaces."""
     pool = ctx["pool"]
     workspaces = await pool.fetch("SELECT id FROM workspaces")
-    client = AsyncOpenAI(api_key=os.environ.get("FLOW_OPENAI_API_KEY"))
-    
+    openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    client = AsyncOpenAI(api_key=openai_key)
+
     for ws in workspaces:
         ws_id = ws["id"]
-        # Find active agent
-        agent = await pool.fetchrow("SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id)
+        agent = await pool.fetchrow(
+            "SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id
+        )
         if not agent:
             continue
-        
-        # Find golden set
-        gset = await pool.fetchrow("SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id)
+
+        gset = await pool.fetchrow(
+            "SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id
+        )
         if not gset:
             continue
-            
+
         logger.info("cron.auto_eval_tick.running workspace_id=%s agent_id=%s", ws_id, agent["id"])
-        # Find a user to assign proposals to
-        user = await pool.fetchrow("SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id)
+        user = await pool.fetchrow(
+            "SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id
+        )
         user_id = user["user_id"] if user else None
 
-        # Resolve current active genome version label (falls back to "v1.0" if none)
         active_genome = await get_active_genome(pool, agent["id"])
         version_label = active_genome.version_label if active_genome else "v1.0"
+        system_prompt = active_genome.system_prompt if active_genome else ""
+        llm_config: dict[str, Any] = {}
+        if active_genome:
+            llm_config = {
+                "provider": active_genome.llm_config.provider,
+                "model": active_genome.llm_config.model,
+                "temperature": active_genome.llm_config.temperature,
+            }
 
         try:
             result = await evaluate_golden_set(
@@ -240,6 +293,9 @@ async def auto_eval_tick(ctx: dict) -> None:
                 workspace_id=ws_id,
                 user_id=user_id,
                 client=client,
+                system_prompt=system_prompt,
+                llm_config=llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
+                openai_api_key=openai_key,
             )
             candidate_id_str = result.get("candidate_version_id")
             if candidate_id_str and user_id:
@@ -279,4 +335,3 @@ async def auto_eval_tick(ctx: dict) -> None:
                         )
         except Exception as exc:
             logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)
-

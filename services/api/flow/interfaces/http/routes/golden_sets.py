@@ -343,7 +343,11 @@ async def get_eval_history(
     user_id: Annotated[UUID, Depends(get_current_user_id)] = None,
     repo: Annotated[FlowRepository, Depends(get_repo)] = None,
 ) -> dict:
-    """Return daily aggregated eval scores for regression-over-time tracking."""
+    """Return per-run eval history for regression-over-time tracking.
+
+    Groups by eval_run_id so multiple runs in the same day are distinct.
+    Falls back to day-grouping for legacy rows without eval_run_id.
+    """
     ws_id = await _get_workspace(repo, user_id)  # type: ignore
     await _assert_set_access(repo._pool, set_id, ws_id)  # type: ignore
 
@@ -353,8 +357,10 @@ async def get_eval_history(
     rows = await repo._pool.fetch(  # type: ignore
         f"""
         SELECT
-            date_trunc('day', gr.created_at)::date  AS day,
-            gr.agent_version_label                  AS version_label,
+            COALESCE(gr.eval_run_id::text, date_trunc('day', MIN(gr.created_at))::text)
+                                                     AS run_id,
+            MIN(gr.created_at)                       AS run_at,
+            gr.agent_version_label                   AS version_label,
             gr.agent_id,
             COUNT(*)::int                            AS total,
             ROUND(AVG(gr.score)::numeric, 3)         AS avg_score,
@@ -367,8 +373,8 @@ async def get_eval_history(
         WHERE gi.set_id = $1
           AND gr.score IS NOT NULL
           {filter_clause}
-        GROUP BY day, gr.agent_version_label, gr.agent_id
-        ORDER BY day ASC, gr.agent_version_label
+        GROUP BY gr.eval_run_id, gr.agent_version_label, gr.agent_id
+        ORDER BY MIN(gr.created_at) ASC
         """,
         *params,
     )
@@ -376,7 +382,8 @@ async def get_eval_history(
     return {
         "history": [
             {
-                "day": str(r["day"]),
+                "run_id": r["run_id"],
+                "run_at": r["run_at"].isoformat() if r["run_at"] else None,
                 "version_label": r["version_label"],
                 "agent_id": str(r["agent_id"]),
                 "total": r["total"],
