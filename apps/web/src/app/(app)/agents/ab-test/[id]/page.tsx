@@ -57,7 +57,7 @@ function pairResults(results: ItemResult[]): PairedItem[] {
 }
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "done") return "default";
+  if (status === "completed") return "default";
   if (status === "running") return "secondary";
   if (status === "failed") return "destructive";
   return "outline";
@@ -134,7 +134,7 @@ export default function ABTestDetailPage() {
           {(["A", "B"] as const).map((label) => {
             const agent = label === "A" ? test.agent_a : test.agent_b;
             const avg = label === "A" ? aggregate.agent_a_avg : aggregate.agent_b_avg;
-            const isWinner = aggregate.winner === label && test.status === "done";
+            const isWinner = aggregate.winner === label && test.status === "completed";
             return (
               <div
                 key={label}
@@ -176,7 +176,7 @@ export default function ABTestDetailPage() {
         </div>
 
         {/* Winner banner */}
-        {test.status === "done" && (
+        {test.status === "completed" && (
           <div className="rounded-xl border border-flow-brand/20 bg-flow-brand/5 px-4 py-3 flex items-center gap-3">
             <Trophy className="h-5 w-5 text-flow-brand shrink-0" />
             <p className="text-sm font-medium">

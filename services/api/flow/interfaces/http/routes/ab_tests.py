@@ -175,42 +175,45 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
     """Judge existing golden_results for both agents on all items in the set."""
     await pool.execute("UPDATE ab_tests SET status='running' WHERE id=$1", test_id)
 
-    items = await pool.fetch(
-        "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id=$1 ORDER BY created_at",
-        golden_set_id,
-    )
+    try:
+        items = await pool.fetch(
+            "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id=$1 ORDER BY created_at",
+            golden_set_id,
+        )
 
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI()
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI()
 
-    for item in items:
-        for label, agent_id in (("A", agent_a_id), ("B", agent_b_id)):
-            # Try to find latest execution output for this agent+item
-            result_row = await pool.fetchrow(
-                """
-                SELECT actual_output FROM golden_results
-                WHERE item_id=$1 AND agent_id=$2 AND actual_output IS NOT NULL
-                ORDER BY created_at DESC LIMIT 1
-                """,
-                item["id"], agent_id,
-            )
-            if not result_row:
-                continue
+        for item in items:
+            for label, agent_id in (("A", agent_a_id), ("B", agent_b_id)):
+                result_row = await pool.fetchrow(
+                    """
+                    SELECT actual_output FROM golden_results
+                    WHERE item_id=$1 AND agent_id=$2 AND actual_output IS NOT NULL
+                    ORDER BY created_at DESC LIMIT 1
+                    """,
+                    item["id"], agent_id,
+                )
+                if not result_row:
+                    continue
 
-            judgment = await judge_single(
-                item["input_text"],
-                item["expected_output"],
-                result_row["actual_output"],
-                item["scoring_criteria"],
-                client=client,
-            )
-            await pool.execute(
-                """
-                INSERT INTO ab_test_results (test_id, golden_item_id, agent_label, score, actual_output, grading_rationale)
-                VALUES ($1,$2,$3,$4,$5,$6)
-                """,
-                test_id, item["id"], label,
-                judgment["score"], result_row["actual_output"], judgment["rationale"],
-            )
+                judgment = await judge_single(
+                    item["input_text"],
+                    item["expected_output"],
+                    result_row["actual_output"],
+                    item["scoring_criteria"],
+                    client=client,
+                )
+                await pool.execute(
+                    """
+                    INSERT INTO ab_test_results (test_id, golden_item_id, agent_label, score, actual_output, grading_rationale)
+                    VALUES ($1,$2,$3,$4,$5,$6)
+                    """,
+                    test_id, item["id"], label,
+                    judgment["score"], result_row["actual_output"], judgment["rationale"],
+                )
 
-    await pool.execute("UPDATE ab_tests SET status='completed' WHERE id=$1", test_id)
+        await pool.execute("UPDATE ab_tests SET status='completed' WHERE id=$1", test_id)
+    except Exception:
+        await pool.execute("UPDATE ab_tests SET status='failed' WHERE id=$1", test_id)
+        raise

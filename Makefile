@@ -9,6 +9,7 @@ rebuild:
 	@sleep 5
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
+	docker compose exec api uv run python scripts/seed_skills.py
 	@echo "\n✓ Ready → http://localhost:13000"
 
 # ── Normal start (no rebuild) ─────────────────────────────────────────────────
@@ -21,6 +22,7 @@ build:
 	@sleep 5
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
+	docker compose exec api uv run python scripts/seed_skills.py
 	@echo "\n✓ Ready → http://localhost:13000"
 
 # ── Stop everything ───────────────────────────────────────────────────────────
