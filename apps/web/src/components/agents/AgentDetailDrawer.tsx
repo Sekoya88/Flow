@@ -40,6 +40,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import type { AgentRow } from "./AgentCard";
 import { MetacogPanel } from "./MetacogPanel";
@@ -130,7 +131,7 @@ export function AgentDetailDrawer({
       );
       setVersions(data.versions ?? []);
     } catch (e) {
-      console.warn("versions load failed", e);
+      logger.warn("versions load failed", { error: String(e) });
     } finally {
       setVersionsLoading(false);
     }
@@ -147,7 +148,7 @@ export function AgentDetailDrawer({
       setSnapshotLabel("");
       void loadVersions();
     } catch (e) {
-      console.warn("snapshot failed", e);
+      logger.warn("snapshot failed", { error: String(e) });
     } finally {
       setSaving(false);
     }
@@ -161,7 +162,7 @@ export function AgentDetailDrawer({
       });
       void loadVersions();
     } catch (e) {
-      console.warn("restore failed", e);
+      logger.warn("restore failed", { error: String(e) });
     }
   }, [agent, loadVersions]);
 
@@ -174,7 +175,7 @@ export function AgentDetailDrawer({
       setDiffChanges(data.changes);
       setDiffLabels([data.v1.label, data.v2.label]);
     } catch (e) {
-      console.warn("diff failed", e);
+      logger.warn("diff failed", { error: String(e) });
     }
   }, [agent]);
 

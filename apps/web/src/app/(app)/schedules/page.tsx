@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -216,7 +217,7 @@ function CreateForm({
         created_at: new Date().toISOString(),
       });
     } catch (err) {
-      console.warn("create schedule failed:", err);
+      logger.warn("create schedule failed", { error: String(err) });
     } finally {
       setCreating(false);
     }
@@ -546,7 +547,7 @@ export default function SchedulesPage() {
         setAgents(aData.agents ?? []);
         setCronJobs(cData.cron_jobs ?? []);
       })
-      .catch(console.warn)
+      .catch((e) => logger.warn("schedules load failed", { error: String(e) }))
       .finally(() => setLoading(false));
   }, [workspaceId]);
 
@@ -561,7 +562,7 @@ export default function SchedulesPage() {
       });
       setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !current } : s)));
     } catch (err) {
-      console.warn("toggle failed:", err);
+      logger.warn("toggle failed", { error: String(err) });
     }
   }
 
@@ -571,7 +572,7 @@ export default function SchedulesPage() {
       setSchedules((prev) => prev.filter((s) => s.id !== id));
       setView("list");
     } catch (err) {
-      console.warn("delete failed:", err);
+      logger.warn("delete failed", { error: String(err) });
     }
   }
 
@@ -608,7 +609,7 @@ export default function SchedulesPage() {
                       setSchedules(sData.schedules ?? []);
                       setAgents(aData.agents ?? []);
                     })
-                    .catch(console.warn)
+                    .catch((e) => logger.warn("schedules refresh failed", { error: String(e) }))
                     .finally(() => setLoading(false));
                 }}
                 title="Refresh"

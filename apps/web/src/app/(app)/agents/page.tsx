@@ -25,6 +25,7 @@ import { AgentDetailDrawer } from "@/components/agents/AgentDetailDrawer";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 type Me = { workspaces: { id: string; name: string }[] };
@@ -104,7 +105,7 @@ export default function AgentsPage() {
           }
         }
       } catch (e) {
-        console.warn("tool toggle failed", e);
+        logger.warn("tool toggle failed", { error: String(e) });
       }
     },
     [wsId],

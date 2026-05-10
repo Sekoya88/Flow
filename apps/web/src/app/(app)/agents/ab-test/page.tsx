@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { track } from "@/lib/analytics";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 type AgentRow = { id: string; name: string };
@@ -79,7 +80,7 @@ export default function ABTestPage() {
       if (agentsData.agents[1]) setAgentB(agentsData.agents[1].id);
       if (setsData.sets[0]) setGoldenSet(setsData.sets[0].id);
     } catch (e) {
-      console.warn("ab test load", e);
+      logger.warn("ab test load", { error: String(e) });
     } finally {
       setLoading(false);
     }

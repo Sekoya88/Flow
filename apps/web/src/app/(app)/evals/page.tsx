@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { apiFetch, getApiBase } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -112,7 +113,7 @@ export default function EvalsPage() {
         if (s[0]) { setSelectedSetId(s[0].id); setExpandedSetId(s[0].id); }
         if (a[0]) setSelectedAgentId(a[0].id);
       })
-      .catch(console.warn)
+      .catch((e) => logger.warn("fetch failed", { error: String(e) }))
       .finally(() => setLoadingSets(false));
   }, [workspaceId]);
 
@@ -121,7 +122,7 @@ export default function EvalsPage() {
     setLoadingItems(true);
     apiFetch<{ items: GoldenItem[] }>(`/api/v1/golden-sets/${expandedSetId}`)
       .then((d) => setSetItems((p) => ({ ...p, [expandedSetId]: d.items ?? [] })))
-      .catch(console.warn)
+      .catch((e) => logger.warn("fetch failed", { error: String(e) }))
       .finally(() => setLoadingItems(false));
   }, [expandedSetId]);
 
@@ -130,7 +131,7 @@ export default function EvalsPage() {
     const params = selectedAgentId ? `?agent_id=${selectedAgentId}` : "";
     apiFetch<{ history: HistoryPoint[] }>(`/api/v1/golden-sets/${selectedSetId}/history${params}`)
       .then((d) => setHistory(d.history ?? []))
-      .catch(console.warn);
+      .catch((e) => logger.warn("fetch failed", { error: String(e) }));
   }, [selectedSetId, selectedAgentId, results]);
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
@@ -146,7 +147,7 @@ export default function EvalsPage() {
       const s = sData.sets ?? [];
       setSets(s);
       if (s[0] && !selectedSetId) { setSelectedSetId(s[0].id); setExpandedSetId(s[0].id); }
-    } catch (e) { console.warn(e); }
+    } catch (e) { logger.warn("import samples failed", { error: String(e) }); }
     finally { setSeeding(false); }
   }
 
@@ -163,7 +164,7 @@ export default function EvalsPage() {
       setSelectedSetId(r.id);
       setExpandedSetId(r.id);
       setNewSetName(""); setNewSetDesc(""); setShowCreateSet(false);
-    } catch (e) { console.warn(e); }
+    } catch (e) { logger.warn("create set failed", { error: String(e) }); }
     finally { setCreatingSet(false); }
   }
 
@@ -177,12 +178,12 @@ export default function EvalsPage() {
       setSets((p) => p.map((s) => s.id === setId ? { ...s, item_count: s.item_count + 1 } : s));
       setNewItem({ input_text: "", expected_output: "", scoring_criteria: "" });
       setAddingItemToSet(null);
-    } catch (e) { console.warn(e); }
+    } catch (e) { logger.warn("add item failed", { error: String(e) }); }
     finally { setAddingItem(false); }
   }
 
   async function deleteItem(setId: string, itemId: string) {
-    await apiFetch(`/api/v1/golden-sets/${setId}/items/${itemId}`, { method: "DELETE" }).catch(console.warn);
+    await apiFetch(`/api/v1/golden-sets/${setId}/items/${itemId}`, { method: "DELETE" }).catch((e) => logger.warn("fetch failed", { error: String(e) }));
     setSetItems((p) => ({ ...p, [setId]: (p[setId] ?? []).filter((i) => i.id !== itemId) }));
     setSets((p) => p.map((s) => s.id === setId ? { ...s, item_count: Math.max(0, s.item_count - 1) } : s));
   }
