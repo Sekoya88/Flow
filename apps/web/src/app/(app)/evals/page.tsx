@@ -199,15 +199,23 @@ export default function EvalsPage() {
       const reader = resp.body?.getReader();
       if (!reader) throw new Error("no reader");
       const dec = new TextDecoder();
+      // Buffer accumulates bytes across chunks — SSE events can span multiple read() calls
+      let buf = "";
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        for (const line of dec.decode(value).split("\n").filter((l) => l.startsWith("data: "))) {
+        buf += dec.decode(value, { stream: true });
+        // SSE events are delimited by \n\n
+        const events = buf.split("\n\n");
+        buf = events.pop() ?? ""; // last element is the incomplete partial — keep buffering
+        for (const event of events) {
+          const line = event.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
           try {
             const data = JSON.parse(line.slice(6));
             setLogs((p) => [...p, { id: Math.random().toString(), kind: data.kind, message: data.message, results: data.results, score: data.score, timestamp: new Date().toLocaleTimeString() }]);
             if (data.kind === "done") { setResults(data.results); setRunning(false); }
-          } catch { /* skip */ }
+          } catch { /* malformed event — skip */ }
         }
       }
     } catch (err: any) {
@@ -248,10 +256,10 @@ export default function EvalsPage() {
               disabled={seeding}
             >
               <Download className="h-4 w-4" />
-              {seeding ? "Importing…" : "Import 5 sample datasets"}
+              {seeding ? "Importing…" : "Import 8 sample datasets"}
             </Button>
             <p className="text-[11px] text-muted-foreground/60 text-center">
-              Includes datasets for Research, Code Review, Data Analysis, Knowledge Curation and Daily Briefing agents.
+              Includes datasets for Research, Code Review, Data Analysis, Knowledge Curation, Daily Briefing, and Lucis health protocol agents.
             </p>
             <div className="relative flex items-center gap-2">
               <div className="flex-1 h-px bg-border/40" />
