@@ -18,7 +18,13 @@ export default function Home() {
     setReady(true);
   }, []);
 
-  if (!ready) {
+  useEffect(() => {
+    if (ready && getToken()) {
+      routerRef.current.replace("/dashboard");
+    }
+  }, [ready]);
+
+  if (!ready || getToken()) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground text-sm">
         Loading…

@@ -5,6 +5,7 @@ COPY pyproject.toml README.md uv.lock ./
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY flow ./flow
+COPY scripts ./scripts
 RUN uv sync --frozen --no-dev
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

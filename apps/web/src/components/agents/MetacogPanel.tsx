@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ConfidenceTrend } from "./ConfidenceTrend";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 interface MetacogPanelProps {
@@ -46,7 +47,7 @@ export function MetacogPanel({ agentId, className }: MetacogPanelProps) {
     setLoading(true);
     apiFetch<StatsData>(`/api/v1/agents/${agentId}/stats`)
       .then(setData)
-      .catch(console.warn)
+      .catch((e) => logger.warn("metacog stats load failed", { agentId, error: String(e) }))
       .finally(() => setLoading(false));
   }, [agentId]);
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-logger = logging.getLogger(__name__)
+from flow.infrastructure.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 from flow.application.genome_service import snapshot_genome
 from flow.config import Settings

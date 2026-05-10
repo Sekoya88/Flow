@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
 import { GraphQueryPanel } from "@/components/kg/GraphQueryPanel";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,7 @@ export default function GraphPage() {
         setNodes(data.nodes ?? []);
         setEdges(data.edges ?? []);
       })
-      .catch(console.warn)
+      .catch((e) => logger.warn("graph fetch failed", { error: String(e) }))
       .finally(() => setLoading(false));
   }, [workspaceId, activeTypes]);
 
@@ -73,7 +74,7 @@ export default function GraphPage() {
       await apiFetch(`/api/v1/kg/seed?workspace_id=${workspaceId}`, { method: "POST" });
       fetchGraph();
     } catch (e) {
-      console.warn("seed failed", e);
+      logger.warn("seed failed", { error: String(e) });
     } finally {
       setSeeding(false);
     }

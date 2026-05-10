@@ -25,6 +25,7 @@ import { AgentDetailDrawer } from "@/components/agents/AgentDetailDrawer";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 type Me = { workspaces: { id: string; name: string }[] };
@@ -86,25 +87,19 @@ export default function AgentsPage() {
 
   const handleToolToggle = useCallback(
     async (agentId: string, tool: string, enabled: boolean) => {
-      try {
-        await apiFetch(`/api/v1/agents/${agentId}`, {
-          method: "PATCH",
-          json: { [tool]: enabled },
-        });
-        // Refresh agent list
-        if (wsId) {
-          const a = await apiFetch<{ agents: AgentRow[] }>(
-            `/api/v1/workspaces/${wsId}/agents`,
-          );
-          if (a?.agents) {
-            setAgents(a.agents);
-            // Update selected agent
-            const updated = a.agents.find((x) => x.id === agentId);
-            if (updated) setSelectedAgent(updated);
-          }
+      await apiFetch(`/api/v1/agents/${agentId}`, {
+        method: "PATCH",
+        json: { [tool]: enabled },
+      });
+      if (wsId) {
+        const a = await apiFetch<{ agents: AgentRow[] }>(
+          `/api/v1/workspaces/${wsId}/agents`,
+        );
+        if (a?.agents) {
+          setAgents(a.agents);
+          const updated = a.agents.find((x) => x.id === agentId);
+          if (updated) setSelectedAgent(updated);
         }
-      } catch (e) {
-        console.warn("tool toggle failed", e);
       }
     },
     [wsId],
@@ -251,6 +246,7 @@ export default function AgentsPage() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         onToolToggle={handleToolToggle}
+        workspaceId={wsId}
       />
     </div>
   );

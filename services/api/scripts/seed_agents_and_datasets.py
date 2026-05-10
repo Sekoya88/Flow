@@ -28,11 +28,22 @@ logger = get_logger("seed")
 # Agent definitions
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Canonical 6 agents — anything else gets deleted on seed run
+CANONICAL_AGENT_NAMES = [
+    "Research Analyst",
+    "Code Review Agent",
+    "Data Analyst",
+    "Content Strategist",
+    "Meeting Summarizer",
+    "Bug Triage Assistant",
+]
+
 AGENTS = [
     {
         "name": "Research Analyst",
         "template": "deer_flow",
         "config": {
+            "template": "deer_flow",
             "system_prompt": (
                 "You are a rigorous Research Analyst. When asked a research question you:\n"
                 "1. Search arXiv for recent papers (last 6 months preferred).\n"
@@ -81,6 +92,7 @@ AGENTS = [
         "name": "Code Review Agent",
         "template": "tool-agent",
         "config": {
+            "template": "tool-agent",
             "system_prompt": (
                 "You are an expert Code Reviewer with 15+ years of experience in Python, TypeScript, "
                 "and distributed systems. When given code:\n"
@@ -126,99 +138,156 @@ AGENTS = [
         },
     },
     {
-        "name": "Daily AI Briefing",
-        "template": "linear-3",
+        "name": "Meeting Summarizer",
+        "template": "tool-agent",
         "config": {
+            "template": "tool-agent",
             "system_prompt": (
-                "You are the Daily AI Briefing Agent. Every morning you:\n"
-                "1. Pull trending papers from HuggingFace Daily Papers.\n"
-                "2. Search for AI/ML news from the last 24h via Tavily.\n"
-                "3. Synthesize into a digestible briefing: Top 3 papers, Top 3 news items, "
-                "   one 'Signal of the Day' insight, and a short trend analysis.\n"
-                "Keep the tone professional but accessible. Use concrete numbers.\n"
-                "Output format: {date, papers: [{title, one_liner, why_it_matters}], "
-                "news: [{headline, source, summary}], signal_of_the_day, trend_analysis}"
-            ),
-            "tools": {
-                "retrieve": False,
-                "sandbox": False,
-                "long_term_memory": True,
-                "tavily_search": True,
-                "fetch_webpage": True,
-                "arxiv_search": False,
-                "hf_papers": True,
-            },
-            "llm_config": {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.4},
-            "state_schema": {
-                "description": "BriefingState TypedDict",
-                "fields": {
-                    "date": "str",
-                    "hf_papers": "list[dict]",
-                    "news_items": "list[dict]",
-                    "draft_briefing": "str | None",
-                    "final_briefing": "Briefing | None",
-                    "messages": "list[BaseMessage]",
-                },
-            },
-            "output_schema": {
-                "name": "Briefing",
-                "fields": {
-                    "date": "str",
-                    "papers": "list[PaperHighlight]",
-                    "news": "list[NewsItem]",
-                    "signal_of_the_day": "str",
-                    "trend_analysis": "str",
-                },
-            },
-        },
-    },
-    {
-        "name": "Knowledge Curator",
-        "template": "deer_flow",
-        "config": {
-            "system_prompt": (
-                "You are a Knowledge Curator specialized in building and maintaining knowledge graphs. "
-                "When given a topic or document:\n"
-                "1. Retrieve relevant existing knowledge from the RAG store.\n"
-                "2. Extract entities, relationships, and key facts.\n"
-                "3. Identify gaps in existing knowledge and suggest what to add.\n"
-                "4. Store structured summaries in long-term memory.\n"
-                "5. Return a curation report with extracted knowledge and update recommendations.\n"
-                "Output: {topic, entities: [{name, type, properties}], "
-                "relationships: [{source, relation, target}], gaps: [str], "
-                "memory_updates: [{key, value}], summary}"
+                "You are a Meeting Summarizer. When given a meeting transcript or notes:\n"
+                "1. Retrieve context about participants and prior meeting decisions from memory.\n"
+                "2. Extract: key decisions made, action items (owner + deadline), open questions, and topics discussed.\n"
+                "3. Write a concise executive summary (3-5 bullet points).\n"
+                "4. Store action items and key decisions in long-term memory for future retrieval.\n"
+                "Be precise: 'Alice will review the API spec by Friday' not 'someone will look at it'.\n"
+                "Output JSON: {meeting_title, date, participants: [str], summary: [str], "
+                "decisions: [{decision, rationale}], action_items: [{task, owner, deadline, priority: P1|P2|P3}], "
+                "open_questions: [str], follow_up_date: str | None}"
             ),
             "tools": {
                 "retrieve": True,
                 "sandbox": False,
                 "long_term_memory": True,
+                "tavily_search": False,
+                "fetch_webpage": False,
+                "arxiv_search": False,
+                "hf_papers": False,
+            },
+            "llm_config": {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.2},
+            "state_schema": {
+                "description": "MeetingState TypedDict",
+                "fields": {
+                    "transcript": "str",
+                    "retrieved_context": "list[dict]",
+                    "extracted_action_items": "list[ActionItem]",
+                    "meeting_summary": "MeetingSummary | None",
+                    "messages": "list[BaseMessage]",
+                },
+            },
+            "output_schema": {
+                "name": "MeetingSummary",
+                "fields": {
+                    "meeting_title": "str",
+                    "date": "str",
+                    "participants": "list[str]",
+                    "summary": "list[str]",
+                    "decisions": "list[Decision]",
+                    "action_items": "list[ActionItem]",
+                    "open_questions": "list[str]",
+                    "follow_up_date": "str | None",
+                },
+            },
+        },
+    },
+    {
+        "name": "Bug Triage Assistant",
+        "template": "tool-agent",
+        "config": {
+            "template": "tool-agent",
+            "system_prompt": (
+                "You are a Bug Triage Assistant for software engineering teams. When given a bug report:\n"
+                "1. Retrieve similar past bugs and related code context from the knowledge base.\n"
+                "2. Write a minimal reproduction script and execute it in the sandbox to confirm the bug.\n"
+                "3. Classify severity: P0 (production down), P1 (major feature broken), P2 (degraded), P3 (minor/cosmetic).\n"
+                "4. Identify likely root cause based on code analysis and execution results.\n"
+                "5. Suggest a fix approach with code snippets.\n"
+                "Output JSON: {title, severity: P0|P1|P2|P3, confirmed: bool, reproduction_steps: [str], "
+                "root_cause: str, affected_components: [str], fix_approach: str, estimated_effort: str, "
+                "related_bugs: [str]}"
+            ),
+            "tools": {
+                "retrieve": True,
+                "sandbox": True,
+                "long_term_memory": False,
+                "tavily_search": False,
+                "fetch_webpage": False,
+                "arxiv_search": False,
+                "hf_papers": False,
+            },
+            "llm_config": {"provider": "anthropic", "model": "claude-sonnet-4-6", "temperature": 0.1},
+            "state_schema": {
+                "description": "BugTriageState TypedDict",
+                "fields": {
+                    "bug_report": "str",
+                    "retrieved_context": "list[dict]",
+                    "reproduction_result": "dict | None",
+                    "triage_result": "BugTriage | None",
+                    "messages": "list[BaseMessage]",
+                },
+            },
+            "output_schema": {
+                "name": "BugTriage",
+                "fields": {
+                    "title": "str",
+                    "severity": "Literal['P0', 'P1', 'P2', 'P3']",
+                    "confirmed": "bool",
+                    "reproduction_steps": "list[str]",
+                    "root_cause": "str",
+                    "affected_components": "list[str]",
+                    "fix_approach": "str",
+                    "estimated_effort": "str",
+                    "related_bugs": "list[str]",
+                },
+            },
+        },
+    },
+    {
+        "name": "Content Strategist",
+        "template": "researcher-critic-writer",
+        "config": {
+            "template": "researcher-critic-writer",
+            "system_prompt": (
+                "You are a Content Strategist specializing in SEO-driven content planning and competitor gap analysis. "
+                "When given a topic, product, or keyword:\n"
+                "1. Research the competitive landscape: what content exists, who ranks, what angles are taken.\n"
+                "2. Identify content gaps: high-intent queries that aren't well served.\n"
+                "3. Draft a content brief: target keyword, search intent, outline, recommended word count, CTAs.\n"
+                "4. Critique the brief: is it differentiated? Does it address a real user need?\n"
+                "5. Refine into a final, actionable brief.\n"
+                "Output JSON: {topic, target_keyword, search_intent: informational|commercial|transactional|navigational, "
+                "competitor_analysis: [{url, strengths, gaps}], content_brief: {title, outline: [section], "
+                "word_count_target, key_points: [str], cta: str}, differentiation_angle: str}"
+            ),
+            "tools": {
+                "retrieve": False,
+                "sandbox": False,
+                "long_term_memory": False,
                 "tavily_search": True,
                 "fetch_webpage": True,
                 "arxiv_search": False,
                 "hf_papers": False,
             },
-            "llm_config": {"provider": "anthropic", "model": "claude-sonnet-4-6", "temperature": 0.3},
+            "llm_config": {"provider": "anthropic", "model": "claude-sonnet-4-6", "temperature": 0.5},
             "state_schema": {
-                "description": "CurationState TypedDict",
+                "description": "ContentStrategyState TypedDict",
                 "fields": {
                     "topic": "str",
-                    "retrieved_docs": "list[dict]",
-                    "extracted_entities": "list[Entity]",
-                    "extracted_relations": "list[Relation]",
-                    "knowledge_gaps": "list[str]",
-                    "curation_report": "CurationReport | None",
+                    "serp_results": "list[dict]",
+                    "competitor_pages": "list[dict]",
+                    "draft_brief": "str | None",
+                    "critique": "str | None",
+                    "final_brief": "ContentBrief | None",
                     "messages": "list[BaseMessage]",
                 },
             },
             "output_schema": {
-                "name": "CurationReport",
+                "name": "ContentBrief",
                 "fields": {
                     "topic": "str",
-                    "entities": "list[Entity]",
-                    "relationships": "list[Relation]",
-                    "gaps": "list[str]",
-                    "memory_updates": "list[dict]",
-                    "summary": "str",
+                    "target_keyword": "str",
+                    "search_intent": "str",
+                    "competitor_analysis": "list[dict]",
+                    "content_brief": "dict",
+                    "differentiation_angle": "str",
                 },
             },
         },
@@ -227,6 +296,7 @@ AGENTS = [
         "name": "Data Analyst",
         "template": "tool-agent",
         "config": {
+            "template": "tool-agent",
             "system_prompt": (
                 "You are a Data Analyst with expertise in Python (pandas, numpy, matplotlib, scipy). "
                 "When given data or an analysis request:\n"
@@ -434,114 +504,162 @@ GOLDEN_SETS: dict[str, dict] = {
             },
         ],
     },
-    "Daily AI Briefing": {
-        "name": "Daily AI Briefing — Quality & Coverage",
-        "description": "Tests briefing completeness, accuracy, and appropriate depth",
+    "Meeting Summarizer": {
+        "name": "Meeting Summarizer — Accuracy & Completeness",
+        "description": "Tests action item extraction, decision capture, and summary quality",
         "items": [
             {
-                "input_text": "Generate today's AI briefing. Focus on language models and reasoning.",
+                "input_text": "Transcript: 'Alice: Let's ship the new dashboard by end of month. Bob: I'll need the designs from Carol first — Carol can you have those by Wednesday? Carol: Yes, Wednesday works. Alice: Great. Also, we need to decide on the auth approach — JWT or sessions? Bob: JWT, it's already in the codebase. Alice: Agreed, JWT it is. Any blockers? Bob: None from me. Carol: I need access to Figma — Alice can you grant that? Alice: Will do today.'",
                 "expected_output": json.dumps({
-                    "date": "2026-05-08",
-                    "papers": [
-                        {"title": "Chain-of-Thought Prompting Elicits Reasoning in LLMs", "one_liner": "Step-by-step prompting enables complex reasoning in large models", "why_it_matters": "Directly applicable to production prompting strategies"},
+                    "meeting_title": "Product sync",
+                    "date": "unknown",
+                    "participants": ["Alice", "Bob", "Carol"],
+                    "summary": [
+                        "Dashboard launch targeted for end of month",
+                        "JWT chosen as auth approach (already in codebase)",
+                        "Design dependency on Carol blocks Bob's work",
                     ],
-                    "news": [
-                        {"headline": "Anthropic releases Claude 4 family", "source": "Anthropic", "summary": "New models with improved reasoning and safety"},
+                    "decisions": [{"decision": "Use JWT for authentication", "rationale": "Already implemented in codebase"}],
+                    "action_items": [
+                        {"task": "Deliver dashboard designs", "owner": "Carol", "deadline": "Wednesday", "priority": "P1"},
+                        {"task": "Grant Figma access to Carol", "owner": "Alice", "deadline": "today", "priority": "P2"},
+                        {"task": "Build dashboard", "owner": "Bob", "deadline": "end of month", "priority": "P1"},
                     ],
-                    "signal_of_the_day": "Reasoning is the new benchmark battleground — test-time compute is winning",
-                    "trend_analysis": "The field is converging on inference-time scaling as the next frontier after pretraining.",
+                    "open_questions": [],
+                    "follow_up_date": None,
                 }),
-                "scoring_criteria": "Must include at least 2 papers, 2 news items, a signal of the day, and trend analysis. Content must be substantive and specific.",
+                "scoring_criteria": "Must extract all 3 action items with correct owners and deadlines. Must capture JWT decision with rationale. Summary must be concise.",
             },
             {
-                "input_text": "Briefing on multimodal AI developments.",
+                "input_text": "Meeting notes: Engineering retrospective. Issues raised: CI pipeline taking 45 min (target: 15 min). Dave volunteers to investigate. No decision on whether to split monorepo yet — needs data. Sarah to pull test coverage report by Thursday. Team agrees to weekly 30-min retros going forward.",
                 "expected_output": json.dumps({
-                    "date": "2026-05-08",
-                    "papers": [
-                        {"title": "Vision-Language Models for Medical Imaging", "one_liner": "VLMs outperform specialist models on radiology tasks", "why_it_matters": "High-stakes domain validation of multimodal AI"},
+                    "meeting_title": "Engineering retrospective",
+                    "date": "unknown",
+                    "participants": ["Dave", "Sarah"],
+                    "summary": [
+                        "CI pipeline at 45 min — 3x over target",
+                        "Monorepo split decision deferred pending data",
+                        "Weekly retros established as recurring cadence",
                     ],
-                    "news": [{"headline": "Google Gemini Ultra 2.0 vision benchmarks", "source": "Google AI", "summary": "State-of-art on multimodal reasoning tasks"}],
-                    "signal_of_the_day": "Video understanding remains the last hard multimodal frontier",
-                    "trend_analysis": "Vision encoders are commoditizing; differentiation moves to reasoning over visual content.",
-                }),
-                "scoring_criteria": "Must reference specific multimodal papers or models. Signal must relate to the theme. Trend must be specific and actionable.",
-            },
-            {
-                "input_text": "What's happening in AI agents and tool use today?",
-                "expected_output": json.dumps({
-                    "date": "2026-05-08",
-                    "papers": [
-                        {"title": "LangGraph: Stateful Multi-Actor Applications with LLMs", "one_liner": "Graph-based framework for production agentic workflows", "why_it_matters": "Used by thousands of production deployments"},
+                    "decisions": [{"decision": "Hold weekly 30-min retros", "rationale": "Team alignment on process improvement"}],
+                    "action_items": [
+                        {"task": "Investigate CI pipeline performance", "owner": "Dave", "deadline": "unspecified", "priority": "P2"},
+                        {"task": "Pull test coverage report", "owner": "Sarah", "deadline": "Thursday", "priority": "P2"},
                     ],
-                    "news": [{"headline": "OpenAI launches Operator for browser automation", "source": "OpenAI", "summary": "First-party agent product with real-world task completion"}],
-                    "signal_of_the_day": "Agent reliability (not capability) is the bottleneck to enterprise adoption",
-                    "trend_analysis": "The agent tooling ecosystem is consolidating around LangGraph and CrewAI patterns.",
+                    "open_questions": ["Should the monorepo be split?"],
+                    "follow_up_date": None,
                 }),
-                "scoring_criteria": "Must cover agentic frameworks and real deployments. Signal must be practically relevant.",
+                "scoring_criteria": "Must capture both action items with correct owners. Must list monorepo as open question. Must note the 3x CI gap as key metric.",
             },
         ],
     },
-    "Knowledge Curator": {
-        "name": "Knowledge Curator — Extraction & Structuring",
-        "description": "Tests ability to extract entities, relationships, and identify knowledge gaps",
+    "Bug Triage Assistant": {
+        "name": "Bug Triage Assistant — Severity & Root Cause",
+        "description": "Tests bug reproduction, severity classification, and fix suggestion quality",
         "items": [
             {
-                "input_text": "Curate knowledge about: 'The attention mechanism in transformers and its variants (MHA, GQA, MLA)'",
+                "input_text": "Bug report: 'Users cannot log in since the deployment at 14:00 UTC. Login form returns 500 error. Affects all users. Error in logs: KeyError: JWT_SECRET in settings.'",
                 "expected_output": json.dumps({
-                    "topic": "Attention mechanisms in transformers",
-                    "entities": [
-                        {"name": "Multi-Head Attention", "type": "algorithm", "properties": {"paper": "Attention Is All You Need", "year": 2017}},
-                        {"name": "Grouped-Query Attention", "type": "algorithm", "properties": {"benefit": "KV cache reduction", "used_in": "Llama 2+"}},
-                        {"name": "Multi-Head Latent Attention", "type": "algorithm", "properties": {"benefit": "Lower memory with lossless compression", "used_in": "DeepSeek"}},
+                    "title": "Login broken — missing JWT_SECRET env var post-deployment",
+                    "severity": "P0",
+                    "confirmed": True,
+                    "reproduction_steps": [
+                        "Deploy without JWT_SECRET environment variable",
+                        "Attempt login — POST /api/auth/login",
+                        "Observe 500 response with KeyError in logs",
                     ],
-                    "relationships": [
-                        {"source": "Grouped-Query Attention", "relation": "improves_efficiency_of", "target": "Multi-Head Attention"},
-                        {"source": "Multi-Head Latent Attention", "relation": "extends", "target": "Grouped-Query Attention"},
-                    ],
-                    "gaps": ["Comparison of wall-clock performance", "Benchmarks on long-context tasks"],
-                    "memory_updates": [{"key": "attention_variants_2025", "value": "MHA→GQA→MLA evolution for KV cache efficiency"}],
-                    "summary": "Three generations of attention with clear efficiency improvements.",
+                    "root_cause": "JWT_SECRET not set in production environment after deployment. Settings loader raises KeyError on missing required variable.",
+                    "affected_components": ["auth service", "login endpoint", "settings loader"],
+                    "fix_approach": "1. Immediately: set JWT_SECRET in production env vars and redeploy. 2. Preventive: add startup health check that validates all required env vars and fails fast.",
+                    "estimated_effort": "15 minutes (env fix) + 1 hour (health check)",
+                    "related_bugs": [],
                 }),
-                "scoring_criteria": "Must extract at least 3 entities with properties, 2 relationships with typed edges, and identify at least 1 knowledge gap.",
+                "scoring_criteria": "Must classify as P0, identify root cause as missing env var, provide both immediate fix and preventive measure.",
             },
             {
-                "input_text": "Curate knowledge about: 'Vector databases — Pinecone, Weaviate, Qdrant, pgvector'",
+                "input_text": "Bug: 'Dashboard loads slowly — takes 12-15 seconds. SQL query in profiler shows N+1: fetching agent details one by one in a loop. 50 agents = 50 queries.'",
                 "expected_output": json.dumps({
-                    "topic": "Vector databases",
-                    "entities": [
-                        {"name": "Pinecone", "type": "product", "properties": {"type": "managed", "use_case": "enterprise RAG"}},
-                        {"name": "Weaviate", "type": "product", "properties": {"type": "open-source/managed", "feature": "hybrid search"}},
-                        {"name": "Qdrant", "type": "product", "properties": {"type": "open-source", "language": "Rust", "feature": "fast filtering"}},
-                        {"name": "pgvector", "type": "extension", "properties": {"type": "PostgreSQL extension", "advantage": "no new infra"}},
+                    "title": "Dashboard N+1 query — O(n) DB calls for agent list",
+                    "severity": "P2",
+                    "confirmed": True,
+                    "reproduction_steps": [
+                        "Create workspace with 50+ agents",
+                        "Load /dashboard",
+                        "Observe 12-15s load time",
+                        "Check SQL profiler: 50+ individual SELECT queries for agents",
                     ],
-                    "relationships": [
-                        {"source": "pgvector", "relation": "integrates_with", "target": "PostgreSQL"},
-                        {"source": "Pinecone", "relation": "competes_with", "target": "Weaviate"},
-                    ],
-                    "gaps": ["Benchmark comparisons at 100M+ vectors", "Cost comparison at scale"],
-                    "memory_updates": [{"key": "vector_db_landscape_2025", "value": "Qdrant for OSS, pgvector for existing Postgres users, Pinecone for managed scale"}],
-                    "summary": "Mature market with clear segmentation: managed vs OSS, specialized vs embedded.",
+                    "root_cause": "N+1 query pattern: outer query fetches agent IDs, then individual queries fetch each agent's details in a loop.",
+                    "affected_components": ["dashboard endpoint", "agent repository", "database"],
+                    "fix_approach": "Replace loop queries with JOIN or IN clause: 'SELECT * FROM agents WHERE id IN (SELECT agent_id FROM ...) LEFT JOIN agent_stats...'",
+                    "estimated_effort": "2-3 hours",
+                    "related_bugs": [],
                 }),
-                "scoring_criteria": "Must extract all 4 databases as entities, show competitive/integration relationships, identify meaningful gaps.",
+                "scoring_criteria": "Must identify as N+1 pattern, classify as P2, provide JOIN-based SQL fix, note O(n) complexity.",
             },
             {
-                "input_text": "Curate: 'Model Context Protocol (MCP) by Anthropic'",
+                "input_text": "Bug: 'Export button on reports page does nothing when clicked. Console shows: TypeError: Cannot read property \"data\" of undefined at ExportButton.tsx:42'",
                 "expected_output": json.dumps({
-                    "topic": "Model Context Protocol",
-                    "entities": [
-                        {"name": "MCP", "type": "protocol", "properties": {"creator": "Anthropic", "purpose": "standardized LLM-tool interface"}},
-                        {"name": "MCP Server", "type": "component", "properties": {"role": "exposes tools/resources to LLM"}},
-                        {"name": "MCP Client", "type": "component", "properties": {"role": "consumes MCP server capabilities"}},
+                    "title": "Export button crash — undefined data prop",
+                    "severity": "P3",
+                    "confirmed": True,
+                    "reproduction_steps": [
+                        "Navigate to reports page",
+                        "Click export button before data has loaded",
+                        "Observe TypeError in console",
                     ],
-                    "relationships": [
-                        {"source": "MCP Client", "relation": "connects_to", "target": "MCP Server"},
-                        {"source": "MCP", "relation": "standardizes", "target": "LLM tool calling"},
-                    ],
-                    "gaps": ["Security model for untrusted MCP servers", "Rate limiting standards"],
-                    "memory_updates": [{"key": "mcp_overview", "value": "Anthropic's open protocol for LLM-tool standardization, gaining adoption in Claude Code etc."}],
-                    "summary": "Open protocol replacing ad-hoc tool integration with a standard interface.",
+                    "root_cause": "ExportButton accesses `props.data.items` before data fetch completes. Component doesn't guard against undefined data state.",
+                    "affected_components": ["ExportButton component", "reports page"],
+                    "fix_approach": "Add null check: `if (!data?.items) return;` at line 42. Consider disabling button until data is available.",
+                    "estimated_effort": "30 minutes",
+                    "related_bugs": [],
                 }),
-                "scoring_criteria": "Must identify MCP as a protocol, its components, key relationships, and practical gaps.",
+                "scoring_criteria": "Must classify as P3 (UI only, non-critical), identify undefined prop access as root cause, provide optional chaining or null guard fix.",
+            },
+        ],
+    },
+    "Content Strategist": {
+        "name": "Content Strategist — Brief Quality & SEO Thinking",
+        "description": "Tests competitor gap analysis, keyword strategy, and content brief quality",
+        "items": [
+            {
+                "input_text": "Create a content brief for: 'best practices for RAG systems in production'",
+                "expected_output": json.dumps({
+                    "topic": "RAG systems in production",
+                    "target_keyword": "RAG production best practices",
+                    "search_intent": "informational",
+                    "competitor_analysis": [
+                        {"url": "competitor-1.com", "strengths": ["Comprehensive overview"], "gaps": ["No performance benchmarks", "No failure mode coverage"]},
+                    ],
+                    "content_brief": {
+                        "title": "RAG in Production: 10 Best Practices from Teams at Scale",
+                        "outline": ["Chunking strategy", "Embedding model selection", "Re-ranking", "Evaluation/evals", "Monitoring in production", "Cost optimization"],
+                        "word_count_target": 3500,
+                        "key_points": ["Concrete benchmarks", "Failure mode catalog", "Real production learnings, not toy examples"],
+                        "cta": "Download our RAG evaluation template",
+                    },
+                    "differentiation_angle": "Focus on failure modes and monitoring — most content covers happy path only",
+                }),
+                "scoring_criteria": "Must identify specific content gaps in competitors, provide structured outline with real sections (not generic), differentiation angle must be specific.",
+            },
+            {
+                "input_text": "Content brief for: 'AI agents for enterprise — buyer's guide'",
+                "expected_output": json.dumps({
+                    "topic": "AI agents for enterprise",
+                    "target_keyword": "enterprise AI agents buyer guide",
+                    "search_intent": "commercial",
+                    "competitor_analysis": [
+                        {"url": "g2.com-like", "strengths": ["Feature comparisons"], "gaps": ["No TCO analysis", "No integration complexity"]},
+                    ],
+                    "content_brief": {
+                        "title": "Enterprise AI Agents: The 2026 Buyer's Guide (With TCO Analysis)",
+                        "outline": ["What to evaluate (security, compliance, integration)", "Build vs buy", "TCO framework", "Vendor comparison matrix", "Implementation pitfalls"],
+                        "word_count_target": 4000,
+                        "key_points": ["Security/compliance requirements", "Total cost of ownership", "Integration complexity"],
+                        "cta": "Book a demo to see how Flow handles enterprise workflows",
+                    },
+                    "differentiation_angle": "TCO and integration complexity — buyers don't find this anywhere else",
+                }),
+                "scoring_criteria": "Must identify commercial search intent, include TCO as differentiator, provide enterprise-specific outline sections (compliance, security), not generic.",
             },
         ],
     },
@@ -636,13 +754,30 @@ GOLDEN_SETS: dict[str, dict] = {
 # Main seeding function
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def seed(pool: asyncpg.Pool) -> None:
-    workspace = await pool.fetchrow("SELECT id FROM workspaces LIMIT 1")
-    if not workspace:
-        logger.error("no_workspace", message="No workspace found. Run migrations and create a user first.")
-        return
-    workspace_id = workspace["id"]
+async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seeding", workspace_id=str(workspace_id))
+
+    # Remove non-canonical agents (and their FK-referenced rows)
+    stale_ids = await pool.fetch(
+        "SELECT id FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
+        workspace_id, CANONICAL_AGENT_NAMES,
+    )
+    if stale_ids:
+        ids = [r["id"] for r in stale_ids]
+        for tbl in [
+            "agent_skills", "agent_memories", "episodic_memories",
+            "agent_negatives", "reasoning_patterns", "agent_schedules",
+            "agent_versions", "golden_results",
+        ]:
+            await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
+        # ab_tests references agent_a_id / agent_b_id — just nullify/delete whole test
+        await pool.execute(
+            "DELETE FROM ab_tests WHERE agent_a_id = ANY($1) OR agent_b_id = ANY($1)",
+            ids,
+        )
+        await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
+        await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
+        logger.info("cleanup.old_agents", count=len(ids), names=[r for r in CANONICAL_AGENT_NAMES])
 
     seeded_agents: dict[str, uuid.UUID] = {}
 
@@ -684,8 +819,8 @@ async def seed(pool: asyncpg.Pool) -> None:
         else:
             set_id = uuid.uuid4()
             await pool.execute(
-                "INSERT INTO golden_sets (id, workspace_id, agent_id, name, description) VALUES ($1, $2, $3, $4, $5)",
-                set_id, workspace_id, agent_id, gs_def["name"], gs_def["description"],
+                "INSERT INTO golden_sets (id, workspace_id, name, description) VALUES ($1, $2, $3, $4)",
+                set_id, workspace_id, gs_def["name"], gs_def["description"],
             )
             logger.info("golden_set.created", name=gs_def["name"], items=len(gs_def["items"]))
 
@@ -698,6 +833,15 @@ async def seed(pool: asyncpg.Pool) -> None:
                 )
 
     logger.info("seed.done", agents=len(seeded_agents), golden_sets=len(GOLDEN_SETS))
+
+
+async def seed(pool: asyncpg.Pool) -> None:
+    workspaces = await pool.fetch("SELECT id FROM workspaces")
+    if not workspaces:
+        logger.error("no_workspace", message="No workspace found. Run migrations and create a user first.")
+        return
+    for ws in workspaces:
+        await seed_workspace(pool, ws["id"])
 
 
 async def main() -> None:

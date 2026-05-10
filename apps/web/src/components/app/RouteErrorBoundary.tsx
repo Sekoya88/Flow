@@ -4,6 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { logger } from "@/lib/logger";
 
 type Props = { children: ReactNode; label?: string };
 
@@ -17,7 +18,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[RouteErrorBoundary]", this.props.label, error, info.componentStack);
+    logger.error("[RouteErrorBoundary] render crash", { label: this.props.label, error: error.message, stack: info.componentStack ?? "" });
   }
 
   render() {

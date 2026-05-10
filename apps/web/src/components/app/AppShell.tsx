@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -36,7 +36,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { apiFetch } from "@/lib/api";
 import { clearToken } from "@/lib/auth";
+import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /** Primary strip — Settings moved to account menu to avoid header overlap */
@@ -57,6 +59,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const setWorkspaces = useStore((s) => s.setWorkspaces);
+  const setUser = useStore((s) => s.setUser);
+
+  // Bootstrap Zustand store from /auth/me once on mount so all pages
+  // reading workspaces[0].id from the store get a value without each
+  // fetching /auth/me independently.
+  useEffect(() => {
+    apiFetch<{ id: string; email: string; workspaces: { id: string; name: string }[] }>(
+      "/api/v1/auth/me",
+    )
+      .then((me) => {
+        setUser({ id: me.id, email: me.email });
+        setWorkspaces(me.workspaces ?? []);
+      })
+      .catch(() => {/* token invalid → middleware will redirect */});
+  }, [setUser, setWorkspaces]);
 
   const settingsActive = path === "/settings" || path.startsWith("/settings/");
 
@@ -65,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="surface-glass sticky top-0 z-50 flex h-[44px] w-full items-center justify-between border-b border-border/60 px-4">
         <div className="flex flex-1 items-center gap-6">
           <div className="shrink-0">
-            <FlowLogo href="/dashboard" variant="header" />
+            <FlowLogo href="/" variant="header" />
           </div>
 
           <nav

@@ -1,9 +1,10 @@
 """FastAPI entry — lifespan wires DB, LangGraph checkpointer, execution stream hub."""
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from flow.config import get_settings
@@ -102,6 +103,20 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        t0 = time.monotonic()
+        response = await call_next(request)
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        logger.info(
+            "http.request",
+            method=request.method,
+            path=request.url.path,
+            status=response.status_code,
+            duration_ms=duration_ms,
+        )
+        return response
 
     app.include_router(health.router)
     app.include_router(auth.router)

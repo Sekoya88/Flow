@@ -24,6 +24,7 @@ import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { SkillEditor } from "@/components/agents/SkillEditor";
 import { SkillDiffView } from "@/components/agents/SkillDiffView";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 type SkillRow = {
@@ -83,7 +84,7 @@ export default function SkillsPage() {
       );
       setSkills(data.skills ?? []);
     } catch (e) {
-      console.warn("skills load failed", e);
+      logger.warn("skills load failed", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export default function SkillsPage() {
       );
       setVersions(data.versions ?? []);
     } catch (e) {
-      console.warn("versions load failed", e);
+      logger.warn("versions load failed", { error: String(e) });
     }
   }, [agentId]);
 
@@ -130,7 +131,7 @@ export default function SkillsPage() {
       setCreating(false);
       void load();
     } catch (e) {
-      console.warn("skill save failed", e);
+      logger.warn("skill save failed", { error: String(e) });
     }
   }, [wsId, agentId, load]);
 
@@ -139,7 +140,7 @@ export default function SkillsPage() {
       await apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" });
       void load();
     } catch (e) {
-      console.warn("deactivate failed", e);
+      logger.warn("deactivate failed", { error: String(e) });
     }
   }, [load]);
 

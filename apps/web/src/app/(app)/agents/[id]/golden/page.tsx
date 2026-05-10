@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { track } from "@/lib/analytics";
 import { apiFetch } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 type GoldenItem = {
@@ -103,7 +104,7 @@ export default function GoldenSetPage() {
       setAgents(agentsData.agents ?? []);
       if (agentsData.agents?.[0]) setSelectedAgent(agentsData.agents[0].id);
     } catch (e) {
-      console.warn("golden set load failed", e);
+      logger.warn("golden set load failed", { error: String(e) });
     } finally {
       setLoading(false);
     }
