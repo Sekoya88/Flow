@@ -87,25 +87,19 @@ export default function AgentsPage() {
 
   const handleToolToggle = useCallback(
     async (agentId: string, tool: string, enabled: boolean) => {
-      try {
-        await apiFetch(`/api/v1/agents/${agentId}`, {
-          method: "PATCH",
-          json: { [tool]: enabled },
-        });
-        // Refresh agent list
-        if (wsId) {
-          const a = await apiFetch<{ agents: AgentRow[] }>(
-            `/api/v1/workspaces/${wsId}/agents`,
-          );
-          if (a?.agents) {
-            setAgents(a.agents);
-            // Update selected agent
-            const updated = a.agents.find((x) => x.id === agentId);
-            if (updated) setSelectedAgent(updated);
-          }
+      await apiFetch(`/api/v1/agents/${agentId}`, {
+        method: "PATCH",
+        json: { [tool]: enabled },
+      });
+      if (wsId) {
+        const a = await apiFetch<{ agents: AgentRow[] }>(
+          `/api/v1/workspaces/${wsId}/agents`,
+        );
+        if (a?.agents) {
+          setAgents(a.agents);
+          const updated = a.agents.find((x) => x.id === agentId);
+          if (updated) setSelectedAgent(updated);
         }
-      } catch (e) {
-        logger.warn("tool toggle failed", { error: String(e) });
       }
     },
     [wsId],
@@ -252,6 +246,7 @@ export default function AgentsPage() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         onToolToggle={handleToolToggle}
+        workspaceId={wsId}
       />
     </div>
   );

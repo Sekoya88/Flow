@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircle,
   Bot,
   Brain,
   Bookmark,
@@ -41,6 +42,7 @@ import { Separator } from "@/components/ui/separator";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import type { AgentRow } from "./AgentCard";
 import { MetacogPanel } from "./MetacogPanel";
@@ -96,20 +98,42 @@ interface AgentDetailDrawerProps {
   agent: AgentRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onToolToggle?: (agentId: string, tool: string, enabled: boolean) => void;
+  onToolToggle?: (agentId: string, tool: string, enabled: boolean) => Promise<void>;
+  workspaceId?: string | null;
 }
+
+type SkillRow = {
+  id: string;
+  name: string;
+  version: number;
+  description: string;
+  allowed_tools: string[];
+  triggers: string[];
+  active: boolean;
+  score: number;
+};
 
 export function AgentDetailDrawer({
   agent,
   open,
   onOpenChange,
   onToolToggle,
+  workspaceId,
 }: AgentDetailDrawerProps) {
   const router = useRouter();
   const [localTools, setLocalTools] = useState<Record<string, boolean>>({});
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // ── Skills state ──
+  const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
 
   useEffect(() => {
     if (agent) setLocalTools(getTools(agent.config));
+    // Reset skills when agent changes
+    setSkills([]);
+    setSkillsLoaded(false);
   }, [agent]);
 
   const tools = localTools;
@@ -178,6 +202,31 @@ export function AgentDetailDrawer({
       logger.warn("diff failed", { error: String(e) });
     }
   }, [agent]);
+
+  const loadSkills = useCallback(async () => {
+    if (!agent || !workspaceId || skillsLoaded) return;
+    setSkillsLoading(true);
+    try {
+      const data = await apiFetch<{ skills: SkillRow[] }>(
+        `/api/v1/skills?workspace_id=${workspaceId}&agent_id=${agent.id}`,
+      );
+      setSkills(data.skills ?? []);
+      setSkillsLoaded(true);
+    } catch (e) {
+      logger.warn("skills load failed", { error: String(e) });
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, [agent, workspaceId, skillsLoaded]);
+
+  const handleDeactivateSkill = useCallback(async (skillId: string) => {
+    try {
+      await apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" });
+      setSkills((prev) => prev.filter((s) => s.id !== skillId));
+    } catch (e) {
+      logger.warn("skill deactivate failed", { error: String(e) });
+    }
+  }, []);
 
   if (!agent) return null;
 
@@ -269,11 +318,17 @@ export function AgentDetailDrawer({
                 <TabsTrigger value="intelligence">Intelligence</TabsTrigger>
                 <TabsTrigger value="versions" onClick={() => { if (versions.length === 0) void loadVersions(); }}>Versions</TabsTrigger>
                 <TabsTrigger value="config">Config</TabsTrigger>
-                <TabsTrigger value="skills">Skills</TabsTrigger>
+                <TabsTrigger value="skills" onClick={() => { void loadSkills(); }}>Skills</TabsTrigger>
               </TabsList>
 
               {/* Tools tab */}
               <TabsContent value="tools" className="px-6 py-4">
+                {toggleError && (
+                  <Alert variant="destructive" className="mb-3 py-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">{toggleError}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-1">
                   {TOOL_DEFS.map(({ key, label, icon: Icon, description }) => {
                     const enabled = !!tools[key];
@@ -308,8 +363,13 @@ export function AgentDetailDrawer({
                           size="sm"
                           checked={enabled}
                           onCheckedChange={(checked: boolean) => {
-                            setLocalTools((prev) => ({ ...prev, [key]: checked }));
-                            onToolToggle?.(agent.id, key, checked);
+                            const prev = localTools;
+                            setLocalTools((p) => ({ ...p, [key]: checked }));
+                            setToggleError(null);
+                            void onToolToggle?.(agent.id, key, checked)?.catch(() => {
+                              setLocalTools(prev);
+                              setToggleError(`Failed to ${checked ? "enable" : "disable"} ${label}. Try again.`);
+                            });
                           }}
                         />
                       </div>
@@ -455,24 +515,93 @@ export function AgentDetailDrawer({
 
               {/* Skills tab */}
               <TabsContent value="skills" className="px-6 py-4">
-                <div className="flex flex-col items-center gap-3 py-6 text-center">
-                  <Sparkles className="h-7 w-7 text-muted-foreground/30" />
-                  <p className="text-sm text-muted-foreground">
-                    Skills are auto-created by the reflector node.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-xs"
-                    onClick={() => {
-                      onOpenChange(false);
-                      router.push(`/agents/${agent.id}/skills`);
-                    }}
-                  >
-                    <FileCode2 className="h-3 w-3" />
-                    Manage skills
-                  </Button>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-muted-foreground">Active skills for this agent</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 gap-1 text-[10px] px-2"
+                      onClick={() => { onOpenChange(false); router.push(`/agents/${agent.id}/skills`); }}
+                    >
+                      <FileCode2 className="h-3 w-3" />
+                      Manage
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-6 gap-1 text-[10px] px-2"
+                      onClick={() => { onOpenChange(false); router.push(`/agents/${agent.id}/skills`); }}
+                    >
+                      <Plus className="h-3 w-3" />
+                      New skill
+                    </Button>
+                  </div>
                 </div>
+
+                {skillsLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="rounded-xl border border-border/40 p-3 space-y-1.5 animate-pulse">
+                        <div className="h-2.5 w-1/2 rounded bg-muted/60" />
+                        <div className="h-2 w-3/4 rounded bg-muted/40" />
+                      </div>
+                    ))}
+                  </div>
+                ) : skills.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-6 text-center">
+                    <Sparkles className="h-7 w-7 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">No skills yet.</p>
+                    <p className="text-xs text-muted-foreground/70">
+                      Skills are auto-created by the reflector node or can be added manually.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        className="rounded-xl border border-border/40 bg-card/50 p-3 space-y-1.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold truncate">{skill.name}</p>
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                v{skill.version}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground tabular-nums">
+                                {skill.score.toFixed(1)}★
+                              </span>
+                            </div>
+                            {skill.description && (
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
+                                {skill.description}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => void handleDeactivateSkill(skill.id)}
+                            title="Deactivate skill"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                        {skill.allowed_tools.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {skill.allowed_tools.map((t) => (
+                              <span key={t} className="rounded px-1 py-0.5 text-[9px] bg-muted/50 text-muted-foreground border border-border/30">
+                                {t.replace(/_/g, " ")}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
 

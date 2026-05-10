@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="surface-glass sticky top-0 z-50 flex h-[44px] w-full items-center justify-between border-b border-border/60 px-4">
         <div className="flex flex-1 items-center gap-6">
           <div className="shrink-0">
-            <FlowLogo href="/dashboard" variant="header" />
+            <FlowLogo href="/" variant="header" />
           </div>
 
           <nav

@@ -664,8 +664,14 @@ export default function SchedulesPage() {
 
         {/* ── Right panel ─────────────────────────────────────── */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {view === "new" && workspaceId ? (
-            <CreateForm agents={agents} onCreated={handleCreated} workspaceId={workspaceId} />
+          {view === "new" ? (
+            workspaceId ? (
+              <CreateForm agents={agents} onCreated={handleCreated} workspaceId={workspaceId} />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                Loading workspace…
+              </div>
+            )
           ) : selectedSchedule ? (
             <ScheduleDetail
               s={selectedSchedule}
