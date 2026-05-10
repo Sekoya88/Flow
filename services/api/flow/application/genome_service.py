@@ -63,7 +63,14 @@ async def snapshot_genome(
             agent_id, workspace_id,
         )
 
-        config = dict(agent_row["config"]) if agent_row["config"] else {}
+        raw_config = agent_row["config"]
+        if isinstance(raw_config, str):
+            import json as _json
+            config = _json.loads(raw_config)
+        elif raw_config:
+            config = dict(raw_config)
+        else:
+            config = {}
         template = agent_row["template"] or config.get("template", "deer_flow")
 
         config["_genome"] = {

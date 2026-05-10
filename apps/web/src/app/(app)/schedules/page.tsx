@@ -193,14 +193,14 @@ function CreateForm({
     try {
       const result = await apiFetch<{ id: string }>("/api/v1/schedules", {
         method: "POST",
-        body: JSON.stringify({
+        json: {
           workspace_id: workspaceId,
           agent_id: form.agent_id,
           cron_expr: form.cron_expr,
           prompt_template: form.prompt_template,
           delivery_type: form.delivery_type,
           delivery_target: form.delivery_target || null,
-        }),
+        },
       });
       const agent = agents.find((a) => a.id === form.agent_id);
       onCreated({
@@ -557,7 +557,7 @@ export default function SchedulesPage() {
     try {
       await apiFetch(`/api/v1/schedules/${id}/toggle`, {
         method: "PATCH",
-        body: JSON.stringify({ enabled: !current }),
+        json: { enabled: !current },
       });
       setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !current } : s)));
     } catch (err) {

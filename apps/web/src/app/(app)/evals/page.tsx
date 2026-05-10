@@ -140,13 +140,12 @@ export default function EvalsPage() {
   async function importSamples() {
     setSeeding(true);
     try {
-      const res = await apiFetch<{ created: number }>("/api/v1/golden-sets/seed-samples", { method: "POST" });
-      if (res.created > 0) {
-        const sData = await apiFetch<{ sets: GoldenSet[] }>("/api/v1/golden-sets");
-        const s = sData.sets ?? [];
-        setSets(s);
-        if (s[0]) { setSelectedSetId(s[0].id); setExpandedSetId(s[0].id); }
-      }
+      await apiFetch<{ created: number }>("/api/v1/golden-sets/seed-samples", { method: "POST" });
+      // Always refresh — datasets may already exist (created === 0) but need to be shown
+      const sData = await apiFetch<{ sets: GoldenSet[] }>("/api/v1/golden-sets");
+      const s = sData.sets ?? [];
+      setSets(s);
+      if (s[0] && !selectedSetId) { setSelectedSetId(s[0].id); setExpandedSetId(s[0].id); }
     } catch (e) { console.warn(e); }
     finally { setSeeding(false); }
   }
@@ -157,7 +156,7 @@ export default function EvalsPage() {
     try {
       const r = await apiFetch<{ id: string; name: string }>("/api/v1/golden-sets", {
         method: "POST",
-        body: JSON.stringify({ name: newSetName.trim(), description: newSetDesc.trim() }),
+        json: { name: newSetName.trim(), description: newSetDesc.trim() },
       });
       const s: GoldenSet = { id: r.id, name: r.name, description: newSetDesc.trim(), item_count: 0, created_at: new Date().toISOString() };
       setSets((p) => [s, ...p]);
@@ -172,7 +171,7 @@ export default function EvalsPage() {
     if (!newItem.input_text.trim() || !newItem.expected_output.trim()) return;
     setAddingItem(true);
     try {
-      const r = await apiFetch<{ id: string }>(`/api/v1/golden-sets/${setId}/items`, { method: "POST", body: JSON.stringify(newItem) });
+      const r = await apiFetch<{ id: string }>(`/api/v1/golden-sets/${setId}/items`, { method: "POST", json: newItem });
       const item: GoldenItem = { id: r.id, ...newItem };
       setSetItems((p) => ({ ...p, [setId]: [...(p[setId] ?? []), item] }));
       setSets((p) => p.map((s) => s.id === setId ? { ...s, item_count: s.item_count + 1 } : s));
