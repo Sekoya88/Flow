@@ -2,7 +2,7 @@
 
 # ── Full rebuild + start ──────────────────────────────────────────────────────
 rebuild:
-	docker compose down --remove-orphans
+	docker compose down -v --remove-orphans
 	docker compose build --no-cache
 	docker compose up -d
 	@echo "\n✓ Stack rebuilt. Waiting for DB..."

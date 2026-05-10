@@ -757,12 +757,27 @@ GOLDEN_SETS: dict[str, dict] = {
 async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seeding", workspace_id=str(workspace_id))
 
-    # Remove agents that are no longer in the canonical list
-    deleted = await pool.execute(
-        "DELETE FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
+    # Remove non-canonical agents (and their FK-referenced rows)
+    stale_ids = await pool.fetch(
+        "SELECT id FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
         workspace_id, CANONICAL_AGENT_NAMES,
     )
-    logger.info("cleanup.old_agents", result=deleted)
+    if stale_ids:
+        ids = [r["id"] for r in stale_ids]
+        for tbl in [
+            "agent_skills", "agent_memories", "episodic_memories",
+            "agent_negatives", "reasoning_patterns", "agent_schedules",
+            "agent_versions", "golden_results",
+        ]:
+            await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
+        # ab_tests references agent_a_id / agent_b_id — just nullify/delete whole test
+        await pool.execute(
+            "DELETE FROM ab_tests WHERE agent_a_id = ANY($1) OR agent_b_id = ANY($1)",
+            ids,
+        )
+        await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
+        await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
+        logger.info("cleanup.old_agents", count=len(ids), names=[r for r in CANONICAL_AGENT_NAMES])
 
     seeded_agents: dict[str, uuid.UUID] = {}
 
