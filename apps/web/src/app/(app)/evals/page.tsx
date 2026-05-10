@@ -102,7 +102,7 @@ export default function EvalsPage() {
     setLoadingSets(true);
     Promise.all([
       apiFetch<{ sets: GoldenSet[] }>("/api/v1/golden-sets"),
-      apiFetch<{ agents: AgentRow[] }>(`/api/v1/agents?workspace_id=${workspaceId}`),
+      apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${workspaceId}/agents`),
     ])
       .then(([sData, aData]) => {
         const s = sData.sets ?? [];

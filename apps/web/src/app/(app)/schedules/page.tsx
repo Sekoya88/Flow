@@ -538,7 +538,7 @@ export default function SchedulesPage() {
     setLoading(true);
     Promise.all([
       apiFetch<{ schedules: Schedule[] }>(`/api/v1/schedules?workspace_id=${workspaceId}`),
-      apiFetch<{ agents: AgentRow[] }>(`/api/v1/agents?workspace_id=${workspaceId}`),
+      apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${workspaceId}/agents`),
       apiFetch<{ cron_jobs: CronJob[] }>(`/api/v1/schedules/cron-jobs`),
     ])
       .then(([sData, aData, cData]) => {
@@ -602,7 +602,7 @@ export default function SchedulesPage() {
                   setLoading(true);
                   Promise.all([
                     apiFetch<{ schedules: Schedule[] }>(`/api/v1/schedules?workspace_id=${workspaceId}`),
-                    apiFetch<{ agents: AgentRow[] }>(`/api/v1/agents?workspace_id=${workspaceId}`),
+                    apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${workspaceId}/agents`),
                   ])
                     .then(([sData, aData]) => {
                       setSchedules(sData.schedules ?? []);
