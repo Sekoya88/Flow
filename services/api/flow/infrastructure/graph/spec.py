@@ -45,6 +45,7 @@ def compile_graph(
     node_registry: dict[str, Callable],
     condition_registry: dict[str, Callable],
     checkpointer: Any | None = None,
+    store: Any | None = None,
 ) -> Any:
     """Compile a GraphSpec into a compiled LangGraph StateGraph."""
     g = StateGraph(FlowGraphState)
@@ -67,7 +68,7 @@ def compile_graph(
         resolved_mapping = {k: _resolve(v) for k, v in ce.mapping.items()}
         g.add_conditional_edges(ce.source, condition_fn, resolved_mapping)
 
-    return g.compile(checkpointer=checkpointer)
+    return g.compile(checkpointer=checkpointer, store=store)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +159,13 @@ TEMPLATES: dict[str, GraphSpec] = {
             ("tool_agent", "synthesizer"),
             ("synthesizer", "END"),
         ],
+        entry="planner",
+    ),
+
+    "react-agent": GraphSpec(
+        template="react-agent",
+        nodes=["planner"],
+        edges=[("planner", "END")],
         entry="planner",
     ),
 }
