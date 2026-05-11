@@ -198,8 +198,9 @@ async def evaluate_golden_set(
         scores.append(judgment["score"])
         results.append({
             "item_id": str(item["id"]),
-            "input_text": item["input_text"][:120],
-            "actual_output": actual_output[:200],
+            "input_text": item["input_text"],
+            "expected_output": item["expected_output"],
+            "actual_output": actual_output,
             "score": judgment["score"],
             "rationale": judgment["rationale"],
         })

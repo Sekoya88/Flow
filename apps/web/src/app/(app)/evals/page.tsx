@@ -97,6 +97,13 @@ export default function EvalsPage() {
 
   const [history, setHistory] = useState<HistoryPoint[]>([]);
 
+  // ── Auto-improve & Regression state ──
+  const [improving, setImproving] = useState(false);
+  const [improveResult, setImproveResult] = useState<any>(null);
+  const [showRegression, setShowRegression] = useState(false);
+  const [regressionData, setRegressionData] = useState<any>(null);
+  const [loadingRegression, setLoadingRegression] = useState(false);
+
   // ── Load data ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -222,6 +229,42 @@ export default function EvalsPage() {
     } catch (err: any) {
       setLogs((p) => [...p, { id: "err", kind: "error", message: err.message, timestamp: new Date().toLocaleTimeString() }]);
       setRunning(false);
+    }
+  }
+
+  async function autoImprove() {
+    if (!selectedSetId || !selectedAgentId) return;
+    setImproving(true);
+    setImproveResult(null);
+    try {
+      const res = await apiFetch<any>("/api/v1/evaluations/improve", {
+        method: "POST",
+        json: { set_id: selectedSetId, agent_id: selectedAgentId },
+      });
+      setImproveResult(res);
+      // Refresh history
+      const params = new URLSearchParams({ set_id: selectedSetId, agent_id: selectedAgentId });
+      const hData = await apiFetch<{ history: HistoryPoint[] }>(`/api/v1/golden-sets/${selectedSetId}/history?${params}`);
+      setHistory(hData.history ?? []);
+    } catch (err: any) {
+      logger.warn("improve failed", { error: err.message });
+    } finally {
+      setImproving(false);
+    }
+  }
+
+  async function loadRegression() {
+    if (!selectedSetId || !selectedAgentId) return;
+    setShowRegression(true);
+    setLoadingRegression(true);
+    try {
+      const params = new URLSearchParams({ set_id: selectedSetId, agent_id: selectedAgentId });
+      const res = await apiFetch<any>(`/api/v1/evaluations/regression-report?${params}`);
+      setRegressionData(res);
+    } catch (err: any) {
+      logger.warn("regression report failed", { error: err.message });
+    } finally {
+      setLoadingRegression(false);
     }
   }
 
@@ -469,14 +512,23 @@ export default function EvalsPage() {
           </div>
 
           {/* Run button */}
-          <div className="p-3 border-t border-border/40">
+          <div className="p-3 border-t border-border/40 space-y-2">
             <Button
               className="w-full gap-2 h-9 text-sm shadow-sm shadow-flow-brand/20"
               onClick={runEvaluation}
-              disabled={running || !selectedSetId || !selectedAgentId}
+              disabled={running || improving || !selectedSetId || !selectedAgentId}
             >
               <Play className="h-3.5 w-3.5" />
               {running ? "Evaluating…" : "Run evaluation"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full gap-2 h-9 text-sm"
+              onClick={autoImprove}
+              disabled={running || improving || !selectedSetId || !selectedAgentId}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-flow-brand" />
+              {improving ? "Improving..." : "Auto-Improve"}
             </Button>
             {selectedSet && selectedAgent && (
               <p className="text-[10px] text-muted-foreground/60 text-center mt-1.5">
@@ -509,7 +561,7 @@ export default function EvalsPage() {
                 </>
               )}
               {hasHistory && !results && (
-                <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-4 flex-wrap flex-1">
                   <span className="text-[11px] text-muted-foreground">Last {history.length} run{history.length !== 1 ? "s" : ""}:</span>
                   {history.slice(-6).map((pt, i) => {
                     const d = new Date(pt.run_at);
@@ -530,12 +582,15 @@ export default function EvalsPage() {
                       ? <span className="flex items-center gap-0.5 text-[10px] text-red-400 font-medium"><TrendingDown className="h-3 w-3" /> {(delta*100).toFixed(0)}%</span>
                       : null;
                   })()}
+                  <Button variant="outline" size="sm" className="ml-auto h-7 text-xs" onClick={loadRegression}>
+                    Regression Report
+                  </Button>
                 </div>
               )}
             </div>
           )}
 
-          <div className="flex flex-1 overflow-hidden gap-0">
+          <div className="relative flex flex-1 overflow-hidden gap-0">
 
             {/* ── Live logs ── */}
             <div className="flex-1 flex flex-col p-4 gap-3 min-w-0 overflow-hidden">
@@ -610,6 +665,135 @@ export default function EvalsPage() {
                       <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2 italic">{r.rationale}</p>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Auto Improve Result ── */}
+            {improveResult && (
+              <div className="absolute inset-0 bg-background/95 backdrop-blur z-10 flex flex-col p-6 overflow-y-auto">
+                <div className="max-w-2xl mx-auto w-full space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-flow-brand" />
+                      Improvement Results
+                    </h2>
+                    <Button variant="ghost" size="sm" onClick={() => setImproveResult(null)}>Close</Button>
+                  </div>
+                  
+                  {improveResult.action_taken === "none" ? (
+                    <div className="rounded-xl border border-border/50 bg-card p-6 text-center space-y-3">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                      <p className="font-medium text-emerald-400">{improveResult.message}</p>
+                      <p className="text-sm text-muted-foreground">Score: {(improveResult.eval_score * 100).toFixed(0)}%. The agent is performing well.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge variant="outline" className="text-amber-400 border-amber-500/20 bg-amber-500/10">Candidate Generated</Badge>
+                          <span className="text-muted-foreground">Score was {(improveResult.eval_score * 100).toFixed(0)}%</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{improveResult.message}</p>
+                        
+                        {improveResult.rewrite && (
+                          <div className="space-y-3 mt-4 pt-4 border-t border-border/20">
+                            <div>
+                              <h4 className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Analysis</h4>
+                              <p className="text-sm">{improveResult.rewrite.failure_analysis}</p>
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Changelog</h4>
+                              <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                                {improveResult.rewrite.changelog?.map((c: string, i: number) => (
+                                  <li key={i}>{c}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {improveResult.proposal_id && (
+                          <div className="mt-4 pt-4 border-t border-border/20 flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">A proposal has been created for this candidate.</p>
+                            <a href="/proposals" className="text-sm text-flow-brand underline underline-offset-2">View Proposal →</a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Regression Report ── */}
+            {showRegression && (
+              <div className="absolute inset-0 bg-background/95 backdrop-blur z-10 flex flex-col p-6 overflow-y-auto">
+                <div className="max-w-3xl mx-auto w-full space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-flow-brand" />
+                      Regression Report
+                    </h2>
+                    <Button variant="ghost" size="sm" onClick={() => setShowRegression(false)}>Close</Button>
+                  </div>
+
+                  {loadingRegression ? (
+                    <div className="flex justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-flow-brand border-t-transparent" /></div>
+                  ) : regressionData ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="rounded-xl border border-border/50 bg-card p-4">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Trend</p>
+                          <p className="text-lg font-medium capitalize">{regressionData.trend?.replace('_', ' ')}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/50 bg-card p-4">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Current Score</p>
+                          <p className="text-lg font-medium">{regressionData.curr_avg ? (regressionData.curr_avg * 100).toFixed(0) : 0}%</p>
+                        </div>
+                        <div className="rounded-xl border border-border/50 bg-card p-4">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Delta</p>
+                          <p className={cn("text-lg font-medium", regressionData.avg_delta >= 0 ? "text-emerald-400" : "text-red-400")}>
+                            {regressionData.avg_delta >= 0 ? "+" : ""}{regressionData.avg_delta ? (regressionData.avg_delta * 100).toFixed(1) : 0}%
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {regressionData.regressed && regressionData.regressed.length > 0 && (
+                          <div className="space-y-2">
+                            <h3 className="text-sm font-semibold text-red-400 flex items-center gap-1.5"><TrendingDown className="h-4 w-4" /> Regressed Items ({regressionData.regressed.length})</h3>
+                            {regressionData.regressed.map((item: any) => (
+                              <div key={item.item_id} className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex justify-between items-center">
+                                <span className="text-sm font-mono text-muted-foreground">{item.item_id.split('-')[0]}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm">{(item.prev_score * 100).toFixed(0)}% → {(item.curr_score * 100).toFixed(0)}%</span>
+                                  <Badge variant="outline" className="text-red-400 border-red-500/30">{(item.delta * 100).toFixed(0)}%</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {regressionData.improved && regressionData.improved.length > 0 && (
+                          <div className="space-y-2">
+                            <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> Improved Items ({regressionData.improved.length})</h3>
+                            {regressionData.improved.map((item: any) => (
+                              <div key={item.item_id} className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 flex justify-between items-center">
+                                <span className="text-sm font-mono text-muted-foreground">{item.item_id.split('-')[0]}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm">{(item.prev_score * 100).toFixed(0)}% → {(item.curr_score * 100).toFixed(0)}%</span>
+                                  <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">+{(item.delta * 100).toFixed(0)}%</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No data available.</p>
+                  )}
                 </div>
               </div>
             )}
