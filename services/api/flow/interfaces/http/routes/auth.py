@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -27,19 +28,18 @@ async def register(
     uid = await repo.create_user(body.email, hash_password(body.password))
     ws = await repo.create_workspace("Personal")
     await repo.add_workspace_member(ws, uid, "admin")
-    await repo.create_agent(
-        ws,
-        "Default Flow",
-        "deer_flow",
-        {
-            "tools": {
-                "retrieve": True,
-                "sandbox": True,
-                "long_term_memory": True,
-            }
-        },
-    )
     token = create_access_token(secret=settings.jwt_secret, sub=uid)
+
+    # Seed canonical agents + golden sets in background so registration returns immediately
+    async def _seed():
+        from scripts.seed_agents_and_datasets import seed_workspace
+        try:
+            await seed_workspace(repo._pool, ws)
+        except Exception:
+            pass  # non-fatal — user can still use the app
+
+    asyncio.ensure_future(_seed())
+
     return TokenOut(access_token=token)
 
 
