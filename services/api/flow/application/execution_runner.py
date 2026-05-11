@@ -111,9 +111,11 @@ async def run_deer_execution(
     user_message: str,
     agent_config: dict[str, Any] | None = None,
     schedule_id: str | None = None,
+    store: Any | None = None,
 ) -> None:
     repo = FlowRepository(pool)
     cfg = dict(agent_config) if isinstance(agent_config, dict) else {}
+    _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
     ctx = GraphContext(
         pool=pool,
         workspace_id=workspace_id,
@@ -125,6 +127,7 @@ async def run_deer_execution(
         execution_id=execution_id,
         settings=settings,
         stream_hub=stream_hub,
+        store=store,
     )
     graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
     config: dict[str, Any] = {
@@ -142,7 +145,6 @@ async def run_deer_execution(
 
     debug_chunks = settings.log_level.strip().upper() == "DEBUG"
     _t_start = _time.monotonic()
-    _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
     try:
         _log_banner(
             logger,

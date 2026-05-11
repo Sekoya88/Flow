@@ -76,6 +76,14 @@ async def lifespan(app: FastAPI):
     app.state.checkpoint_pool = checkpoint_pool
     app.state.checkpointer = checkpointer
 
+    from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+    memory_store_pool = build_memory_store_pool(settings.database_url)
+    await memory_store_pool.open()
+    memory_store = create_memory_store(memory_store_pool)
+    await memory_store.setup()
+    app.state.memory_store_pool = memory_store_pool
+    app.state.memory_store = memory_store
+
     stream_hub = ExecutionStreamHub(redis_url=settings.redis_url)
     app.state.stream_hub = stream_hub
 
@@ -87,6 +95,8 @@ async def lifespan(app: FastAPI):
     finally:
         await close_arq_pool()
         await stream_hub.close()
+        if hasattr(app.state, "memory_store_pool"):
+            await app.state.memory_store_pool.close()
         await checkpoint_pool.close()  # type: ignore[misc]
         await close_pool(pool)
         logger.info("lifespan.stopped")
