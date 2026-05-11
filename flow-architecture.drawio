@@ -95,6 +95,44 @@
         <mxCell id="edge_graph_eval" edge="1" parent="1" source="graph" target="eval">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
+
+        <!-- Memory Store -->
+        <mxCell id="memstore" value="AsyncPostgresStore&#10;(Cross-thread facts)&#10;langgraph.store.postgres" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1090" y="80" width="170" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_graph_memstore" edge="1" parent="1" source="graph" target="memstore" style="dashed=1;endArrow=open;endFill=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Worker Queue -->
+        <mxCell id="arq" value="ARQ Worker&#10;(arq + Redis queue)&#10;async task execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="460" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_api_arq" edge="1" parent="1" source="api" target="arq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_arq_graph" edge="1" parent="1" source="arq" target="graph">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Observability layer -->
+        <mxCell id="obs" value="Observability&#10;FlowCallbackHandler (structlog)&#10;LangSmith tracing&#10;JSON logs → Docker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#666666;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="380" y="340" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_graph_obs" edge="1" parent="1" source="graph" target="obs" style="dashed=1;endArrow=open;endFill=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Agent Factory -->
+        <mxCell id="agentfactory" value="build_agent()&#10;create_react_agent&#10;(react-agent template)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1090" y="220" width="170" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_graph_agentfactory" edge="1" parent="1" source="graph" target="agentfactory" style="dashed=1;endArrow=open;endFill=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_agentfactory_memstore" edge="1" parent="1" source="agentfactory" target="memstore">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
