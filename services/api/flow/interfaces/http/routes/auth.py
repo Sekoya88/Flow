@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -12,6 +13,8 @@ from flow.infrastructure.auth.password import hash_password, verify_password
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import LoginIn, RegisterIn, TokenOut
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -36,7 +39,7 @@ async def register(
         try:
             await seed_workspace(repo._pool, ws)
         except Exception:
-            pass  # non-fatal — user can still use the app
+            logger.exception("Failed to seed workspace %s for new user", ws)
 
     asyncio.ensure_future(_seed())
 
