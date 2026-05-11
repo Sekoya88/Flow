@@ -18,7 +18,7 @@ def test_create_memory_store_wraps_pool():
     """create_memory_store returns an AsyncPostgresStore wrapping the pool."""
     from flow.infrastructure.db.store import create_memory_store
     mock_pool = MagicMock()
-    with patch("flow.infrastructure.db.store.AsyncPostgresStore") as MockStore:
+    with patch("langgraph.store.postgres.aio.AsyncPostgresStore") as MockStore:
         MockStore.return_value = MagicMock()
         store = create_memory_store(mock_pool)
         MockStore.assert_called_once_with(mock_pool)
