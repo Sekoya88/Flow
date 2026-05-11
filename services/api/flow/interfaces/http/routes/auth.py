@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -11,6 +13,8 @@ from flow.infrastructure.auth.password import hash_password, verify_password
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import LoginIn, RegisterIn, TokenOut
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -27,19 +31,18 @@ async def register(
     uid = await repo.create_user(body.email, hash_password(body.password))
     ws = await repo.create_workspace("Personal")
     await repo.add_workspace_member(ws, uid, "admin")
-    await repo.create_agent(
-        ws,
-        "Default Flow",
-        "deer_flow",
-        {
-            "tools": {
-                "retrieve": True,
-                "sandbox": True,
-                "long_term_memory": True,
-            }
-        },
-    )
     token = create_access_token(secret=settings.jwt_secret, sub=uid)
+
+    # Seed canonical agents + golden sets in background so registration returns immediately
+    async def _seed():
+        from scripts.seed_agents_and_datasets import seed_workspace
+        try:
+            await seed_workspace(repo._pool, ws)
+        except Exception:
+            logger.exception("Failed to seed workspace %s for new user", ws)
+
+    asyncio.ensure_future(_seed())
+
     return TokenOut(access_token=token)
 
 

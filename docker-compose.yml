@@ -64,8 +64,8 @@ services:
       # Browser origin is the host port you open (see web ports). Include :3000 for local `npm run dev`.
       FLOW_CORS_ORIGINS: http://localhost:13000,http://localhost:3000,http://web:3000
       FLOW_LOG_LEVEL: INFO
-      FLOW_LOG_JSON: "false"
-      FLOW_LOG_FORCE_COLORS: "true"
+      FLOW_LOG_JSON: "true"
+      FLOW_LOG_FORCE_COLORS: "false"
       FLOW_REDIS_URL: redis://redis:6379/0
       FLOW_QDRANT_URL: http://qdrant:6333
       FLOW_QDRANT_COLLECTION: flow_knowledge
@@ -105,8 +105,8 @@ services:
       FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
       FLOW_OPENAI_API_KEY: ${FLOW_OPENAI_API_KEY:-}
       FLOW_LOG_LEVEL: INFO
-      FLOW_LOG_JSON: "false"
-      FLOW_LOG_FORCE_COLORS: "true"
+      FLOW_LOG_JSON: "true"
+      FLOW_LOG_FORCE_COLORS: "false"
       FLOW_REDIS_URL: redis://redis:6379/0
       FLOW_QDRANT_URL: http://qdrant:6333
       FLOW_QDRANT_COLLECTION: flow_knowledge

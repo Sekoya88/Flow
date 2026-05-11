@@ -30,10 +30,17 @@ async def startup(ctx: dict) -> None:
     pool = await create_pool(settings)
     checkpoint_pool = build_checkpoint_pool(settings.database_url)
     await checkpoint_pool.open()
+    from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+    memory_store_pool = build_memory_store_pool(settings.database_url)
+    await memory_store_pool.open()
+    memory_store = create_memory_store(memory_store_pool)
+    await memory_store.setup()
     stream_hub = ExecutionStreamHub(redis_url=settings.redis_url)
     ctx["pool"] = pool
     ctx["stream_hub"] = stream_hub
     ctx["checkpoint_pool"] = checkpoint_pool
+    ctx["memory_store_pool"] = memory_store_pool
+    ctx["memory_store"] = memory_store
     ctx["settings"] = settings
     logger.info("worker.started", redis="configured")
 
@@ -41,6 +48,8 @@ async def startup(ctx: dict) -> None:
 async def shutdown(ctx: dict) -> None:
     if hub := ctx.get("stream_hub"):
         await hub.close()
+    if msp := ctx.get("memory_store_pool"):
+        await msp.close()
     if cp := ctx.get("checkpoint_pool"):
         await cp.close()
     if pool := ctx.get("pool"):
@@ -85,6 +94,7 @@ async def task_run_deer_execution(
             user_message=user_message,
             agent_config=agent_config,
             schedule_id=schedule_id,
+            store=ctx.get("memory_store"),
         )
     finally:
         structlog.contextvars.unbind_contextvars(

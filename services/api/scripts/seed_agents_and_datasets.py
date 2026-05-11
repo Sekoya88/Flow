@@ -762,6 +762,10 @@ async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
         "SELECT id FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
         workspace_id, CANONICAL_AGENT_NAMES,
     )
+    # Always clear ab_tests for this workspace first — they reference agents by FK
+    # without ON DELETE CASCADE, so any agent deletion would fail otherwise.
+    await pool.execute("DELETE FROM ab_tests WHERE workspace_id = $1", workspace_id)
+
     if stale_ids:
         ids = [r["id"] for r in stale_ids]
         for tbl in [
@@ -770,11 +774,6 @@ async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
             "agent_versions", "golden_results",
         ]:
             await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
-        # ab_tests references agent_a_id / agent_b_id — just nullify/delete whole test
-        await pool.execute(
-            "DELETE FROM ab_tests WHERE agent_a_id = ANY($1) OR agent_b_id = ANY($1)",
-            ids,
-        )
         await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
         await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
         logger.info("cleanup.old_agents", count=len(ids), names=[r for r in CANONICAL_AGENT_NAMES])

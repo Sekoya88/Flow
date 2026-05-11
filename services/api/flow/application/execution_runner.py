@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage
 from flow.config import Settings
 from flow.infrastructure.execution_streams import ExecutionStreamHub
 from flow.infrastructure.graph.deer_graph import GraphContext, build_deer_flow_graph
+from flow.infrastructure.observability.callbacks import FlowCallbackHandler
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
 
@@ -111,9 +112,11 @@ async def run_deer_execution(
     user_message: str,
     agent_config: dict[str, Any] | None = None,
     schedule_id: str | None = None,
+    store: Any | None = None,
 ) -> None:
     repo = FlowRepository(pool)
     cfg = dict(agent_config) if isinstance(agent_config, dict) else {}
+    _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
     ctx = GraphContext(
         pool=pool,
         workspace_id=workspace_id,
@@ -125,24 +128,32 @@ async def run_deer_execution(
         execution_id=execution_id,
         settings=settings,
         stream_hub=stream_hub,
+        store=store,
     )
     graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
+    _callback = FlowCallbackHandler(
+        workspace_id=str(workspace_id),
+        agent_id=str(agent_id),
+        execution_id=str(execution_id),
+        template=_template,
+    )
     config: dict[str, Any] = {
         "configurable": {"thread_id": str(execution_id)},
+        "callbacks": [_callback],
         "metadata": {
             "execution_id": str(execution_id),
             "agent_id": str(agent_id),
             "workspace_id": str(workspace_id),
             "user_id": str(user_id),
+            "template": _template,
         },
-        "tags": ["flow", "deer-flow"],
+        "tags": ["flow", "deer-flow", f"template:{_template}"],
         "run_name": f"flow-exec-{execution_id}",
     }
     initial: dict[str, Any] = {"messages": [HumanMessage(content=user_message)]}
 
     debug_chunks = settings.log_level.strip().upper() == "DEBUG"
     _t_start = _time.monotonic()
-    _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
     try:
         _log_banner(
             logger,

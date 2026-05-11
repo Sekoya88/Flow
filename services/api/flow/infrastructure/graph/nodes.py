@@ -251,12 +251,27 @@ def make_planner(ctx: GraphContext):
             except Exception:
                 pass
 
+            # Read cross-thread facts from AsyncPostgresStore
+            store_facts_block = ""
+            if ctx.store is not None:
+                try:
+                    namespace = (str(ctx.workspace_id), str(ctx.agent_id), "facts")
+                    store_results = await ctx.store.asearch(namespace, query=user_text, limit=5)
+                    if store_results:
+                        lines = [r.value.get("content", "") for r in store_results if r.value.get("content")]
+                        if lines:
+                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {l}" for l in lines)
+                except Exception:
+                    pass  # store read is best-effort
+
             if llm is None:
                 plan = "Offline plan: clarify goal, gather facts, draft answer."
                 if pattern_block:
                     plan = f"[Reasoning patterns found]\n{pattern_block}\n\n{plan}"
             else:
                 system = "You are a planning node. Output a short numbered plan (max 5 bullets)."
+                if store_facts_block:
+                    system += f"\n\n{store_facts_block}"
                 if pattern_block:
                     system = (
                         "You are a planning node. Output a short numbered plan (max 5 bullets).\n\n"
@@ -399,6 +414,19 @@ def make_synthesizer(ctx: GraphContext):
                     confidence = max(0.0, min(1.0, float(parts[1].strip().split()[0])))
                 except (ValueError, IndexError):
                     pass
+            # Persist answer as fact in cross-thread store (best-effort)
+            if ctx.store is not None and answer:
+                try:
+                    import uuid as _uuid
+                    namespace = (str(ctx.workspace_id), str(ctx.agent_id), "facts")
+                    await ctx.store.aput(
+                        namespace,
+                        str(_uuid.uuid4()),
+                        {"content": answer[:500], "execution_id": str(ctx.execution_id or "")},
+                    )
+                except Exception:
+                    pass  # store write is best-effort
+
             _node_logger.info("node.done", node="synthesizer", duration_ms=int((time.monotonic() - _t0) * 1000))
             return {
                 "answer": answer,

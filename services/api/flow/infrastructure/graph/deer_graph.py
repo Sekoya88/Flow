@@ -27,9 +27,10 @@ class GraphContext:
     execution_id: UUID | None = None
     settings: Settings | None = None
     stream_hub: Any | None = None  # ExecutionStreamHub — avoids circular import
+    store: Any | None = None  # AsyncPostgresStore for cross-thread memory
 
 
 def build_deer_flow_graph(ctx: GraphContext, checkpointer: Any | None = None) -> Any:
     spec = spec_from_config(ctx.agent_config)
     node_registry = build_node_registry(ctx)
-    return compile_graph(spec, node_registry, CONDITION_REGISTRY, checkpointer=checkpointer)
+    return compile_graph(spec, node_registry, CONDITION_REGISTRY, checkpointer=checkpointer, store=ctx.store)
