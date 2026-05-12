@@ -230,35 +230,44 @@ async def rewrite_and_snapshot(
         if isinstance(config, str):
             config = _json.loads(config)
         config = dict(config or {})
+        original_prompt_stored = config.get("system_prompt", current_prompt)
 
-        # Store the rewritten prompt
+        # Write candidate prompt temporarily
         config["system_prompt"] = rewrite.improved_prompt
         config["_rewrite_changelog"] = rewrite.changelog
-
         await conn.execute(
             "UPDATE agents SET config = $1 WHERE id = $2 AND workspace_id = $3",
             config, agent_id, workspace_id,
         )
 
-    # Snapshot as CANDIDATE
-    candidate_id = await snapshot_genome(
-        pool=pool,
-        agent_id=agent_id,
-        workspace_id=workspace_id,
-        trigger=VersionTrigger.EVAL_PASS,
-        status=VersionStatus.CANDIDATE,
-        created_by=user_id,
-    )
-
-    # Restore original prompt on the agent (candidate is snapshotted independently)
-    async with pool.acquire() as conn:
-        config["system_prompt"] = current_prompt
-        if "_rewrite_changelog" in config:
-            del config["_rewrite_changelog"]
-        await conn.execute(
-            "UPDATE agents SET config = $1 WHERE id = $2 AND workspace_id = $3",
-            config, agent_id, workspace_id,
+    candidate_id = None
+    try:
+        # Snapshot as CANDIDATE (reads the temporarily-updated config)
+        candidate_id = await snapshot_genome(
+            pool=pool,
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            trigger=VersionTrigger.EVAL_PASS,
+            status=VersionStatus.CANDIDATE,
+            created_by=user_id,
         )
+    except Exception:
+        logger.exception(
+            "prompt_rewriter.snapshot_failed",
+            extra={"agent_id": str(agent_id)},
+        )
+    finally:
+        # Always restore original prompt — candidate is independently snapshotted
+        async with pool.acquire() as conn:
+            config["system_prompt"] = original_prompt_stored
+            config.pop("_rewrite_changelog", None)
+            await conn.execute(
+                "UPDATE agents SET config = $1 WHERE id = $2 AND workspace_id = $3",
+                config, agent_id, workspace_id,
+            )
+
+    if candidate_id is None:
+        return None
 
     logger.info(
         "prompt_rewriter.candidate_created",

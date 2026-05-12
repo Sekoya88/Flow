@@ -327,3 +327,103 @@ async def test_rewrite_prompt_handles_markdown_wrapped_json():
 
     assert result.improved_prompt == "Better prompt"
     assert result.confidence == 0.7
+
+
+@pytest.mark.asyncio
+async def test_rewrite_and_snapshot_restores_on_snapshot_failure():
+    """If snapshot_genome raises, original prompt must be restored."""
+    original_prompt = "original prompt"
+    stored_config = {"system_prompt": original_prompt}
+
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(return_value={"config": stored_config})
+
+    updates_received = []
+
+    async def capture_execute(sql, config, *args):
+        updates_received.append(dict(config))
+
+    conn.execute = capture_execute
+
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=conn)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    pool = MagicMock()
+    pool.acquire = MagicMock(return_value=cm)
+
+    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
+         patch("flow.application.genome_service.snapshot_genome", side_effect=RuntimeError("db down")):
+
+        mock_rewrite.return_value = RewriteResult(
+            original_prompt=original_prompt,
+            improved_prompt="improved prompt text",
+            changelog=["change 1"],
+            failure_analysis="analysis",
+            confidence=0.85,
+        )
+
+        result = await rewrite_and_snapshot(
+            pool=pool,
+            agent_id=uuid4(),
+            workspace_id=uuid4(),
+            user_id=uuid4(),
+            current_prompt=original_prompt,
+            failed_items=[FailedItem("q", "expected", "actual", 0.1, "wrong")],
+            llm_config={},
+        )
+
+    assert result is None
+    # Last UPDATE must have restored the original prompt
+    assert len(updates_received) >= 2
+    assert updates_received[-1]["system_prompt"] == original_prompt
+    assert "_rewrite_changelog" not in updates_received[-1]
+
+
+@pytest.mark.asyncio
+async def test_rewrite_and_snapshot_returns_candidate_on_success():
+    """When snapshot succeeds, returns dict with candidate_version_id and restores prompt."""
+    original_prompt = "original prompt"
+    candidate_uuid = uuid4()
+    stored_config = {"system_prompt": original_prompt}
+
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(return_value={"config": stored_config})
+    updates_received = []
+
+    async def capture_execute(sql, config, *args):
+        updates_received.append(dict(config))
+
+    conn.execute = capture_execute
+
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=conn)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    pool = MagicMock()
+    pool.acquire = MagicMock(return_value=cm)
+
+    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
+         patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid):
+
+        mock_rewrite.return_value = RewriteResult(
+            original_prompt=original_prompt,
+            improved_prompt="improved prompt text",
+            changelog=["change 1"],
+            failure_analysis="analysis",
+            confidence=0.85,
+        )
+
+        result = await rewrite_and_snapshot(
+            pool=pool,
+            agent_id=uuid4(),
+            workspace_id=uuid4(),
+            user_id=uuid4(),
+            current_prompt=original_prompt,
+            failed_items=[FailedItem("q", "expected", "actual", 0.1, "wrong")],
+            llm_config={},
+        )
+
+    assert result is not None
+    assert result["candidate_version_id"] == str(candidate_uuid)
+    # Prompt always restored at end
+    assert updates_received[-1]["system_prompt"] == original_prompt
