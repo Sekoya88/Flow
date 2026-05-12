@@ -1,6 +1,8 @@
 # Flow
 
-Personal second brain and agent platform. Upload PDFs and documents, ask questions, get cited answers. Built on **FastAPI** (LangGraph pipeline, asyncpg, JWT, SSE), **Redis + ARQ** for background jobs, **PostgreSQL + pgvector**, and **Next.js** (App Router, Tailwind v4).
+Personal second brain and agent platform. Upload documents, ask questions, get cited answers. Agents improve themselves automatically through evaluation, prompt rewriting, and A/B testing.
+
+Built on **FastAPI** (LangGraph pipeline, asyncpg, JWT, SSE), **Redis + ARQ** for background jobs, **PostgreSQL + pgvector**, and **Next.js** (App Router, Tailwind v4).
 
 ## What you can do today
 
@@ -9,8 +11,9 @@ Personal second brain and agent platform. Upload PDFs and documents, ask questio
 - **Ask questions** — streamed answers with inline `[1]` `[2]` citation markers
 - **See sources** — click any citation to expand the exact chunk from your document
 - **Feedback loop** — 👍/👎 on answers; negative feedback improves future retrievals
-- **Agent Metacognition** — LLM-based reflection and confidence scoring
-- **Evaluation Loop** — Golden Sets and automated A/B testing for agent variations
+- **Agent versioning** — every config change snapshots a new genome version (CANDIDATE → ACTIVE → ARCHIVED)
+- **Evaluation loop** — golden sets + LLM judge + automatic prompt rewriting + A/B testing
+- **Agent schedules** — run agents on a cron schedule and deliver results via configurable channels
 - **Onboarding wizard** — guided first-run that gets you from signup to first answer in under 2 minutes
 
 ---
@@ -97,38 +100,100 @@ Worker retrieves up to 8 knowledge chunks (pgvector cosine), numbers them `[1]�
 
 | Tool | Effect |
 | ---- | ------ |
-| Knowledge search | Enable pgvector retrieval |
-| Long-term memory | Recall past run summaries |
+| Knowledge search | pgvector retrieval (+ Qdrant when agentic RAG enabled) |
+| Long-term memory | Recall past run summaries via `AsyncPostgresStore` |
 | Sandbox | Execute Python code blocks |
 
 ---
 
-## Agentic Evolution (Metacognition)
+## Agent Genome (versioning)
 
-Flow is designed as a continuously improving agentic framework. 
+Every agent has a **genome** — a versioned snapshot of its full configuration:
 
-### 1. Skills & Versioning
-Agents hold **Skills** (`SKILL.md`), which are granular sets of instructions, behaviors, and knowledge boundaries. Both Skills and overall Agent Configurations are versioned. You can:
-- Edit Skills using a markdown/YAML editor.
-- View LCS-based side-by-side diffs.
-- Restore previous snapshots of your agent if performance degrades.
+| Field | What it captures |
+| ----- | ---------------- |
+| `template` | LangGraph graph template (`react-agent`, `deer_flow`, …) |
+| `system_prompt` | The agent's instruction prompt |
+| `llm_config` | Provider, model, temperature |
+| `tools` | Which tools are enabled (`{"retrieve": true, "sandbox": false, ...}`) |
+| `skills` | Skill instructions embedded in the prompt |
 
-### 2. Golden Sets & Evaluation
-To prevent regressions, Flow supports **Golden Sets** (curated inputs and expected outputs).
-- **Run Evaluations**: A Background task runs the Golden Set items through your agent.
-- **LLM-Judge**: Uses `gpt-4o-mini` to score factual accuracy and alignment on a 0.0-1.0 scale with a grading rationale.
-- **Auto-refinement**: If an evaluation fails (score < 0.7), the system automatically drafts an improvement Proposal (e.g. "Add a skill for handling unstructured queries") that you can approve.
+**Version lifecycle:** `CANDIDATE` → `ACTIVE` → `ARCHIVED`
 
-### 3. A/B Testing
-Compare two agents head-to-head on the same Golden Set to validate prompt modifications or different routing configurations.
+- Versions snapshot automatically on config changes, eval passes, or prompt rewrites
+- Only one version is `ACTIVE` at a time per agent
+- Approving a proposal promotes a `CANDIDATE` to `ACTIVE` and archives the previous one
+- Full version history available in the UI (`/agents/:id/versions`)
+
+---
+
+## Continuous Improvement Loop
+
+A nightly ARQ cron job (`auto_eval_tick`, 03:00 UTC) closes the self-improvement loop:
+
+```text
+1. Run golden set evaluation (LLM judge, 0.0–1.0 per item)
+2. If pass_rate < 0.7 → extract failed items → Prompt Rewriter
+3. Prompt Rewriter (GPT-4o-mini) analyzes failures → proposes targeted prompt edits
+4. If confidence ≥ 0.3 and prompt changed → snapshot as CANDIDATE genome
+5. If active baseline exists → run A/B test on same golden set
+6. If candidate wins → create Proposal for human approval
+7. Human approves → CANDIDATE promoted to ACTIVE, previous version ARCHIVED
+```
+
+**Prompt Rewriter** (`flow/application/prompt_rewriter.py`):
+
+- Takes current system prompt + failed golden items (input, expected, actual, judge rationale)
+- Produces improved prompt with structured changelog and confidence score (0.0–1.0)
+- Skips rewrites below 0.3 confidence or when prompt is unchanged
+- Original prompt always restored after snapshotting candidate (crash-safe `try/finally`)
+
+**A/B Test Runner** (`flow/application/ab_runner.py`):
+
+- Runs both genome versions against the same golden set
+- Determines winner by average score delta
+- Only creates promotion proposal when candidate significantly outperforms baseline
+
+---
+
+## Golden Sets & Evaluation (`/evals`)
+
+**Golden Sets** are curated test cases (input → expected output) used to measure agent quality.
+
+- Create via UI or seed with `scripts/seed_agents_and_datasets.py`
+- Run evaluations manually or let `auto_eval_tick` trigger them nightly
+- Results accumulated in `golden_results` rows, grouped by `eval_run_id`
+- LLM judge uses `gpt-4o-mini`: `{"score": 0.0–1.0, "rationale": "…"}`
+
+---
+
+## Agent Schedules
+
+Agents can run on a schedule:
+
+- Configure `cron_expr` (e.g. `0 8 * * *` = daily at 8 AM)
+- Set `prompt_template` for the scheduled run
+- Set `delivery_type` / `delivery_target` for result routing
+- Schedules stored in `agent_schedules`, executed by the ARQ worker
+
+---
+
+## Observability
+
+**FlowCallbackHandler** (`flow/infrastructure/observability/callbacks.py`) instruments every LangGraph execution:
+
+- Attaches `workspace_id`, `agent_id`, `execution_id`, `template` to all log events
+- Tracks per-call latency (ms) for LLM calls and tool invocations
+- Emits structured `structlog` events: `llm.start`, `llm.end`, `tool.start`, `tool.end`, `chain.error`
+- Integrates with LangSmith tracing (`FLOW_LANGSMITH_API_KEY`)
+
+Docker containers emit JSON logs (`FLOW_LOG_JSON=true`). Cron job failures logged with `exc_type`, `workspace_id`, `agent_id` fields for structured querying.
 
 ---
 
 ## Feedback loop
 
 After each run, rate the answer (slider 0–100%). Scores below 50% automatically insert an **agent negative** — a record of the query that produced a poor result. The worker grader uses top-5 negatives as few-shot examples to avoid repeating similar bad retrievals.
-
-You can view the agent's historical confidence in a sparkline chart on the Dashboard and click any data point to drill down into the specific execution context.
 
 ---
 
@@ -138,15 +203,15 @@ You can view the agent's historical confidence in a sparkline chart on the Dashb
 postgresql://flow:flow@localhost:55432/flow
 ```
 
-Migrations run automatically on API startup via Alembic.
+Migrations run automatically on API startup via Alembic. 12 migrations (`0001_initial_schema` → `0012_agent_schedules`).
 
 ---
 
 ## Dev without Docker
 
 ```bash
-# Keep DB + Redis in Docker
-docker compose up -d db redis
+# Keep DB + Redis + Qdrant in Docker
+docker compose up -d db redis qdrant
 
 export FLOW_DATABASE_URL=postgresql://flow:flow@localhost:55432/flow
 export FLOW_REDIS_URL=redis://localhost:16379/0
