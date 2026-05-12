@@ -22,7 +22,6 @@ from flow.application.genome_service import (
     _create_genome_proposal,
     _maybe_snapshot_eval_pass,
     get_active_genome,
-    get_previous_active_genome,
 )
 
 logger = logging.getLogger(__name__)
@@ -303,7 +302,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                 from uuid import UUID as _UUID
                 from flow.application.ab_runner import ABTestRunner
                 candidate_id = _UUID(candidate_id_str)
-                prev_genome = await get_previous_active_genome(pool, agent["id"])
+                prev_genome = await get_active_genome(pool, agent["id"])
                 if prev_genome and prev_genome.id:
                     test_id = uuid4()
                     await pool.execute(
