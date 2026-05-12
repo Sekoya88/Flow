@@ -253,6 +253,7 @@ async def auto_eval_tick(ctx: dict) -> None:
     openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     client = AsyncOpenAI(api_key=openai_key)
 
+    failed_count = 0
     for ws in workspaces:
         ws_id = ws["id"]
         agent = await pool.fetchrow(
@@ -350,4 +351,19 @@ async def auto_eval_tick(ctx: dict) -> None:
                         ),
                     )
         except Exception as exc:
-            logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)
+            import structlog as _structlog
+            _structlog.get_logger().error(
+                "cron.auto_eval_tick.agent_failed",
+                exc=str(exc),
+                exc_type=type(exc).__name__,
+                workspace_id=str(ws_id),
+                agent_id=str(agent.get("id")) if agent else None,
+            )
+            failed_count += 1
+
+    if failed_count:
+        import structlog as _structlog
+        _structlog.get_logger().warning(
+            "cron.auto_eval_tick.partial_failure",
+            failed_count=failed_count,
+        )
