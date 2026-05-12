@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 
 def test_ab_test_insert_sql_uses_same_agent_for_both_sides():
     """Verify the INSERT SQL intentionally uses same positional param $4 for both agent columns.
