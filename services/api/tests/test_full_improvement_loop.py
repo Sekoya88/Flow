@@ -266,6 +266,104 @@ async def test_ab_test_winner_triggers_proposal():
     assert summary.version_b.avg_score > summary.version_a.avg_score
 
 
+def _make_pool_context(conn):
+    """Create an async context manager mock that returns conn."""
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=conn)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    pool = MagicMock()
+    pool.acquire = MagicMock(return_value=cm)
+    return pool
+
+
+@pytest.mark.asyncio
+async def test_full_loop_creates_candidate_and_restores_prompt():
+    """
+    Given: agent with failures below threshold
+    When: rewrite_and_snapshot is called
+    Then: CANDIDATE genome created, agent prompt restored to original
+    """
+    from flow.application.prompt_rewriter import rewrite_and_snapshot
+
+    agent_id = uuid4()
+    workspace_id = uuid4()
+    user_id = uuid4()
+    original_prompt = "You are a helpful assistant."
+    candidate_uuid = uuid4()
+
+    stored_config = {"system_prompt": original_prompt}
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(return_value={"config": stored_config})
+
+    updates_received = []
+
+    async def capture_execute(sql, config, *args):
+        updates_received.append(dict(config))
+
+    conn.execute = capture_execute
+    pool = _make_pool_context(conn)
+
+    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
+         patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid):
+
+        mock_rewrite.return_value = RewriteResult(
+            original_prompt=original_prompt,
+            improved_prompt="You are a helpful, precise assistant. Always cite sources.",
+            changelog=["Added source citation requirement"],
+            failure_analysis="Agent failed to cite sources",
+            confidence=0.85,
+        )
+
+        result = await rewrite_and_snapshot(
+            pool=pool,
+            agent_id=agent_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            current_prompt=original_prompt,
+            failed_items=[FailedItem("Q", "A with source", "A without source", 0.2, "missing citation")],
+            llm_config={"provider": "openai", "model": "gpt-4o-mini"},
+        )
+
+    assert result is not None, "Should return a result dict when rewrite succeeds"
+    assert result["candidate_version_id"] == str(candidate_uuid)
+
+    # Verify: last update restored the original prompt
+    assert len(updates_received) >= 2, "Should have written temp prompt then restored"
+    assert updates_received[-1]["system_prompt"] == original_prompt
+    assert "_rewrite_changelog" not in updates_received[-1]
+
+
+@pytest.mark.asyncio
+async def test_full_loop_skips_low_confidence_rewrite():
+    """When rewrite confidence is below 0.3, rewrite_and_snapshot returns None."""
+    from flow.application.prompt_rewriter import rewrite_and_snapshot
+
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(return_value={"config": {"system_prompt": "original"}})
+    pool = _make_pool_context(conn)
+
+    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite:
+        mock_rewrite.return_value = RewriteResult(
+            original_prompt="original",
+            improved_prompt="slightly better",
+            changelog=["minor tweak"],
+            failure_analysis="unclear",
+            confidence=0.2,  # below threshold
+        )
+
+        result = await rewrite_and_snapshot(
+            pool=pool,
+            agent_id=uuid4(),
+            workspace_id=uuid4(),
+            user_id=uuid4(),
+            current_prompt="original",
+            failed_items=[FailedItem("Q", "A", "B", 0.1, "wrong")],
+            llm_config={},
+        )
+
+    assert result is None, "Low confidence rewrite should be skipped"
+
+
 @pytest.mark.asyncio
 async def test_eval_pass_snapshot_only_on_improvement():
     """Verify _maybe_snapshot_eval_pass only creates candidate when score improves"""
