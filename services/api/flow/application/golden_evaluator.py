@@ -334,5 +334,21 @@ async def auto_eval_tick(ctx: dict) -> None:
                                 "Approve to promote."
                             ),
                         )
+                else:
+                    # No active baseline — promote candidate directly via proposal
+                    avg_score = result.get("avg_score", 0.0)
+                    await _create_genome_proposal(
+                        pool=pool,
+                        workspace_id=ws_id,
+                        user_id=user_id,
+                        candidate_version_id=candidate_id,
+                        title=f"First eval improvement: {avg_score:.3f} avg score",
+                        body=(
+                            f"No prior active genome to compare against. "
+                            f"Candidate created from prompt rewrite (confidence: "
+                            f"{result.get('rewrite', {}).get('confidence', 0.0):.2f}). "
+                            "Approve to make this the active version."
+                        ),
+                    )
         except Exception as exc:
             logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)

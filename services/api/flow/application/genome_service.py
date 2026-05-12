@@ -183,9 +183,9 @@ async def get_previous_active_genome(
     pool: asyncpg.Pool,
     agent_id: UUID,
 ) -> AgentGenome | None:
-    """Most recently archived version (was active before current)."""
+    """Current active version (baseline for A/B comparison)."""
     row = await pool.fetchrow(
-        "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'archived' "
+        "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'active' "
         "ORDER BY created_at DESC LIMIT 1",
         agent_id,
     )
