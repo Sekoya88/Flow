@@ -310,7 +310,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                         "INSERT INTO ab_tests "
                         "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
                         "VALUES ($1, $2, $3, $4, $4, 'running')",
-                        test_id, ws_id, gset["id"], agent["id"],
+                        test_id, ws_id, gset["id"], agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
                     )
                     summary = await ABTestRunner(pool, client).run(
                         test_id=test_id,
