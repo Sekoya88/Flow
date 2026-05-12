@@ -347,8 +347,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                         title=f"First eval improvement: {avg_score:.3f} avg score",
                         body=(
                             f"No prior active genome to compare against. "
-                            f"Candidate created from prompt rewrite (confidence: "
-                            f"{result.get('rewrite', {}).get('confidence', 0.0):.2f}). "
+                            f"Candidate {candidate_id_str} created from prompt rewrite. "
                             "Approve to make this the active version."
                         ),
                     )

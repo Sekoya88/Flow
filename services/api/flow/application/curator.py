@@ -170,22 +170,17 @@ async def check_regression_and_propose(
                     f"**Confidence:** {confidence:.0%}\n\n"
                     "Approve this proposal to promote the improved prompt to production."
                 )
-                await repo.create_proposal(workspace_id, user_id, title, body)
 
-                # Link proposal to candidate version
                 from flow.application.genome_service import _create_genome_proposal
-                try:
-                    from uuid import UUID as _UUID
-                    await _create_genome_proposal(
-                        pool=pool,
-                        workspace_id=workspace_id,
-                        user_id=user_id,
-                        candidate_version_id=_UUID(candidate_id),
-                        title=title,
-                        body=body,
-                    )
-                except Exception:
-                    logger.debug("genome_proposal link failed (may already exist)", exc_info=True)
+                from uuid import UUID as _UUID
+                await _create_genome_proposal(
+                    pool=pool,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    candidate_version_id=_UUID(candidate_id),
+                    title=title,
+                    body=body,
+                )
 
                 logger.info(
                     "curator.auto_improvement.completed",
