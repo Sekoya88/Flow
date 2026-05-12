@@ -16,6 +16,8 @@ import os
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
+
 from openai import AsyncOpenAI
 from flow.application.curator import check_regression_and_propose
 from flow.application.genome_service import (
@@ -351,8 +353,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                         ),
                     )
         except Exception as exc:
-            import structlog as _structlog
-            _structlog.get_logger().error(
+            structlog.get_logger().error(
                 "cron.auto_eval_tick.agent_failed",
                 exc=str(exc),
                 exc_type=type(exc).__name__,
@@ -362,8 +363,7 @@ async def auto_eval_tick(ctx: dict) -> None:
             failed_count += 1
 
     if failed_count:
-        import structlog as _structlog
-        _structlog.get_logger().warning(
+        structlog.get_logger().warning(
             "cron.auto_eval_tick.partial_failure",
             failed_count=failed_count,
         )
