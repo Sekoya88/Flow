@@ -20,6 +20,29 @@ class PositionUpdate(BaseModel):
     y: float
 
 
+def _serialize_node(r: Any) -> dict[str, Any]:
+    return {
+        "id": str(r["id"]),
+        "node_type": r["node_type"],
+        "ref_id": r["ref_id"],
+        "ref_type": r["ref_type"],
+        "label": r["label"],
+        "metadata": dict(r["metadata"]) if r["metadata"] else {},
+        "pos_x": r["pos_x"],
+        "pos_y": r["pos_y"],
+    }
+
+
+def _serialize_edge(e: Any) -> dict[str, Any]:
+    return {
+        "id": str(e["id"]),
+        "source_id": str(e["source_id"]),
+        "target_id": str(e["target_id"]),
+        "edge_type": e["edge_type"],
+        "weight": e["weight"],
+    }
+
+
 async def _check_workspace_access(
     workspace_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -63,8 +86,8 @@ async def _fetch_workspace_graph(
             node_ids,
         )
     return {
-        "nodes": [dict(n) for n in nodes],
-        "edges": [dict(e) for e in edges],
+        "nodes": [_serialize_node(n) for n in nodes],
+        "edges": [_serialize_edge(e) for e in edges],
     }
 
 
@@ -99,9 +122,9 @@ async def _fetch_entity_graph(
         ) if neighbour_ids else []
 
     return {
-        "node": dict(root),
-        "neighbours": [dict(n) for n in neighbours],
-        "edges": [dict(e) for e in edges],
+        "node": _serialize_node(root),
+        "neighbours": [_serialize_node(n) for n in neighbours],
+        "edges": [_serialize_edge(e) for e in edges],
     }
 
 
