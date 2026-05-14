@@ -46,11 +46,19 @@ class FlowMemoryMiddleware(AgentMiddleware):
         self._embed = embed
         self._max_facts = max_facts
         self._min_confidence = min_confidence
+        self._stashed_question: str = ""  # stashed per-run in before_agent
 
     async def before_agent(self, state: dict, runtime: HarnessRuntime) -> dict:
         messages = state.get("messages", [])
         if not messages:
             return state
+
+        # Stash the question for use in after_agent (merged state won't have full messages)
+        self._stashed_question = next(
+            (getattr(m, "content", "") for m in messages
+             if not isinstance(m, (AIMessage, SystemMessage))),
+            "",
+        )
 
         query = next(
             (getattr(m, "content", "") for m in reversed(messages)
@@ -83,11 +91,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
              if isinstance(m, AIMessage)),
             "",
         )
-        question = next(
-            (getattr(m, "content", "") for m in messages
-             if not isinstance(m, (AIMessage, SystemMessage))),
-            "",
-        )
+        question = self._stashed_question
         if not answer:
             return
 
@@ -100,7 +104,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
                 await self._store.aput(ns_facts, key, {"text": fact, "emb": emb})
         except Exception as exc:
             logger.warning("memory.after_agent.extract_failed", error=str(exc))
-            return
+            # fall through to pattern extraction
 
         confidence = float(state.get("confidence") or 0.0)
         if confidence < self._min_confidence:

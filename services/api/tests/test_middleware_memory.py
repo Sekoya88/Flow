@@ -133,3 +133,21 @@ async def test_after_agent_noop_when_no_llm():
     runtime = _make_runtime()
     await mw.after_agent({"answer": "x", "messages": []}, runtime)
     store.aput.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_after_agent_empty_messages_stores_nothing_without_answer():
+    from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+    store = _make_store()
+    embed = AsyncMock(return_value=[0.1])
+
+    with patch(
+        "flow.infrastructure.llm.middleware.memory.extract_facts_from_answer",
+        new=AsyncMock(return_value=[]),
+    ):
+        mw = FlowMemoryMiddleware(store=store, llm=MagicMock(), embed=embed)
+        runtime = _make_runtime()
+        # merged state from harness: no messages, no answer
+        await mw.after_agent({"messages": []}, runtime)
+
+    store.aput.assert_not_called()
