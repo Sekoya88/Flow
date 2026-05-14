@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { SkillEditor } from "@/components/agents/SkillEditor";
 import { SkillDiffView } from "@/components/agents/SkillDiffView";
+import { EntityGraphButton } from "@/components/graph/EntityGraphButton";
 import { apiFetch } from "@/lib/api";
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
@@ -212,10 +213,19 @@ export default function SkillsPage() {
         title="Skills"
         description="Reusable instruction modules auto-created by the reflector or manually authored. Each skill is versioned — new saves create a new version."
         actions={
-          <Button onClick={() => setCreating(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            New skill
-          </Button>
+          <div className="flex items-center gap-2">
+            {wsId && (
+              <EntityGraphButton
+                workspaceId={wsId}
+                nodeType="agent"
+                refId={agentId}
+              />
+            )}
+            <Button onClick={() => setCreating(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New skill
+            </Button>
+          </div>
         }
       />
 
