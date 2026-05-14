@@ -62,7 +62,11 @@ async def test_patch_llm_raises_after_exhaustion():
     from openai import RateLimitError
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
+    call_count = 0
+
     async def always_fail(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
         raise RateLimitError("rate limit", response=MagicMock(status_code=429), body={})
 
     llm = _make_fake_llm()
@@ -71,6 +75,7 @@ async def test_patch_llm_raises_after_exhaustion():
     mw.patch_llm(llm)
     with pytest.raises(RateLimitError):
         await llm._agenerate([])
+    assert call_count == 2  # exhausted all retries before raising
 
 
 @pytest.mark.asyncio

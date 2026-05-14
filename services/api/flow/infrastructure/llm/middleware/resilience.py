@@ -71,6 +71,9 @@ class FlowResilienceMiddleware(AgentMiddleware):
         llm._agenerate = _retried
 
     async def wrap_tool_call(self, invoke: Callable, args: dict) -> Any:
+        from tenacity import RetryError
+
+        # Tools may also fail with network/OS errors not covered by provider SDKs
         retryable = _retryable_exceptions() + (OSError, ConnectionError, TimeoutError)
 
         @retry(
@@ -81,13 +84,14 @@ class FlowResilienceMiddleware(AgentMiddleware):
                 max=self._max_wait,
             ),
             retry=retry_if_exception_type(retryable),
-            reraise=False,
+            reraise=True,  # raises original exception after exhaustion
         )
         async def _retried():
             return await invoke(args)
 
         try:
             return await _retried()
-        except Exception as exc:
+        except retryable as exc:
+            # Only swallow retryable exhaustion — programming errors propagate normally
             logger.error("tool.failed", error=str(exc))
             return None
