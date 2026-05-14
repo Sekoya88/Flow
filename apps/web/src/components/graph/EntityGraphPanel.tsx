@@ -5,14 +5,12 @@ import {
   Background,
   useNodesState,
   useEdgesState,
-  type Node,
-  type Edge,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useEntityGraph } from '@/lib/graph/useEntityGraph'
 import { NODE_COLORS } from '@/lib/graph/graphColors'
+import { buildEntityLayout } from '@/lib/graph/graphLayouts'
 import type { NodeType } from '@/lib/graph/types'
-import type { KGNode } from '@/lib/graph/types'
 import { useRouter } from 'next/navigation'
 
 const ENTITY_PAGE: Partial<Record<NodeType, string>> = {
@@ -26,60 +24,6 @@ interface EntityGraphPanelProps {
   nodeType: NodeType
   refId: string
   onClose: () => void
-}
-
-function buildLayout(
-  rootNode: KGNode,
-  neighbours: KGNode[],
-  edges: Array<{ id: string; source_id: string; target_id: string; edge_type: string }>,
-): { nodes: Node[]; edges: Edge[] } {
-  const GAP = 130
-  const rootX = Math.max(200, (neighbours.length * GAP) / 2)
-
-  const flowNodes: Node[] = [
-    {
-      id: rootNode.id,
-      position: { x: rootX, y: 40 },
-      data: {
-        label: rootNode.label,
-        nodeType: rootNode.node_type,
-        refId: rootNode.ref_id,
-      },
-      style: {
-        background: '#1e293b',
-        border: `2px solid ${NODE_COLORS[rootNode.node_type] ?? '#6366f1'}`,
-        borderRadius: 6,
-        color: NODE_COLORS[rootNode.node_type] ?? '#6366f1',
-        fontSize: 11,
-        padding: '4px 10px',
-      },
-    },
-    ...neighbours.map((n, i) => ({
-      id: n.id,
-      position: { x: i * GAP + 20, y: 160 },
-      data: { label: n.label, nodeType: n.node_type, refId: n.ref_id },
-      style: {
-        background: '#1e293b',
-        border: `1.5px solid ${NODE_COLORS[n.node_type] ?? '#334155'}`,
-        borderRadius: 4,
-        color: NODE_COLORS[n.node_type] ?? '#94a3b8',
-        fontSize: 10,
-        padding: '3px 8px',
-      },
-    })),
-  ]
-
-  const flowEdges: Edge[] = edges.map(e => ({
-    id: e.id,
-    source: e.source_id,
-    target: e.target_id,
-    label: e.edge_type,
-    labelStyle: { fontSize: 9, fill: '#475569' },
-    style: { stroke: '#334155', strokeWidth: 1 },
-    animated: false,
-  }))
-
-  return { nodes: flowNodes, edges: flowEdges }
 }
 
 export function EntityGraphPanel({
@@ -98,11 +42,7 @@ export function EntityGraphPanel({
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] }
-    return buildLayout(
-      data.node,
-      data.neighbours,
-      data.edges,
-    )
+    return buildEntityLayout(data.node, data.neighbours, data.edges)
   }, [data])
 
   const [nodes, setNodes] = useNodesState(initialNodes)
