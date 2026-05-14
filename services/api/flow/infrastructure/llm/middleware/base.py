@@ -39,7 +39,12 @@ class AgentMiddleware:
         return await invoke(messages)
 
     async def wrap_tool_call(self, invoke: Callable, args: dict) -> Any:
-        """Wrap a tool invocation. Call await invoke(args) to proceed."""
+        """Wrap a tool invocation. Call await invoke(args) to proceed.
+
+        NOTE (Phase 2): Tool calls inside LangGraph's ToolNode require wrapping the tool
+        objects themselves (not the LLM). This hook is correctly defined here but is not yet
+        wired — wiring it requires patching tools before they are passed to create_react_agent.
+        """
         return await invoke(args)
 
 

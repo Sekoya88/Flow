@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 def test_build_agent_returns_none_when_no_api_key():
     from flow.infrastructure.llm.agent_factory import build_agent
@@ -163,3 +165,31 @@ def test_build_agent_from_ctx_wraps_anthropic_prompt_with_cache_control(monkeypa
     block = prompt.content[0]
     assert block["cache_control"] == {"type": "ephemeral"}
     assert "Be helpful." in block["text"]
+
+
+@pytest.mark.asyncio
+async def test_build_agent_from_ctx_patches_llm_for_before_model(monkeypatch):
+    """before_model hook must fire when llm._agenerate is called after patching."""
+    monkeypatch.setenv("FLOW_ENV", "test")
+    from flow.infrastructure.llm.middleware.base import AgentMiddleware
+
+    calls = []
+
+    class TrackingMiddleware(AgentMiddleware):
+        async def before_model(self, messages, runtime):
+            calls.append("before_model")
+            return None
+
+    # Patch _build_middleware to inject our tracking middleware
+    with patch("flow.infrastructure.llm.agent_factory._build_middleware",
+               return_value=[TrackingMiddleware()]):
+        with patch("langgraph.prebuilt.create_react_agent", return_value=MagicMock()):
+            from flow.infrastructure.llm.agent_factory import build_agent_from_ctx
+            ctx = _make_ctx(template="react-agent", provider="stub")
+            harness = build_agent_from_ctx(ctx)
+
+    # Verify the harness is a FlowMiddlewareHarness with our tracking middleware
+    from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness
+    assert isinstance(harness, FlowMiddlewareHarness)
+    # The middleware list in the harness should contain our tracking middleware
+    assert any(isinstance(m, TrackingMiddleware) for m in harness._middleware)

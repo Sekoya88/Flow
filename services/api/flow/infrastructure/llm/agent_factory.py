@@ -12,6 +12,54 @@ if TYPE_CHECKING:
     from flow.infrastructure.graph.deer_graph import GraphContext
 
 
+def _make_model_wrapper(m: Any, inner: Any) -> Any:
+    """Build a single wrap_model_call layer. Separate function to capture m+inner correctly."""
+    async def _wrapper(msgs: Any) -> Any:
+        return await m.wrap_model_call(inner, msgs)
+    return _wrapper
+
+
+def _patch_llm_for_middleware(llm: Any, middleware: list, runtime: Any) -> None:
+    """Patch llm._agenerate to chain before_model + wrap_model_call through middleware."""
+    if not hasattr(llm, "_agenerate"):
+        return
+
+    # Apply tenacity retry first (FlowResilienceMiddleware.patch_llm)
+    for m in middleware:
+        if hasattr(m, "patch_llm"):
+            m.patch_llm(llm)
+
+    # Now wrap the (possibly already-patched) _agenerate with cost + observability
+    original = llm._agenerate
+    _mw = middleware
+    _rt = runtime
+
+    async def _chained(messages: Any, *args: Any, **kwargs: Any) -> Any:
+        current = list(messages) if hasattr(messages, "__iter__") else messages
+
+        # before_model hooks — may mutate messages or signal early exit
+        for m in _mw:
+            result = await m.before_model(current, _rt)
+            if isinstance(result, dict) and result.get("jump_to") == "end":
+                from langchain_core.messages import AIMessage
+                from langchain_core.outputs import ChatGeneration, ChatResult
+                return ChatResult(generations=[[ChatGeneration(message=AIMessage(content=""))]])
+            elif isinstance(result, list):
+                current = result
+
+        # wrap_model_call chain: middleware[0] is outermost, builds inward
+        async def _base(msgs: Any) -> Any:
+            return await original(msgs, *args, **kwargs)
+
+        invoke = _base
+        for m in reversed(_mw):
+            invoke = _make_model_wrapper(m, invoke)
+
+        return await invoke(current)
+
+    llm._agenerate = _chained
+
+
 def _get_llm_for_judge(ctx: "GraphContext") -> Any | None:
     settings = getattr(ctx, "settings", None)
     api_key = settings.openai_api_key if settings else getattr(ctx, "openai_api_key", None)
@@ -86,7 +134,34 @@ def build_agent_from_ctx(ctx: "GraphContext", checkpointer: Any | None = None) -
     provider = model_cfg.get("provider", "openai")
 
     if template == "react-agent":
+        from flow.infrastructure.llm.providers import get_chat_model
+
         api_key = ctx.anthropic_api_key if provider == "anthropic" else ctx.openai_api_key
+        model_name = model_cfg.get("model", "gpt-4o-mini")
+        temp = float(model_cfg.get("temperature", 0.2))
+
+        # Create LLM first so we can patch it before graph compilation
+        llm = get_chat_model(
+            {"provider": provider, "model": model_name, "temperature": temp},
+            {"openai": api_key if provider == "openai" else None,
+             "anthropic": api_key if provider == "anthropic" else None},
+        )
+        if llm is None:
+            return None
+
+        _null_uuid = UUID("00000000-0000-0000-0000-000000000000")
+        runtime = HarnessRuntime(
+            workspace_id=ctx.workspace_id,
+            agent_id=ctx.agent_id,
+            user_id=getattr(ctx, "user_id", None) or _null_uuid,
+            execution_id=getattr(ctx, "execution_id", None) or _null_uuid,
+            thread_id=str(getattr(ctx, "execution_id", None) or "unknown"),
+        )
+        middleware = _build_middleware(ctx, runtime)
+
+        # Patch LLM for per-call hooks BEFORE create_react_agent compiles it
+        _patch_llm_for_middleware(llm, middleware, runtime)
+
         system_prompt: Any = ctx.agent_config.get("system_prompt")
 
         # Anthropic prompt caching — wrap system prompt in a content block with cache_control
@@ -101,25 +176,17 @@ def build_agent_from_ctx(ctx: "GraphContext", checkpointer: Any | None = None) -
 
         raw_graph = build_agent(
             provider=provider,
-            model=model_cfg.get("model", "gpt-4o-mini"),
+            model=model_name,
             api_key=api_key,
+            llm=llm,
             system_prompt=system_prompt,
             checkpointer=checkpointer,
             store=ctx.store,
-            temperature=float(model_cfg.get("temperature", 0.2)),
+            temperature=temp,
         )
         if raw_graph is None:
             return None
 
-        _null_uuid = UUID("00000000-0000-0000-0000-000000000000")
-        runtime = HarnessRuntime(
-            workspace_id=ctx.workspace_id,
-            agent_id=ctx.agent_id,
-            user_id=getattr(ctx, "user_id", None) or _null_uuid,
-            execution_id=getattr(ctx, "execution_id", None) or _null_uuid,
-            thread_id=str(getattr(ctx, "execution_id", None) or "unknown"),
-        )
-        middleware = _build_middleware(ctx, runtime)
         return FlowMiddlewareHarness(raw_graph, middleware=middleware, runtime=runtime)
 
     from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
@@ -131,6 +198,7 @@ def build_agent(
     provider: str,
     model: str,
     api_key: str | None,
+    llm: Any | None = None,
     tools: list[Any] | None = None,
     system_prompt: str | None = None,
     checkpointer: Any | None = None,
@@ -141,14 +209,16 @@ def build_agent(
 
     Selects the LLM based on *provider*. Returns None if the required API key is absent.
     The returned graph has the same streaming interface as manually compiled graphs.
-    """
-    from flow.infrastructure.llm.providers import get_chat_model
 
-    llm = get_chat_model(
-        {"provider": provider, "model": model, "temperature": temperature},
-        {"openai": api_key if provider == "openai" else None,
-         "anthropic": api_key if provider == "anthropic" else None},
-    )
+    Pass *llm* to provide a pre-built (and pre-patched) LLM instance; skips get_chat_model.
+    """
+    if llm is None:
+        from flow.infrastructure.llm.providers import get_chat_model
+        llm = get_chat_model(
+            {"provider": provider, "model": model, "temperature": temperature},
+            {"openai": api_key if provider == "openai" else None,
+             "anthropic": api_key if provider == "anthropic" else None},
+        )
     if llm is None:
         return None
 
