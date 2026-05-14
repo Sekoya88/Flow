@@ -36,6 +36,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Note: this will fail if any rows contain the new entity node_types.
+    # Delete or migrate those rows before downgrading.
     op.execute("DROP INDEX IF EXISTS idx_kg_nodes_entity")
     op.execute("ALTER TABLE kg_nodes DROP COLUMN IF EXISTS ref_id")
     op.execute("ALTER TABLE kg_nodes DROP COLUMN IF EXISTS ref_type")
