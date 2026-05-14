@@ -30,7 +30,7 @@ class AgentMiddleware:
         """Side effects after the graph finishes. Failures are logged and swallowed."""
         pass
 
-    async def before_model(self, messages: list, runtime: HarnessRuntime) -> dict | None:
+    async def before_model(self, messages: list, runtime: HarnessRuntime) -> dict | list | None:
         """Called before each LLM invocation. Return {"jump_to": "end"} to stop early."""
         return None
 

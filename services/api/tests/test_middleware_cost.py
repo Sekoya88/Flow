@@ -89,3 +89,21 @@ async def test_before_model_noop_when_under_limit():
     messages = [HumanMessage(content="hi")]
     result = await mw.before_model(messages, runtime)
     assert result is None  # no mutation
+
+
+@pytest.mark.asyncio
+async def test_before_model_noop_when_over_limit_but_too_few_messages():
+    """Should not summarize when over token limit but <= 4 messages (not enough to summarize)."""
+    from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+    summarize_model = AsyncMock()
+    mw = FlowCostMiddleware(
+        token_limit=10,
+        call_limit=100,
+        summarize_model=summarize_model,
+        token_counter=lambda msgs: 9999,  # always over limit
+    )
+    runtime = _make_runtime()
+    messages = [HumanMessage(content="hi"), HumanMessage(content="bye")]  # only 2 messages
+    result = await mw.before_model(messages, runtime)
+    assert result is None  # can't summarize — too few messages
+    summarize_model.ainvoke.assert_not_called()
