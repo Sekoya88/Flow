@@ -7,22 +7,35 @@ import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
 import { GraphQueryPanel } from "@/components/kg/GraphQueryPanel";
 import { apiFetch } from "@/lib/api";
+import { NODE_COLORS } from "@/lib/graph/graphColors";
 import { logger } from "@/lib/logger";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const NODE_TYPES = ["trace", "skill", "tool_call", "metacog", "note", "concept", "topic", "query", "prompt"] as const;
 
+const ENTITY_FILTER_TABS = [
+  { type: 'agent',          label: 'Agents',    color: NODE_COLORS.agent },
+  { type: 'skill',          label: 'Skills',    color: NODE_COLORS.skill },
+  { type: 'genome_version', label: 'Genomes',   color: NODE_COLORS.genome_version },
+  { type: 'execution',      label: 'Executions', color: NODE_COLORS.execution },
+] as const;
+
 const TYPE_DOT_COLORS: Record<string, string> = {
   concept: "#94a3b8",
-  skill: "#5eead4",
-  tool_call: "#fbbf24",
+  skill: NODE_COLORS.skill,
+  tool_call: NODE_COLORS.tool_call,
   trace: "#38bdf8",
   metacog: "#a78bfa",
   prompt: "#818cf8",
   note: "#8b9cb7",
   topic: "#67e8f9",
   query: "#7dd3fc",
+  agent: NODE_COLORS.agent,
+  genome_version: NODE_COLORS.genome_version,
+  execution: NODE_COLORS.execution,
+  sub_agent: NODE_COLORS.sub_agent,
+  system_prompt: NODE_COLORS.system_prompt,
 };
 
 export default function GraphPage() {
@@ -181,7 +194,7 @@ export default function GraphPage() {
               </Badge>
             </div>
 
-            {/* Filter chips */}
+            {/* Filter chips — document types */}
             <div className="flex flex-wrap gap-1">
               {NODE_TYPES.map((t) => {
                 const active = activeTypes.has(t);
@@ -206,6 +219,41 @@ export default function GraphPage() {
                       }}
                     />
                     {t.replace("_", " ")}
+                    {count > 0 && active && (
+                      <span className="text-[9px] text-muted-foreground tabular-nums">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filter chips — entity types */}
+            <div className="flex flex-wrap gap-1 pt-1 border-t border-border/30">
+              {ENTITY_FILTER_TABS.map(({ type: t, label, color }) => {
+                const active = activeTypes.has(t);
+                const count = typeCounts[t] || 0;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => toggleType(t)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition-all",
+                      active
+                        ? "bg-card text-foreground shadow-sm border border-border/60"
+                        : "text-muted-foreground/40 hover:text-muted-foreground border border-transparent",
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0 transition-all"
+                      style={{
+                        backgroundColor: active ? color : "transparent",
+                        border: active ? "none" : `1px solid ${color}60`,
+                        boxShadow: active ? `0 0 6px ${color}40` : "none",
+                      }}
+                    />
+                    {label}
                     {count > 0 && active && (
                       <span className="text-[9px] text-muted-foreground tabular-nums">
                         {count}
@@ -275,7 +323,7 @@ const NODE_TYPE_ICONS: Record<string, React.ReactNode> = {
 };
 
 function NodeDetailPanel({ node, onClose, offset }: { node: KGNode; onClose: () => void; offset?: boolean }) {
-  const color = TYPE_DOT_COLORS[node.node_type] ?? "#94a3b8";
+  const color = NODE_COLORS[node.node_type as keyof typeof NODE_COLORS] ?? TYPE_DOT_COLORS[node.node_type] ?? "#94a3b8";
   const skills = (node.metadata?.skills as string[] | undefined) ?? [];
   const tools = (node.metadata?.tools as string[] | undefined) ?? [];
   const contentMd = (node.metadata?.content_md ?? node.metadata?.content ?? node.metadata?.body) as string | undefined;
@@ -404,6 +452,68 @@ function NodeDetailPanel({ node, onClose, offset }: { node: KGNode; onClose: () 
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Entity-specific sections */}
+          {node.node_type === 'agent' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Template</p>
+              <p className="text-sm text-slate-300">
+                {String(node.metadata?.template ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mt-2">Status</p>
+              <p className="text-sm text-slate-300">
+                {String(node.metadata?.status ?? '—')}
+              </p>
+              {node.ref_id && (
+                <a
+                  href={`/agents/${node.ref_id}`}
+                  className="mt-3 block w-full text-center bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1.5 rounded"
+                >
+                  Open agent page ↗
+                </a>
+              )}
+            </div>
+          )}
+
+          {node.node_type === 'genome_version' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Model</p>
+              <p className="text-sm text-slate-300">
+                {String(node.metadata?.provider ?? '')} / {String(node.metadata?.model ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mt-2">Status</p>
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                node.metadata?.status === 'active'
+                  ? 'bg-amber-900/40 text-amber-400'
+                  : 'bg-slate-700 text-slate-400'
+              }`}>
+                {String(node.metadata?.status ?? '—')}
+                {node.metadata?.status === 'active' && ' ✦'}
+              </span>
+            </div>
+          )}
+
+          {node.node_type === 'skill' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Version</p>
+              <p className="text-sm text-slate-300">v{String(node.metadata?.version ?? '—')}</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mt-2">Score</p>
+              <p className="text-sm text-slate-300">{String(node.metadata?.score ?? '—')}</p>
+            </div>
+          )}
+
+          {node.node_type === 'execution' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Status</p>
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                node.metadata?.status === 'completed'
+                  ? 'bg-emerald-900/40 text-emerald-400'
+                  : 'bg-red-900/40 text-red-400'
+              }`}>
+                {String(node.metadata?.status ?? '—')}
+              </span>
             </div>
           )}
         </div>

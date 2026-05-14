@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import * as THREE from "three";
+import { NODE_COLORS, NODE_SIZE } from "@/lib/graph/graphColors";
 import { cn } from "@/lib/utils";
 
 const ForceGraph3D = dynamic(() => import("react-force-graph-3d"), { ssr: false });
@@ -10,7 +11,9 @@ const ForceGraph3D = dynamic(() => import("react-force-graph-3d"), { ssr: false 
 export interface KGNode {
   id: string;
   label: string;
-  node_type: "note" | "concept" | "topic" | "query" | "trace" | "skill" | "tool_call" | "prompt" | "metacog";
+  node_type: "note" | "concept" | "topic" | "query" | "trace" | "skill" | "tool_call" | "prompt" | "metacog"
+    | "agent" | "genome_version" | "execution" | "sub_agent" | "system_prompt";
+  ref_id?: string | null;
   summary: string | null;
   source_path: string | null;
   cluster_id: number | null;
@@ -79,8 +82,8 @@ export function KnowledgeGraphCanvas({
       summary: n.summary,
       pagerank: n.pagerank,
       cluster_id: n.cluster_id,
-      color: TYPE_COLORS[n.node_type] || "#8b9cb7",
-      val: Math.max(2, n.pagerank * 25 + 3),
+      color: NODE_COLORS[n.node_type as keyof typeof NODE_COLORS] ?? TYPE_COLORS[n.node_type] ?? "#8b9cb7",
+      val: NODE_SIZE[n.node_type as keyof typeof NODE_SIZE] ?? Math.max(2, n.pagerank * 25 + 3),
       _raw: n,
     }));
     const nodeIds = new Set(gNodes.map((n) => n.id));
