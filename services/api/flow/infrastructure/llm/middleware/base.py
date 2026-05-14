@@ -62,9 +62,9 @@ class FlowMiddlewareHarness:
 
     async def astream(
         self, input_state: dict, config: dict, **kwargs
-    ) -> AsyncGenerator:
+    ) -> AsyncGenerator[Any, None]:
         # before_agent: each middleware may augment initial state
-        state = input_state
+        state = dict(input_state)
         for m in self._middleware:
             state = await m.before_agent(state, self._runtime)
 

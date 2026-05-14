@@ -101,17 +101,23 @@ async def test_after_agent_fires_on_early_generator_close():
 
     class M(AgentMiddleware):
         async def after_agent(self, state, runtime):
-            after_called.append(True)
+            after_called.append(state)
 
     runtime = _make_runtime()
-    graph = _make_stub_graph([("updates", {}), ("updates", {}), ("updates", {})])
+    graph = _make_stub_graph([
+        ("updates", {"node": {"answer": "partial"}}),
+        ("updates", {}),
+        ("updates", {}),
+    ])
     harness = FlowMiddlewareHarness(graph, middleware=[M()], runtime=runtime)
 
     gen = harness.astream({"messages": []}, {})
     await gen.__anext__()   # consume one chunk then close
     await gen.aclose()
 
-    assert after_called == [True]
+    assert len(after_called) == 1
+    # Verify state contains what was accumulated before close
+    assert after_called[0].get("answer") == "partial"
 
 
 # ── after_agent failure doesn't crash ─────────────────────────────────────────
