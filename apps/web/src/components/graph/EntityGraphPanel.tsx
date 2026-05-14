@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
   Background,
@@ -105,14 +105,20 @@ export function EntityGraphPanel({
     )
   }, [data])
 
-  const [nodes] = useNodesState(initialNodes)
-  const [edges] = useEdgesState(initialEdges)
+  const [nodes, setNodes] = useNodesState(initialNodes)
+  const [edges, setEdges] = useEdgesState(initialEdges)
+
+  useEffect(() => {
+    setNodes(initialNodes)
+    setEdges(initialEdges)
+  }, [initialNodes, initialEdges, setNodes, setEdges])
 
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      const nt = node.data.nodeType as NodeType
-      const rid = node.data.refId as string | null
-      const base = ENTITY_PAGE[nt]
+      const nt = node.data?.nodeType
+      const rid = node.data?.refId as string | null
+      if (typeof nt !== 'string') return
+      const base = ENTITY_PAGE[nt as NodeType]
       if (base && rid) router.push(`${base}/${rid}`)
     },
     [router],
