@@ -102,6 +102,30 @@ async def test_after_agent_skips_pattern_below_confidence():
 
 
 @pytest.mark.asyncio
+async def test_before_agent_queries_last_human_message_not_last_message():
+    from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+    queried = []
+    store = AsyncMock()
+    async def asearch(ns, query=None, limit=8):
+        queried.append(query)
+        if "facts" in ns:
+            return [MagicMock(value={"text": "fact"})]
+        return []
+    store.asearch = asearch
+    store.aput = AsyncMock()
+
+    mw = FlowMemoryMiddleware(store=store, llm=None, embed=None)
+    runtime = _make_runtime()
+    state = {"messages": [
+        HumanMessage(content="what is python"),
+        AIMessage(content="Python is a language"),  # last message is AI
+    ]}
+    await mw.before_agent(state, runtime)
+    # Query should come from the HumanMessage, not the AIMessage
+    assert queried[0] == "what is python"
+
+
+@pytest.mark.asyncio
 async def test_after_agent_noop_when_no_llm():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
     store = _make_store()

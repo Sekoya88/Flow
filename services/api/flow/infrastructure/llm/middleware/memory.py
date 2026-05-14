@@ -52,7 +52,11 @@ class FlowMemoryMiddleware(AgentMiddleware):
         if not messages:
             return state
 
-        query = getattr(messages[-1], "content", "")[:200]
+        query = next(
+            (getattr(m, "content", "") for m in reversed(messages)
+             if not isinstance(m, (AIMessage, SystemMessage))),
+            "",
+        )[:200]
         ns_facts = (runtime.workspace_id, runtime.agent_id, "facts")
         ns_patterns = (runtime.workspace_id, runtime.agent_id, "patterns")
 
