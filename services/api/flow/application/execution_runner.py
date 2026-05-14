@@ -10,8 +10,8 @@ from langchain_core.messages import HumanMessage
 
 from flow.config import Settings
 from flow.infrastructure.execution_streams import ExecutionStreamHub
-from flow.infrastructure.graph.deer_graph import GraphContext, build_deer_flow_graph
-from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+from flow.infrastructure.graph.deer_graph import GraphContext
+from flow.infrastructure.llm.agent_factory import build_agent_from_ctx
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
 
@@ -21,17 +21,6 @@ logger = get_logger(__name__)
 def _log_banner(log, event: str, **kw) -> None:
     """Emit a structured log entry used as a visual execution delimiter in Docker logs."""
     log.info(event, **kw)
-
-
-def _get_llm_for_judge(settings):
-    """Get cheap LLM instance for post-run judge tasks."""
-    if not settings.openai_api_key:
-        return None
-    try:
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(api_key=settings.openai_api_key, model="gpt-4o-mini", temperature=0)
-    except Exception:
-        return None
 
 
 async def _get_schedule_delivery(pool, schedule_id: str) -> dict | None:
@@ -130,16 +119,9 @@ async def run_deer_execution(
         stream_hub=stream_hub,
         store=store,
     )
-    graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
-    _callback = FlowCallbackHandler(
-        workspace_id=str(workspace_id),
-        agent_id=str(agent_id),
-        execution_id=str(execution_id),
-        template=_template,
-    )
+    graph = build_agent_from_ctx(ctx, checkpointer=checkpointer)
     config: dict[str, Any] = {
         "configurable": {"thread_id": str(execution_id)},
-        "callbacks": [_callback],
         "metadata": {
             "execution_id": str(execution_id),
             "agent_id": str(agent_id),
@@ -233,52 +215,6 @@ async def run_deer_execution(
             template=_template,
         )
 
-        # LLM-judge memory extraction (best-effort, post-run)
-        if answer and settings.openai_api_key:
-            try:
-                from flow.infrastructure.llm import embeddings as emb_svc
-                from flow.application.memory_judge import (
-                    extract_facts_from_answer,
-                    extract_pattern_summary,
-                    should_store_pattern,
-                )
-                _judge_llm = _get_llm_for_judge(settings)
-                _answer_str = str(answer)
-                facts = await extract_facts_from_answer(_judge_llm, user_message, _answer_str) if _judge_llm else []
-                for fact in facts:
-                    emb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[fact]))[0]
-                    await repo.insert_episodic_memory(
-                        workspace_id, agent_id, user_id, fact, emb, execution_id=execution_id
-                    )
-                if _judge_llm and await should_store_pattern(confidence, len(_answer_str)):
-                    pattern = await extract_pattern_summary(_judge_llm, user_message, _answer_str)
-                    if pattern:
-                        problem_summary, solution_steps = pattern
-                        pemb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[problem_summary]))[0]
-                        await repo.insert_reasoning_pattern(
-                            workspace_id, agent_id, problem_summary, solution_steps, pemb, score=confidence
-                        )
-            except Exception:
-                pass  # memory extraction is best-effort
-
-        # Write trace node into KG (best-effort)
-        try:
-            _answer_preview = str(answer)[:500] if answer else ""
-            _q_emb = None
-            if settings.openai_api_key:
-                from flow.infrastructure.llm import embeddings as emb_svc
-                _q_emb = (await emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[user_message[:200]]))[0]
-            await repo.insert_trace_node(
-                workspace_id=workspace_id,
-                agent_id=agent_id,
-                execution_id=execution_id,
-                question=user_message,
-                answer_summary=_answer_preview,
-                confidence=confidence,
-                embedding=_q_emb,
-            )
-        except Exception:
-            pass  # trace writing is best-effort
     except Exception as exc:
         _duration_ms = int((_time.monotonic() - _t_start) * 1000)
         logger.error(

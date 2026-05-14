@@ -31,6 +31,8 @@ import yaml
 class ParsedSkill:
     name: str
     description: str = ""
+    # Display label from YAML frontmatter (e.g. "1.0", "2.1"). NOT the DB integer version —
+    # the DB uses MAX(version)+1 via upsert_agent_skill and never reads this field.
     version: str = "1.0"
     allowed_tools: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=list)

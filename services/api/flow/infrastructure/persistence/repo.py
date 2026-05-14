@@ -1060,23 +1060,6 @@ class FlowRepository:
 
     # ── Agent Versions ────────────────────────────────────────────────────
 
-    async def get_active_agent_version(self, agent_id: UUID) -> asyncpg.Record | None:
-        return await self._pool.fetchrow(
-            "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'active' "
-            "ORDER BY created_at DESC LIMIT 1",
-            agent_id,
-        )
-
-    async def get_previous_active_version(self, agent_id: UUID) -> asyncpg.Record | None:
-        """Returns the most recently archived version (was active before current)."""
-        # NOTE: orders by created_at DESC as a proxy for activation order.
-        # Candidates archived manually may appear before genuinely-previous-active versions.
-        return await self._pool.fetchrow(
-            "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'archived' "
-            "ORDER BY created_at DESC LIMIT 1",
-            agent_id,
-        )
-
     async def get_version_by_proposal(self, proposal_id: UUID) -> asyncpg.Record | None:
         return await self._pool.fetchrow(
             "SELECT * FROM agent_versions WHERE proposal_id = $1 AND status = 'candidate' LIMIT 1",

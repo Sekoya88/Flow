@@ -16,13 +16,14 @@ import os
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
+
 from openai import AsyncOpenAI
 from flow.application.curator import check_regression_and_propose
 from flow.application.genome_service import (
     _create_genome_proposal,
     _maybe_snapshot_eval_pass,
     get_active_genome,
-    get_previous_active_genome,
 )
 
 logger = logging.getLogger(__name__)
@@ -254,6 +255,7 @@ async def auto_eval_tick(ctx: dict) -> None:
     openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     client = AsyncOpenAI(api_key=openai_key)
 
+    failed_count = 0
     for ws in workspaces:
         ws_id = ws["id"]
         agent = await pool.fetchrow(
@@ -303,14 +305,14 @@ async def auto_eval_tick(ctx: dict) -> None:
                 from uuid import UUID as _UUID
                 from flow.application.ab_runner import ABTestRunner
                 candidate_id = _UUID(candidate_id_str)
-                prev_genome = await get_previous_active_genome(pool, agent["id"])
+                prev_genome = await get_active_genome(pool, agent["id"])
                 if prev_genome and prev_genome.id:
                     test_id = uuid4()
                     await pool.execute(
                         "INSERT INTO ab_tests "
                         "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
                         "VALUES ($1, $2, $3, $4, $4, 'running')",
-                        test_id, ws_id, gset["id"], agent["id"],
+                        test_id, ws_id, gset["id"], agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
                     )
                     summary = await ABTestRunner(pool, client).run(
                         test_id=test_id,
@@ -334,5 +336,33 @@ async def auto_eval_tick(ctx: dict) -> None:
                                 "Approve to promote."
                             ),
                         )
+                else:
+                    # No active baseline — promote candidate directly via proposal
+                    avg_score = result.get("avg_score", 0.0)
+                    await _create_genome_proposal(
+                        pool=pool,
+                        workspace_id=ws_id,
+                        user_id=user_id,
+                        candidate_version_id=candidate_id,
+                        title=f"First eval improvement: {avg_score:.3f} avg score",
+                        body=(
+                            f"No prior active genome to compare against. "
+                            f"Candidate {candidate_id_str} created from prompt rewrite. "
+                            "Approve to make this the active version."
+                        ),
+                    )
         except Exception as exc:
-            logger.error("cron.auto_eval_tick.failed exc=%s workspace_id=%s", exc, ws_id)
+            structlog.get_logger().error(
+                "cron.auto_eval_tick.agent_failed",
+                exc=str(exc),
+                exc_type=type(exc).__name__,
+                workspace_id=str(ws_id),
+                agent_id=str(agent.get("id")) if agent else None,
+            )
+            failed_count += 1
+
+    if failed_count:
+        structlog.get_logger().warning(
+            "cron.auto_eval_tick.partial_failure",
+            failed_count=failed_count,
+        )

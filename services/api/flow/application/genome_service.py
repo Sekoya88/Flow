@@ -179,19 +179,6 @@ async def get_active_genome(
     return _row_to_genome(row) if row else None
 
 
-async def get_previous_active_genome(
-    pool: asyncpg.Pool,
-    agent_id: UUID,
-) -> AgentGenome | None:
-    """Most recently archived version (was active before current)."""
-    row = await pool.fetchrow(
-        "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'archived' "
-        "ORDER BY created_at DESC LIMIT 1",
-        agent_id,
-    )
-    return _row_to_genome(row) if row else None
-
-
 async def _maybe_snapshot_eval_pass(
     pool: asyncpg.Pool,
     agent_id: UUID,
