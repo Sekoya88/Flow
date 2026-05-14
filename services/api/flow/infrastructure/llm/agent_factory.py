@@ -49,15 +49,14 @@ def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
     from flow.infrastructure.observability.logging import get_logger
 
     middleware = []
+    judge_llm = _get_llm_for_judge(ctx)
 
     if ctx.store is not None:
-        judge_llm = _get_llm_for_judge(ctx)
         embed = _make_embed_fn(ctx)
         middleware.append(FlowMemoryMiddleware(store=ctx.store, llm=judge_llm, embed=embed))
 
     middleware.append(FlowResilienceMiddleware())
 
-    judge_llm = _get_llm_for_judge(ctx)
     if judge_llm is not None:
         middleware.append(FlowCostMiddleware(summarize_model=judge_llm))
 
