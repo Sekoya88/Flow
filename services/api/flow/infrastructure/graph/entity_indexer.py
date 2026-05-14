@@ -19,7 +19,7 @@ async def _upsert_node(
     ref_id: str,
     label: str,
     metadata: dict[str, Any],
-) -> uuid.UUID:
+) -> uuid.UUID | None:
     row = await conn.fetchrow(
         """
         INSERT INTO kg_nodes
