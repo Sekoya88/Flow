@@ -71,7 +71,9 @@ class FlowMiddlewareHarness:
         # before_agent: each middleware may augment initial state
         state = dict(input_state)
         for m in self._middleware:
-            state = await m.before_agent(state, self._runtime)
+            updated = await m.before_agent(state, self._runtime)
+            if updated is not None:
+                state = updated
 
         # Stream graph, collecting node updates for after_agent
         final_chunks: dict = {}
