@@ -1,7 +1,130 @@
-"""Factory for building LangGraph prebuilt react agents with provider-aware LLM selection."""
+"""Factory for building LangGraph agents with provider-aware routing.
+
+Entry points:
+- build_agent_from_ctx(ctx, checkpointer) — routes by template + provider (use this from execution_runner)
+- build_agent(provider, model, api_key, ...) — low-level prebuilt react-agent builder
+"""
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from flow.infrastructure.graph.deer_graph import GraphContext
+
+
+def _get_llm_for_judge(ctx: "GraphContext") -> Any | None:
+    settings = getattr(ctx, "settings", None)
+    api_key = settings.openai_api_key if settings else getattr(ctx, "openai_api_key", None)
+    if not api_key:
+        return None
+    try:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0)
+    except Exception:
+        return None
+
+
+def _make_embed_fn(ctx: "GraphContext"):
+    async def _embed(text: str) -> list[float]:
+        settings = getattr(ctx, "settings", None)
+        api_key = settings.openai_api_key if settings else getattr(ctx, "openai_api_key", None)
+        if not api_key:
+            return []
+        try:
+            from flow.infrastructure.llm import embeddings as emb_svc
+            results = await emb_svc.embed_texts(api_key=api_key, texts=[text])
+            return results[0] if results else []
+        except Exception:
+            return []
+    return _embed
+
+
+def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
+    from flow.infrastructure.llm.middleware import (
+        FlowCostMiddleware,
+        FlowMemoryMiddleware,
+        FlowObservabilityMiddleware,
+        FlowResilienceMiddleware,
+    )
+    from flow.infrastructure.observability.logging import get_logger
+
+    middleware = []
+
+    if ctx.store is not None:
+        judge_llm = _get_llm_for_judge(ctx)
+        embed = _make_embed_fn(ctx)
+        middleware.append(FlowMemoryMiddleware(store=ctx.store, llm=judge_llm, embed=embed))
+
+    middleware.append(FlowResilienceMiddleware())
+
+    judge_llm = _get_llm_for_judge(ctx)
+    if judge_llm is not None:
+        middleware.append(FlowCostMiddleware(summarize_model=judge_llm))
+
+    bound_logger = get_logger("flow.agent").bind(
+        execution_id=str(getattr(ctx, "execution_id", "") or ""),
+        agent_id=str(ctx.agent_id),
+        workspace_id=str(ctx.workspace_id),
+    )
+    middleware.append(FlowObservabilityMiddleware(logger=bound_logger))
+
+    return middleware
+
+
+def build_agent_from_ctx(ctx: "GraphContext", checkpointer: Any | None = None) -> Any:
+    """Route to the correct graph builder; wrap react-agent in FlowMiddlewareHarness.
+
+    - react-agent → FlowMiddlewareHarness wrapping create_react_agent(...)
+    - all other templates → build_deer_flow_graph (Phase 2 will wrap these too)
+    """
+    from uuid import UUID
+
+    from flow.infrastructure.graph.spec import spec_from_config
+    from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness, HarnessRuntime
+
+    template = spec_from_config(ctx.agent_config).template
+    model_cfg = ctx.agent_config.get("model") or {}
+    provider = model_cfg.get("provider", "openai")
+
+    if template == "react-agent":
+        api_key = ctx.anthropic_api_key if provider == "anthropic" else ctx.openai_api_key
+        system_prompt: Any = ctx.agent_config.get("system_prompt")
+
+        # Anthropic prompt caching — wrap system prompt in a content block with cache_control
+        # so that repeated calls with the same system prompt hit Anthropic's 5-min cache.
+        if provider == "anthropic" and system_prompt:
+            from langchain_core.messages import SystemMessage
+            system_prompt = SystemMessage(content=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }])
+
+        raw_graph = build_agent(
+            provider=provider,
+            model=model_cfg.get("model", "gpt-4o-mini"),
+            api_key=api_key,
+            system_prompt=system_prompt,
+            checkpointer=checkpointer,
+            store=ctx.store,
+            temperature=float(model_cfg.get("temperature", 0.2)),
+        )
+        if raw_graph is None:
+            return None
+
+        _null_uuid = UUID("00000000-0000-0000-0000-000000000000")
+        runtime = HarnessRuntime(
+            workspace_id=ctx.workspace_id,
+            agent_id=ctx.agent_id,
+            user_id=getattr(ctx, "user_id", None) or _null_uuid,
+            execution_id=getattr(ctx, "execution_id", None) or _null_uuid,
+            thread_id=str(getattr(ctx, "execution_id", None) or "unknown"),
+        )
+        middleware = _build_middleware(ctx, runtime)
+        return FlowMiddlewareHarness(raw_graph, middleware=middleware, runtime=runtime)
+
+    from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
+    return build_deer_flow_graph(ctx, checkpointer=checkpointer)
 
 
 def build_agent(
