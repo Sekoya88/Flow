@@ -53,8 +53,9 @@ export const ENTITY_NODE_TYPES: NodeType[] = [
   'system_prompt',
   'execution',
   'sub_agent',
+  'tool_call',
 ]
 
 export const DOCUMENT_NODE_TYPES: NodeType[] = [
-  'note', 'concept', 'topic', 'query', 'trace', 'prompt', 'metacog', 'tool_call',
+  'note', 'concept', 'topic', 'query', 'trace', 'prompt', 'metacog',
 ]
