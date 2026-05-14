@@ -21,7 +21,7 @@ class FlowObservabilityMiddleware(AgentMiddleware):
         response = await invoke(messages)
         latency_ms = int((time.monotonic() - t0) * 1000)
 
-        input_tokens = len(messages)
+        input_tokens = 0
         output_tokens = 0
         try:
             gens = getattr(response, "generations", [])

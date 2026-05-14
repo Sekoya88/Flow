@@ -33,6 +33,8 @@ async def test_wrap_model_call_logs_latency_and_returns_response():
     mock_logger.info.assert_called()
     call_kwargs = mock_logger.info.call_args[1]
     assert "latency_ms" in call_kwargs
+    assert "input_tokens" in call_kwargs
+    assert "output_tokens" in call_kwargs
 
 
 @pytest.mark.asyncio
