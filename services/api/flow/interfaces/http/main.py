@@ -35,6 +35,7 @@ from flow.interfaces.http.routes import (
     executions,
     feedback,
     golden_sets,
+    graph,
     health,
     kg,
     knowledge,
@@ -150,6 +151,7 @@ def create_app() -> FastAPI:
     app.include_router(golden_sets.router)
     app.include_router(ab_tests.router)
     app.include_router(evaluations.router)
+    app.include_router(graph.router)
     return app
 
 
