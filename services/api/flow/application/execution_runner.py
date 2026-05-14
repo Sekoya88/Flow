@@ -137,6 +137,7 @@ async def run_deer_execution(
 
     debug_chunks = settings.log_level.strip().upper() == "DEBUG"
     _t_start = _time.monotonic()
+    _exec_status = "completed"
     try:
         _log_banner(
             logger,
@@ -227,6 +228,7 @@ async def run_deer_execution(
         )
         await repo.insert_event(execution_id, "error", {"message": str(exc)})
         stream_hub.publish(execution_id, {"kind": "error", "message": str(exc)})
+        _exec_status = "failed"
         await repo.complete_execution(execution_id, "failed", str(exc))
     finally:
         try:
@@ -244,7 +246,7 @@ async def run_deer_execution(
                 workspace_id=workspace_id,
                 agent_id=agent_id,
                 execution_id=execution_id,
-                status="completed",
+                status=_exec_status,
                 skill_ids=skill_ids,
             )
         except Exception:

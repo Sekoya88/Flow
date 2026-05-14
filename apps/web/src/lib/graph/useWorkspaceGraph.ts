@@ -40,7 +40,7 @@ export function useWorkspaceGraph({
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [workspaceId, since, tick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, types?.join(','), since, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { data, loading, error, refetch }
 }
