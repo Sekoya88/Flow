@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import asyncpg
 
 from flow.domain.genome import AgentGenome, VersionStatus, VersionTrigger
+from flow.infrastructure.graph.entity_indexer import index_genome as _index_genome
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,47 @@ async def activate_genome(
         "genome.activated",
         extra={"version_id": str(version_id), "agent_id": str(agent_id)},
     )
+
+    try:
+        row = await pool.fetchrow(
+            "SELECT id, version_label, config_snapshot, status FROM agent_versions "
+            "WHERE id = $1",
+            version_id,
+        )
+        # Find the most-recently archived version (was active before this activation)
+        prev_row = await pool.fetchrow(
+            "SELECT id FROM agent_versions "
+            "WHERE agent_id = $1 AND status = 'archived' AND id != $2 "
+            "ORDER BY created_at DESC LIMIT 1",
+            agent_id, version_id,
+        )
+        if row is not None:
+            import json as _json
+            config = row["config_snapshot"]
+            if isinstance(config, str):
+                config = _json.loads(config)
+            config = config or {}
+            llm_raw = config.get("llm_config") or config.get("model") or {}
+            if isinstance(llm_raw, dict):
+                provider = llm_raw.get("provider", "unknown")
+                model = llm_raw.get("model", "unknown")
+            else:
+                provider = "unknown"
+                model = str(llm_raw) if llm_raw else "unknown"
+            await _index_genome(
+                pool,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                genome_id=row["id"],
+                version_label=row["version_label"],
+                provider=provider,
+                model=model,
+                status=row["status"],
+                system_prompt=config.get("system_prompt") or None,
+                prev_genome_id=prev_row["id"] if prev_row else None,
+            )
+    except Exception:
+        pass
 
 
 async def load_genome(

@@ -5,6 +5,8 @@ from uuid import UUID
 
 import asyncpg
 
+from flow.infrastructure.graph.entity_indexer import index_agent as _index_agent
+
 
 def _vec_literal(values: list[float]) -> str:
     return "[" + ",".join(str(float(x)) for x in values) + "]"
@@ -77,7 +79,18 @@ class FlowRepository:
             json.dumps(config),
         )
         assert row is not None
-        return row["id"]
+        agent_id = row["id"]
+        try:
+            await _index_agent(
+                self._pool,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                name=name,
+                template=template,
+            )
+        except Exception:
+            pass
+        return agent_id
 
     async def list_agents(self, workspace_id: UUID) -> list[asyncpg.Record]:
         q = (

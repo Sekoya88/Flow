@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage
 from flow.config import Settings
 from flow.infrastructure.execution_streams import ExecutionStreamHub
 from flow.infrastructure.graph.deer_graph import GraphContext
+from flow.infrastructure.graph.entity_indexer import index_execution as _index_execution
 from flow.infrastructure.llm.agent_factory import build_agent_from_ctx
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
@@ -228,4 +229,24 @@ async def run_deer_execution(
         stream_hub.publish(execution_id, {"kind": "error", "message": str(exc)})
         await repo.complete_execution(execution_id, "failed", str(exc))
     finally:
+        try:
+            async with pool.acquire() as conn:
+                skill_rows = await conn.fetch(
+                    "SELECT payload->>'skill_id' AS skill_id FROM execution_events "
+                    "WHERE execution_id=$1 AND kind='skill_invoked'",
+                    execution_id,
+                )
+            skill_ids = [
+                UUID(r["skill_id"]) for r in skill_rows if r["skill_id"]
+            ]
+            await _index_execution(
+                pool,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                execution_id=execution_id,
+                status="completed",
+                skill_ids=skill_ids,
+            )
+        except Exception:
+            pass
         stream_hub.publish(execution_id, {"kind": "done"})
