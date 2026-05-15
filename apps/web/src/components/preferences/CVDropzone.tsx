@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useRef, useState } from 'react'
+import { getApiBase } from '@/lib/api'
+import { getToken } from '@/lib/auth'
 
 interface CVDropzoneProps {
   workspaceId: string
@@ -46,9 +48,11 @@ export function CVDropzone({ workspaceId, onImported }: CVDropzoneProps) {
       formData.append('file', file)
       formData.append('workspace_id', workspaceId)
 
-      const res = await fetch('/api/v1/preferences/import-cv', {
+      const token = getToken()
+      const res = await fetch(`${getApiBase()}/api/v1/preferences/import-cv`, {
         method: 'POST',
         body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       })
 
       if (!res.ok) {
