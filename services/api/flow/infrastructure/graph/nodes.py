@@ -844,6 +844,30 @@ def _build_context_tools(ctx: GraphContext) -> list:
 
     async def _subagent_call(agent_name: str, message: str) -> str:
         t0 = time.time()
+        # Emit start event so the parent run UI can render the inline card immediately
+        hub = getattr(ctx, "stream_hub", None)
+        parent_exec_id = getattr(ctx, "execution_id", None)
+        if hub is not None and parent_exec_id is not None:
+            try:
+                hub.publish(parent_exec_id, {
+                    "kind": "subagent_start",
+                    "agent_name": agent_name,
+                    "message": message[:500],
+                })
+            except Exception:
+                pass
+        # Also persist a start row so a reload can replay it
+        if parent_exec_id is not None and ctx.pool is not None:
+            try:
+                from flow.infrastructure.persistence.repo import FlowRepository as _RepoStart
+                _rs = _RepoStart(ctx.pool)
+                await _rs.insert_event(parent_exec_id, "subagent_start", {
+                    "agent_name": agent_name,
+                    "message": message[:500],
+                })
+            except Exception:
+                pass
+
         try:
             from flow.infrastructure.persistence.repo import FlowRepository as _Repo
             from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx, build_deer_flow_graph
@@ -852,7 +876,16 @@ def _build_context_tools(ctx: GraphContext) -> list:
             agents = await _repo.list_agents(ctx.workspace_id)
             target = next((a for a in agents if a["name"].lower() == agent_name.lower()), None)
             if target is None:
-                return f"[subagent_call] Agent '{agent_name}' not found in workspace."
+                err = f"[subagent_call] Agent '{agent_name}' not found in workspace."
+                if hub is not None and parent_exec_id is not None:
+                    hub.publish(parent_exec_id, {
+                        "kind": "subagent_done",
+                        "agent_name": agent_name,
+                        "answer": err,
+                        "duration_ms": int((time.time() - t0) * 1000),
+                        "status": "error",
+                    })
+                return err
             sub_config = target["config"] if isinstance(target["config"], dict) else {}
             sub_ctx = _GCtx(
                 pool=ctx.pool,
@@ -873,10 +906,49 @@ def _build_context_tools(ctx: GraphContext) -> list:
             if not answer:
                 msgs = result_state.get("messages") or []
                 answer = str(msgs[-1].content) if msgs else "(no answer)"
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], int((time.time() - t0) * 1000))
+            duration_ms = int((time.time() - t0) * 1000)
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms)
+            # Stream done event + persist
+            if hub is not None and parent_exec_id is not None:
+                try:
+                    hub.publish(parent_exec_id, {
+                        "kind": "subagent_done",
+                        "agent_name": agent_name,
+                        "message": message[:500],
+                        "answer": str(answer)[:4000],
+                        "duration_ms": duration_ms,
+                        "status": "success",
+                    })
+                except Exception:
+                    pass
+            if parent_exec_id is not None and ctx.pool is not None:
+                try:
+                    from flow.infrastructure.persistence.repo import FlowRepository as _RepoDone
+                    _rd = _RepoDone(ctx.pool)
+                    await _rd.insert_event(parent_exec_id, "subagent_done", {
+                        "agent_name": agent_name,
+                        "message": message[:500],
+                        "answer": str(answer)[:4000],
+                        "duration_ms": duration_ms,
+                        "status": "success",
+                    })
+                except Exception:
+                    pass
             return str(answer)[:4000]
         except Exception as exc:
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), int((time.time() - t0) * 1000), "error")
+            duration_ms = int((time.time() - t0) * 1000)
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error")
+            if hub is not None and parent_exec_id is not None:
+                try:
+                    hub.publish(parent_exec_id, {
+                        "kind": "subagent_done",
+                        "agent_name": agent_name,
+                        "answer": str(exc),
+                        "duration_ms": duration_ms,
+                        "status": "error",
+                    })
+                except Exception:
+                    pass
             return f"[subagent_call] Error: {exc}"
 
     lc_tools.append(StructuredTool.from_function(

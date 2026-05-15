@@ -33,10 +33,21 @@ class KGGraphOut(BaseModel):
     cluster_count: int
 
 
+class SkillNodeDetail(BaseModel):
+    content_md: str | None
+    description: str | None
+    allowed_tools: list[str]
+    triggers: list[str]
+    score: float
+    use_count: int
+    version: int
+
+
 class KGNodeDetailOut(BaseModel):
     node: KGNodeOut
     neighbors: list[KGNodeOut]
     edges: list[KGEdgeOut]
+    skill: SkillNodeDetail | None = None
 
 
 class KGIngestObsidianIn(BaseModel):

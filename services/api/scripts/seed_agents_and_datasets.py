@@ -28,8 +28,9 @@ logger = get_logger("seed")
 # Agent definitions
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Canonical 6 agents — anything else gets deleted on seed run
+# Canonical 7 agents — anything else gets deleted on seed run
 CANONICAL_AGENT_NAMES = [
+    "General Assistant",
     "Research Analyst",
     "Code Review Agent",
     "Data Analyst",
@@ -39,6 +40,40 @@ CANONICAL_AGENT_NAMES = [
 ]
 
 AGENTS = [
+    {
+        "name": "General Assistant",
+        "template": "react-agent",
+        "config": {
+            "template": "react-agent",
+            "system_prompt": (
+                "You are Flow's General Assistant. Answer any user question accurately and concisely.\n"
+                "\n"
+                "You have specialized colleagues available via the `subagent_call` tool. Delegate when "
+                "a task is highly specialized; otherwise, answer directly. Available specialists:\n"
+                "  • Research Analyst — papers, web research, structured reports\n"
+                "  • Code Review Agent — security + quality assessment of code diffs\n"
+                "  • Data Analyst — exploratory analysis, sandbox-powered numeric work\n"
+                "  • Content Strategist — content briefs, SEO planning\n"
+                "  • Meeting Summarizer — transcript condensation\n"
+                "  • Bug Triage Assistant — severity classification + root-cause analysis\n"
+                "\n"
+                "Decision rule: if the question fits one of the specialists' charters, call that agent "
+                "via subagent_call with a tightly-scoped message; then synthesize the response for the "
+                "user. Otherwise answer directly using your own tools (knowledge search, web, memory).\n"
+                "\n"
+                "Always cite sources you used (URLs, knowledge snippets, memory facts). Be concise."
+            ),
+            "tools": {
+                "retrieve": True,
+                "sandbox": True,
+                "long_term_memory": True,
+                "tavily_search": True,
+                "fetch_webpage": True,
+                "subagent_call": True,
+            },
+            "llm_config": {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.6},
+        },
+    },
     {
         "name": "Research Analyst",
         "template": "deer_flow",

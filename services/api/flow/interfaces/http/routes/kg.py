@@ -21,6 +21,7 @@ from flow.interfaces.http.schemas_kg import (
     KGNodeOut,
     KGQueryIn,
     KGSyncIn,
+    SkillNodeDetail,
 )
 
 router = APIRouter(prefix="/api/v1/kg", tags=["knowledge-graph"])
@@ -189,10 +190,29 @@ async def get_node_detail(
     if node is None or node["workspace_id"] != workspace_id:
         raise HTTPException(status_code=404, detail="Node not found")
     neighbors, edges = await repo.get_kg_neighbors(node_id, workspace_id)
+
+    skill_detail = None
+    if node["node_type"] == "skill" and node.get("ref_id"):
+        try:
+            sk = await repo.get_skill_by_id(node["ref_id"])
+        except Exception:
+            sk = None
+        if sk is not None:
+            skill_detail = SkillNodeDetail(
+                content_md=sk["content_md"],
+                description=sk["description"],
+                allowed_tools=list(sk["allowed_tools"] or []),
+                triggers=list(sk["triggers"] or []),
+                score=float(sk["score"] or 0.0),
+                use_count=int(sk["use_count"] or 0),
+                version=int(sk["version"] or 1),
+            )
+
     return KGNodeDetailOut(
         node=_node_out(node),
         neighbors=[_node_out(n) for n in neighbors],
         edges=[_edge_out(e) for e in edges],
+        skill=skill_detail,
     )
 
 

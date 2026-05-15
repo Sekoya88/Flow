@@ -1051,6 +1051,19 @@ class FlowRepository:
             skill_id,
         )
 
+    async def get_skill_by_id(self, skill_id: UUID) -> asyncpg.Record | None:
+        """Full skill row including content_md, parsed fields, score, use_count."""
+        return await self._pool.fetchrow(
+            """
+            SELECT id, agent_id, workspace_id, name, version, content_md,
+                   description, allowed_tools, triggers, metadata,
+                   active, score, use_count, created_at
+            FROM agent_skills
+            WHERE id = $1
+            """,
+            skill_id,
+        )
+
     # ── Knowledge Graph ─────────────────────────────────────────────────────
 
     async def upsert_kg_node(

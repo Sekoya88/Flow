@@ -1,16 +1,29 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, Sparkles, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
 import { GraphQueryPanel } from "@/components/kg/GraphQueryPanel";
+import { GraphControls } from "@/components/kg/GraphControls";
+import { GraphSearchOverlay } from "@/components/kg/GraphSearchOverlay";
 import { apiFetch } from "@/lib/api";
 import { NODE_COLORS } from "@/lib/graph/graphColors";
 import { logger } from "@/lib/logger";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+
+interface SkillNodeDetail {
+  content_md: string | null;
+  description: string | null;
+  allowed_tools: string[];
+  triggers: string[];
+  score: number;
+  use_count: number;
+  version: number;
+}
 
 const NODE_TYPES = ["trace", "skill", "tool_call", "metacog", "note", "concept", "topic", "query", "prompt"] as const;
 
@@ -39,6 +52,7 @@ const TYPE_DOT_COLORS: Record<string, string> = {
 };
 
 export default function GraphPage() {
+  const router = useRouter();
   const storeWs = useStore((s) => s.workspaces);
   const [bootedWsId, setBootedWsId] = useState<string | null>(null);
   const workspaceId = storeWs[0]?.id ?? bootedWsId;
@@ -60,6 +74,21 @@ export default function GraphPage() {
   const [seeding, setSeeding] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
+
+  // Quartz-style controls
+  const [depth, setDepth] = useState<number>(0);  // 0 = unlimited
+  const [localMode, setLocalMode] = useState<boolean>(false);
+  const [searchOpen, setSearchOpen] = useState<boolean>(false);
+  const [skillDetail, setSkillDetail] = useState<SkillNodeDetail | null>(null);
+  const [visitedIds, setVisitedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("flow_graph_visited");
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const typesKey = useMemo(() => Array.from(activeTypes).sort().join(","), [activeTypes]);
 
@@ -101,7 +130,7 @@ export default function GraphPage() {
     });
   }, []);
 
-  // Type counts
+  // Type counts (raw, pre-filter)
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const n of nodes) {
@@ -109,6 +138,115 @@ export default function GraphPage() {
     }
     return counts;
   }, [nodes]);
+
+  // BFS depth + local-mode filter. Active only when a focus node is selected.
+  const filteredView = useMemo(() => {
+    const hasFocus = selectedNode != null;
+    const shouldFilter = hasFocus && (depth > 0 || localMode);
+    if (!shouldFilter) return { nodes, edges };
+
+    const adjacency = new Map<string, string[]>();
+    for (const e of edges) {
+      const a = e.source_id;
+      const b = e.target_id;
+      if (!adjacency.has(a)) adjacency.set(a, []);
+      if (!adjacency.has(b)) adjacency.set(b, []);
+      adjacency.get(a)!.push(b);
+      adjacency.get(b)!.push(a);
+    }
+
+    const reachable = new Set<string>();
+    const focusId = selectedNode!.id;
+    reachable.add(focusId);
+    const maxHops = depth === 0 ? Number.POSITIVE_INFINITY : depth;
+    let frontier: string[] = [focusId];
+    let hops = 0;
+    while (frontier.length > 0 && hops < maxHops) {
+      const nextFrontier: string[] = [];
+      for (const id of frontier) {
+        for (const nb of adjacency.get(id) ?? []) {
+          if (!reachable.has(nb)) {
+            reachable.add(nb);
+            nextFrontier.push(nb);
+          }
+        }
+      }
+      frontier = nextFrontier;
+      hops += 1;
+    }
+
+    const filteredNodes = nodes.filter((n) => reachable.has(n.id));
+    const filteredEdges = edges.filter(
+      (e) => reachable.has(e.source_id) && reachable.has(e.target_id),
+    );
+    return { nodes: filteredNodes, edges: filteredEdges };
+  }, [nodes, edges, depth, localMode, selectedNode]);
+
+  const displayNodes = filteredView.nodes;
+  const displayEdges = filteredView.edges;
+
+  // Cmd+G / Ctrl+G shortcut for graph search overlay (browser hijacks Cmd+F; G is free).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Fetch enriched skill detail when a skill node is selected.
+  useEffect(() => {
+    setSkillDetail(null);
+    if (!selectedNode || !workspaceId) return;
+    if (selectedNode.node_type !== "skill") return;
+    apiFetch<{ skill: SkillNodeDetail | null }>(
+      `/api/v1/kg/graph/node/${selectedNode.id}?workspace_id=${workspaceId}`,
+    )
+      .then((r) => {
+        if (r.skill) setSkillDetail(r.skill);
+      })
+      .catch(() => {});
+  }, [selectedNode, workspaceId]);
+
+  // Track visited nodes in localStorage.
+  const markVisited = useCallback((nodeId: string) => {
+    setVisitedIds((prev) => {
+      if (prev.has(nodeId)) return prev;
+      const next = new Set(prev);
+      next.add(nodeId);
+      try {
+        window.localStorage.setItem(
+          "flow_graph_visited",
+          JSON.stringify(Array.from(next)),
+        );
+      } catch {
+        /* ignore quota */
+      }
+      return next;
+    });
+  }, []);
+
+  const handleNodeClick = useCallback(
+    (n: KGNode) => {
+      markVisited(n.id);
+      setSelectedNode((prev) => (prev?.id === n.id ? null : n));
+    },
+    [markVisited],
+  );
+
+  const handleSearchSelect = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((x) => x.id === nodeId);
+      if (node) {
+        markVisited(node.id);
+        setSelectedNode(node);
+      }
+    },
+    [nodes, markVisited],
+  );
 
   if (!workspaceId) {
     return (
@@ -170,12 +308,12 @@ export default function GraphPage() {
         </div>
       ) : (
         <KnowledgeGraphCanvas
-          nodes={nodes}
-          edges={edges}
+          nodes={displayNodes}
+          edges={displayEdges}
           highlightedNodeIds={highlightedIds}
           highlightedPath={pathLabels}
           className="flex-1 h-full w-full"
-          onNodeClick={(n) => setSelectedNode((prev) => prev?.id === n.id ? null : n)}
+          onNodeClick={handleNodeClick}
         />
       )}
 
@@ -266,6 +404,16 @@ export default function GraphPage() {
           </div>
         )}
 
+        {/* Quartz-style graph controls */}
+        <GraphControls
+          depth={depth}
+          setDepth={setDepth}
+          localMode={localMode}
+          setLocalMode={setLocalMode}
+          hasFocus={selectedNode != null}
+          onOpenSearch={() => setSearchOpen(true)}
+        />
+
         {/* Action buttons */}
         <div className="flex gap-1.5">
           <Button
@@ -305,11 +453,35 @@ export default function GraphPage() {
 
       {/* Node detail panel */}
       {selectedNode && !panelOpen && (
-        <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+        <NodeDetailPanel
+          node={selectedNode}
+          onClose={() => setSelectedNode(null)}
+          skill={skillDetail}
+          onNavigate={(href) => router.push(href)}
+        />
       )}
       {selectedNode && panelOpen && (
-        <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} offset />
+        <NodeDetailPanel
+          node={selectedNode}
+          onClose={() => setSelectedNode(null)}
+          offset
+          skill={skillDetail}
+          onNavigate={(href) => router.push(href)}
+        />
       )}
+
+      {/* Cmd+G search overlay */}
+      <GraphSearchOverlay
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        nodes={nodes.map((n) => ({
+          id: n.id,
+          label: n.label,
+          node_type: n.node_type,
+          summary: n.summary,
+        }))}
+        onSelect={handleSearchSelect}
+      />
       </div>
     </div>
   );
@@ -322,7 +494,19 @@ const NODE_TYPE_ICONS: Record<string, React.ReactNode> = {
   prompt: <BookOpen className="h-3.5 w-3.5" />,
 };
 
-function NodeDetailPanel({ node, onClose, offset }: { node: KGNode; onClose: () => void; offset?: boolean }) {
+function NodeDetailPanel({
+  node,
+  onClose,
+  offset,
+  skill,
+  onNavigate,
+}: {
+  node: KGNode;
+  onClose: () => void;
+  offset?: boolean;
+  skill?: SkillNodeDetail | null;
+  onNavigate?: (href: string) => void;
+}) {
   const color = NODE_COLORS[node.node_type as keyof typeof NODE_COLORS] ?? TYPE_DOT_COLORS[node.node_type] ?? "#94a3b8";
   const skills = (node.metadata?.skills as string[] | undefined) ?? [];
   const tools = (node.metadata?.tools as string[] | undefined) ?? [];
@@ -496,11 +680,86 @@ function NodeDetailPanel({ node, onClose, offset }: { node: KGNode; onClose: () 
           )}
 
           {node.node_type === 'skill' && (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Version</p>
-              <p className="text-sm text-slate-300">v{String(node.metadata?.version ?? '—')}</p>
-              <p className="text-xs text-slate-500 uppercase tracking-wide mt-2">Score</p>
-              <p className="text-sm text-slate-300">{String(node.metadata?.score ?? '—')}</p>
+            <div className="mt-3 space-y-3 border-t border-border/30 pt-3">
+              {skill?.description && (
+                <p className="text-xs italic text-foreground/70 leading-relaxed">
+                  {skill.description}
+                </p>
+              )}
+              {skill?.content_md && (
+                <div className="rounded-lg bg-muted/30 border border-border/40 p-2.5 max-h-44 overflow-y-auto">
+                  <p className="text-[10px] font-mono text-flow-brand/80 uppercase tracking-wide mb-1.5">
+                    SKILL.md
+                  </p>
+                  <pre className="text-[11px] text-foreground/85 leading-relaxed font-mono whitespace-pre-wrap">
+                    {skill.content_md.slice(0, 1500)}
+                    {skill.content_md.length > 1500 ? "…" : ""}
+                  </pre>
+                </div>
+              )}
+              {skill && skill.allowed_tools.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1.5">
+                    Allowed tools
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {skill.allowed_tools.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium"
+                        style={{
+                          backgroundColor: `${TYPE_DOT_COLORS.tool_call}14`,
+                          color: TYPE_DOT_COLORS.tool_call,
+                          border: `1px solid ${TYPE_DOT_COLORS.tool_call}28`,
+                        }}
+                      >
+                        <Cpu className="h-2.5 w-2.5" />
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {skill && skill.triggers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1.5">
+                    Triggers
+                  </p>
+                  <ul className="space-y-0.5">
+                    {skill.triggers.map((t) => (
+                      <li
+                        key={t}
+                        className="text-[11px] italic text-muted-foreground/80 before:mr-1 before:content-['›']"
+                      >
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="flex items-center gap-3 pt-1 text-[10px] font-mono text-muted-foreground/60">
+                <span>v{String(skill?.version ?? node.metadata?.version ?? "—")}</span>
+                <span className="text-muted-foreground/30">·</span>
+                <span>score {(skill?.score ?? Number(node.metadata?.score ?? 0)).toFixed(2)}</span>
+                <span className="text-muted-foreground/30">·</span>
+                <span>{skill?.use_count ?? 0} uses</span>
+              </div>
+              {skill && skill.score > 0 && (
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted/40">
+                  <div
+                    className="h-full rounded-full bg-flow-brand transition-all duration-500"
+                    style={{ width: `${Math.min(100, skill.score * 100)}%` }}
+                  />
+                </div>
+              )}
+              {node.ref_id && onNavigate && (
+                <button
+                  onClick={() => onNavigate(`/agents`)}
+                  className="mt-2 block w-full rounded-lg border border-flow-brand/30 bg-flow-brand/10 px-3 py-1.5 text-center text-xs text-flow-brand hover:bg-flow-brand/15 transition-colors"
+                >
+                  Manage agents using this skill ↗
+                </button>
+              )}
             </div>
           )}
 

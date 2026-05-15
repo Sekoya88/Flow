@@ -32,6 +32,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { ToolCall } from "@/components/flow/ToolCallLog";
 import type { CitationSource } from "@/components/flow/CitationsPanel";
+import { SubagentCard, type SubagentInvocation } from "@/components/flow/SubagentCard";
 
 type AgentRow = { id: string; name: string; template: string; config: Record<string, unknown> };
 
@@ -69,6 +70,7 @@ type SseEvent = {
   duration_ms?: number;
   status?: string;
   payload?: unknown;
+  agent_name?: string;
 };
 
 const SUGGESTIONS = [
@@ -147,6 +149,9 @@ export default function RunPage() {
   // Onboarding completion banner
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
+  // Subagent invocations during the active run, keyed by agentName + start order
+  const [subagentInvocations, setSubagentInvocations] = useState<SubagentInvocation[]>([]);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +211,7 @@ export default function RunPage() {
     reset();
     setToolCalls([]);
     setCitations([]);
+    setSubagentInvocations([]);
     textareaRef.current?.focus();
   }, [reset]);
 
@@ -231,6 +237,7 @@ export default function RunPage() {
     reset();
     setToolCalls([]);
     setCitations([]);
+    setSubagentInvocations([]);
 
     // If we're continuing a selected thread, send parent_execution_id
     const parentId =
@@ -329,6 +336,35 @@ export default function RunPage() {
             ]);
           } else if (data.kind === "citations" && data.payload) {
             setCitations(data.payload as CitationSource[]);
+          } else if (data.kind === "subagent_start" && data.agent_name) {
+            const agentName = data.agent_name!;
+            setSubagentInvocations((prev) => [
+              ...prev,
+              {
+                key: `${agentName}-${prev.length}-${Date.now()}`,
+                agentName,
+                message: data.message ?? "",
+                status: "running",
+              },
+            ]);
+          } else if (data.kind === "subagent_done" && data.agent_name) {
+            const agentName = data.agent_name!;
+            setSubagentInvocations((prev) => {
+              // Resolve the most recent matching "running" invocation
+              const idx = [...prev]
+                .map((inv, i) => ({ inv, i }))
+                .reverse()
+                .find((x) => x.inv.agentName === agentName && x.inv.status === "running")?.i;
+              if (idx === undefined) return prev;
+              const next = [...prev];
+              next[idx] = {
+                ...next[idx],
+                status: data.status === "error" ? "error" : "success",
+                answer: data.answer ?? null,
+                durationMs: data.duration_ms ?? null,
+              };
+              return next;
+            });
           } else if (data.kind === "final" && data.answer) {
             fullAnswer = String(data.answer);
             setLiveAnswer(fullAnswer);
@@ -584,6 +620,15 @@ export default function RunPage() {
                           <User className="h-4 w-4 text-muted-foreground" />
                         </div>
                       </div>
+
+                      {/* Subagent invocations (only on the last/streaming turn) */}
+                      {isLastTurn && subagentInvocations.length > 0 && (
+                        <div className="ml-11 space-y-2 animate-fade-in">
+                          {subagentInvocations.map((inv) => (
+                            <SubagentCard key={inv.key} invocation={inv} />
+                          ))}
+                        </div>
+                      )}
 
                       {/* Agent response */}
                       {(displayAnswer || isStreamingTurn) && (
