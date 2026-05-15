@@ -8,9 +8,16 @@ interface CVDropzoneProps {
 }
 
 const MAX_SIZE = 5 * 1024 * 1024
+const ALLOWED_MIME = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
 
 function isValidType(file: File): boolean {
-  return file.name.endsWith('.pdf') || file.name.endsWith('.docx')
+  return (
+    ALLOWED_MIME.includes(file.type) &&
+    (file.name.endsWith('.pdf') || file.name.endsWith('.docx'))
+  )
 }
 
 export function CVDropzone({ workspaceId, onImported }: CVDropzoneProps) {
