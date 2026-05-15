@@ -23,6 +23,7 @@ export function usePreferences(workspaceId: string, agentId?: string) {
   const [data, setData] = useState<PreferencesData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!workspaceId) return
@@ -42,32 +43,47 @@ export function usePreferences(workspaceId: string, agentId?: string) {
   useEffect(() => { load() }, [load])
 
   const patchPreference = useCallback(async (id: string, action: string) => {
-    await apiFetch(`/api/v1/preferences/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ action }),
-    })
-    await load()
+    try {
+      setMutationError(null)
+      await apiFetch(`/api/v1/preferences/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action }),
+      })
+      await load()
+    } catch (e) {
+      setMutationError(e instanceof Error ? e.message : 'Failed to update preference')
+    }
   }, [load])
 
   const createPreference = useCallback(async (
     cls: string, value: string, agentId?: string
   ) => {
-    await apiFetch('/api/v1/preferences', {
-      method: 'POST',
-      body: JSON.stringify({
-        workspace_id: workspaceId,
-        class: cls,
-        value,
-        ...(agentId ? { agent_id: agentId } : {}),
-      }),
-    })
-    await load()
+    try {
+      setMutationError(null)
+      await apiFetch('/api/v1/preferences', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+          class: cls,
+          value,
+          ...(agentId ? { agent_id: agentId } : {}),
+        }),
+      })
+      await load()
+    } catch (e) {
+      setMutationError(e instanceof Error ? e.message : 'Failed to create preference')
+    }
   }, [workspaceId, load])
 
   const deletePreference = useCallback(async (id: string) => {
-    await apiFetch(`/api/v1/preferences/${id}`, { method: 'DELETE' })
-    await load()
+    try {
+      setMutationError(null)
+      await apiFetch(`/api/v1/preferences/${id}`, { method: 'DELETE' })
+      await load()
+    } catch (e) {
+      setMutationError(e instanceof Error ? e.message : 'Failed to delete preference')
+    }
   }, [load])
 
-  return { data, loading, error, reload: load, patchPreference, createPreference, deletePreference }
+  return { data, loading, error, mutationError, reload: load, patchPreference, createPreference, deletePreference }
 }

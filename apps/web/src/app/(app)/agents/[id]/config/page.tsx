@@ -11,7 +11,7 @@ type Tab = "preferences";
 
 export default function AgentConfigPage() {
   const params = useParams<{ id: string }>();
-  const agentId = params.id;
+  const agentId = params?.id ?? "";
   const workspaceId = "default";
 
   const [activeTab, setActiveTab] = useState<Tab>("preferences");
