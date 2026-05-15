@@ -58,7 +58,7 @@ describe('OnboardingQuestionnaire', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ created: 3 }),
+        text: async () => JSON.stringify({ created: 3 }),
       })
     )
 
@@ -96,7 +96,7 @@ describe('OnboardingQuestionnaire', () => {
   it('submit calls onboarding endpoint with correct payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ created: 4 }),
+      text: async () => JSON.stringify({ created: 4 }),
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -116,7 +116,7 @@ describe('OnboardingQuestionnaire', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledOnce()
       const [url, options] = fetchMock.mock.calls[0]
-      expect(url).toBe('/api/v1/preferences/onboarding')
+      expect(url).toContain('/api/v1/preferences/onboarding')
       expect(options.method).toBe('POST')
       const body = JSON.parse(options.body)
       expect(body.workspace_id).toBe('ws-456')
@@ -135,7 +135,7 @@ describe('OnboardingQuestionnaire', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ created: 5 }),
+        text: async () => JSON.stringify({ created: 5 }),
       })
     )
 
@@ -183,7 +183,7 @@ describe('OnboardingQuestionnaire', () => {
   it('shows error on server error response', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 500 })
+      vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'Server error' })
     )
     render(<OnboardingQuestionnaire {...defaultProps} />)
     fillAndAdvance('Python')

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { apiFetch } from '@/lib/api'
 
 interface OnboardingQuestionnaireProps {
   workspaceId: string
@@ -78,15 +79,10 @@ export function OnboardingQuestionnaire({
             value,
           })),
       }
-      const res = await fetch('/api/v1/preferences/onboarding', {
+      const data = await apiFetch<{ created: number }>('/api/v1/preferences/onboarding', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) {
-        throw new Error('Request failed')
-      }
-      const data = await res.json()
       onComplete(data.created ?? 0)
     } catch {
       setError('Something went wrong. Please try again.')
