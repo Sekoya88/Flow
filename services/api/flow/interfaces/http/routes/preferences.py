@@ -80,51 +80,6 @@ async def onboarding_status(
     return await repo.get_onboarding_status(workspace_id, user_id)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_preference(
-    body: PreferenceCreateIn,
-    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
-    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
-) -> dict:
-    await _assert_workspace_access(repo, user_id, body.workspace_id)
-    row = await repo.upsert_typed_preference(
-        body.workspace_id, user_id, body.class_, body.value,
-        body.agent_id, initial_status=body.status,
-    )
-    new_status = auto_graduate(dict(row))
-    if new_status:
-        await repo.apply_preference_graduation(row["id"], new_status)
-        row = await repo.get_preference_by_id(row["id"], user_id)
-    return _row_to_out(dict(row))
-
-
-@router.patch("/{pref_id}")
-async def patch_preference(
-    pref_id: UUID,
-    body: PreferencePatchIn,
-    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
-    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
-) -> dict:
-    valid_actions = {"promote", "pin", "unpin", "forget", "veto"}
-    if body.action not in valid_actions:
-        raise HTTPException(status_code=422, detail=f"action must be one of {valid_actions}")
-    row = await repo.patch_typed_preference(pref_id, user_id, body.action)
-    if row is None:
-        return {"deleted": True}
-    return _row_to_out(dict(row))
-
-
-@router.delete("/{pref_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_preference(
-    pref_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
-    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
-) -> None:
-    deleted = await repo.delete_typed_preference(pref_id, user_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="preference not found")
-
-
 @router.post("/onboarding")
 async def submit_onboarding(
     workspace_id: UUID,
@@ -189,3 +144,48 @@ async def import_cv(
         )
 
     return {"extracted": len(prefs), "preview": prefs}
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_preference(
+    body: PreferenceCreateIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
+    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
+) -> dict:
+    await _assert_workspace_access(repo, user_id, body.workspace_id)
+    row = await repo.upsert_typed_preference(
+        body.workspace_id, user_id, body.class_, body.value,
+        body.agent_id, initial_status=body.status,
+    )
+    new_status = auto_graduate(dict(row))
+    if new_status:
+        await repo.apply_preference_graduation(row["id"], new_status)
+        row = await repo.get_preference_by_id(row["id"], user_id)
+    return _row_to_out(dict(row))
+
+
+@router.patch("/{pref_id}")
+async def patch_preference(
+    pref_id: UUID,
+    body: PreferencePatchIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
+    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
+) -> dict:
+    valid_actions = {"promote", "pin", "unpin", "forget", "veto"}
+    if body.action not in valid_actions:
+        raise HTTPException(status_code=422, detail=f"action must be one of {valid_actions}")
+    row = await repo.patch_typed_preference(pref_id, user_id, body.action)
+    if row is None:
+        return {"deleted": True}
+    return _row_to_out(dict(row))
+
+
+@router.delete("/{pref_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_preference(
+    pref_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
+    repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
+) -> None:
+    deleted = await repo.delete_typed_preference(pref_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="preference not found")
