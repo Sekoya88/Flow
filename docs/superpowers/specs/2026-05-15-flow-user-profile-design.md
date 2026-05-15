@@ -29,6 +29,15 @@ One subsystem (Roadmap A). Does not cover:
 ### Overview
 
 ```
+Onboarding (first login or empty profile):
+  /onboarding/profile          → guided questionnaire (5–7 questions)
+    → answers inserted as active preferences immediately
+
+CV upload (any time):
+  POST /api/v1/preferences/import-cv  (PDF or DOCX)
+    → extract_preferences_from_cv(llm, text)
+    → inserted as active preferences (user-provided = trusted)
+
 After every agent run:
   FlowMemoryMiddleware.after_agent
     → extract_preferences(llm, conversation)   # LLM extraction
@@ -41,7 +50,7 @@ Before every agent run:
     → inject as SystemMessage([User Preferences] block)
 
 User:
-  /settings/profile            → manage global preferences
+  /settings/profile            → manage global preferences + upload CV
   /agents/{id}/config#prefs    → manage per-agent overrides
 ```
 
@@ -187,6 +196,91 @@ Domain: fintech environment
 
 ---
 
+## Onboarding Questionnaire
+
+Shown as a modal on first login (or when `user_preferences` is empty for the user). 5–7 targeted questions, one per screen. Answers are inserted directly as `active` preferences (user-declared = fully trusted, no graduation needed).
+
+### Questions
+
+| # | Question | Target class |
+|---|---------|-------------|
+| 1 | "What programming languages do you use most?" | `tooling` |
+| 2 | "What's your main professional domain?" (e.g. fintech, healthcare, SaaS) | `domain` |
+| 3 | "How do you prefer answers formatted?" (concise / detailed / bullet points / narrative) | `style` |
+| 4 | "What are you currently working on or trying to learn?" | `goal` |
+| 5 | "Are there tools, patterns, or suggestions you never want to see?" | `veto` |
+| 6 | "Any tech stack preferences we should know about?" (frameworks, DBs, cloud) | `tooling` |
+| 7 | "How should code examples be presented?" (always / only when asked / never) | `channel` |
+
+Questions 5–7 are optional (user can skip). The questionnaire can be re-triggered from `/settings/profile` ("Re-run setup").
+
+### Flow
+
+```
+GET /api/v1/preferences/onboarding-status
+→ { completed: bool, preference_count: int }
+
+POST /api/v1/preferences/onboarding
+Body: { answers: [{ class, value }] }
+→ { created: int }   # number of preferences inserted
+```
+
+Answers are bulk-inserted as `active` preferences. Existing preferences are not overwritten (idempotent upsert — if value already exists, just reinforce it).
+
+---
+
+## CV / Résumé Import
+
+User uploads a PDF or DOCX résumé. The backend parses the text, runs LLM extraction against it, and bulk-inserts the results as `active` preferences. This provides a rich cold-start signal before any agent runs.
+
+### Endpoint
+
+```
+POST /api/v1/preferences/import-cv
+Content-Type: multipart/form-data
+Body: file (PDF or DOCX, max 5MB), workspace_id
+
+Response: { extracted: int, preview: [{ class, value }] }
+```
+
+### Processing pipeline
+
+1. Parse file to plain text:
+   - PDF: `pypdf` (already in ecosystem or add as dep)
+   - DOCX: `python-docx`
+2. Truncate to 8 000 chars (résumés are dense; cap avoids token blowout)
+3. Run LLM extraction with an extended prompt:
+
+```
+You are reading a professional résumé. Extract stable user preferences for an AI assistant.
+Return JSON: [{"class": "<class>", "value": "<short declarative phrase>"}]
+Classes: style, tooling, veto, goal, domain, channel
+Focus on:
+- Programming languages and frameworks mentioned → tooling
+- Industry / domain / sector → domain
+- Seniority and communication preferences implied by role titles → style
+- Career goals or current focus areas → goal
+Return 10–25 items. Short declarative phrases only (max 10 words each).
+```
+
+4. All extracted items inserted as `active` preferences (user uploaded = trusted).
+5. `preview` array returned to frontend for immediate display.
+
+### Frontend (in `/settings/profile`)
+
+- Drag-and-drop zone: "Drop your résumé here (PDF or DOCX)" with a "Browse" fallback
+- After upload: "We found N preferences from your résumé" toast + preview list
+- User can immediately delete/veto any extracted item from the preview before it's confirmed — but default is all accepted
+
+### Dependencies added
+
+| Package | Reason |
+|---------|--------|
+| `pypdf>=4.0` | PDF text extraction |
+| `python-docx>=1.1` | DOCX text extraction |
+
+---
+
 ## API Endpoints
 
 All endpoints scoped to `workspace_id` + `user_id` from JWT. No body-supplied identity fields accepted.
@@ -274,13 +368,14 @@ class PreferenceOut(BaseModel):
 services/api/flow/
   infrastructure/
     persistence/
-      repo.py                      # add: load_profile, upsert_preference, patch_preference
+      repo.py                      # MODIFY: load_profile, upsert_preference, patch_preference
   application/
-    preference_service.py          # NEW: extract_preferences, effective_score, auto_graduate
+    preference_service.py          # NEW: extract_preferences, effective_score, auto_graduate,
+                                   #      extract_from_cv, process_onboarding_answers
   interfaces/
     http/
       routes/
-        preferences.py             # NEW: 4 endpoints
+        preferences.py             # NEW: 6 endpoints (CRUD + import-cv + onboarding)
   infrastructure/
     llm/
       middleware/
@@ -292,6 +387,12 @@ Migration:
 services/api/migrations/versions/0014_user_preferences.py
 ```
 
+Dependencies added to `pyproject.toml`:
+```
+pypdf>=4.0,<6         # PDF text extraction (CV import)
+python-docx>=1.1,<2   # DOCX text extraction (CV import)
+```
+
 ---
 
 ## Frontend File Structure
@@ -299,16 +400,21 @@ services/api/migrations/versions/0014_user_preferences.py
 ```
 apps/web/src/
   app/(app)/settings/profile/
-    page.tsx                       # NEW: global profile page
+    page.tsx                       # NEW: global profile page + CV dropzone
+  app/(app)/onboarding/profile/
+    page.tsx                       # NEW: onboarding questionnaire (shown on first login)
   app/(app)/agents/[id]/config/
     page.tsx                       # MODIFY: add Preferences tab
   components/preferences/
-    PreferenceRow.tsx               # NEW: value + score + badge + actions
+    PreferenceRow.tsx               # NEW: value + score + badge + row actions
     PreferenceSection.tsx           # NEW: class group (collapsible)
     CandidateQueue.tsx              # NEW: pending review queue
-    AddPreferenceInline.tsx         # NEW: inline add input
+    AddPreferenceInline.tsx         # NEW: inline add input with class selector
+    CVDropzone.tsx                  # NEW: drag-and-drop CV upload + preview list
+    OnboardingQuestionnaire.tsx     # NEW: step-by-step question flow (5–7 steps)
   lib/
-    usePreferences.ts              # NEW: data hook → GET /api/v1/preferences
+    usePreferences.ts               # NEW: data hook → GET /api/v1/preferences
+    useOnboardingStatus.ts          # NEW: GET /api/v1/preferences/onboarding-status
 ```
 
 ---
@@ -317,18 +423,22 @@ apps/web/src/
 
 | File | What it verifies |
 |------|-----------------|
-| `tests/test_preference_service.py` | extraction returns correct classes; upsert deduplicates; auto-graduation fires at correct thresholds; decay calculation correct; veto action inserts veto row |
-| `tests/test_preference_routes.py` | GET scopes to workspace+user; PATCH promote advances status; PATCH veto inserts veto row and deletes original; DELETE returns 204 |
-| `tests/test_middleware_memory.py` (extend) | before_agent injects profile block when active preferences exist; candidates not injected; provisional marked (learning); veto class always included |
-| `apps/web/__tests__/PreferenceSection.test.tsx` | row actions call correct API; promote advances badge; pin shows indigo badge; candidate queue bulk actions fire correct requests |
+| `tests/test_preference_service.py` | extraction returns correct classes; upsert deduplicates; auto-graduation at correct score thresholds; decay formula correct; veto inserts veto row; CV extraction truncates at 8 000 chars; onboarding answers bulk-insert as active |
+| `tests/test_preference_routes.py` | GET scopes to workspace+user only; PATCH promote advances status; PATCH veto inserts veto row and deletes original; DELETE 204; import-cv rejects files > 5 MB; onboarding-status returns correct completed flag |
+| `tests/test_middleware_memory.py` (extend) | before_agent injects profile block when active preferences exist; candidates not injected; provisional marked (learning); veto always included regardless of agent override |
+| `apps/web/__tests__/PreferenceSection.test.tsx` | row actions call correct API; promote advances badge; pin shows indigo badge; candidate queue bulk actions work |
+| `apps/web/__tests__/CVDropzone.test.tsx` | rejects non-PDF/DOCX files; shows preview after upload; all items accepted by default |
+| `apps/web/__tests__/OnboardingQuestionnaire.test.tsx` | advances through steps; skippable questions work; submit calls onboarding endpoint with correct payload |
 
 ---
 
 ## Success Criteria
 
-1. After 3 runs where the user consistently asks for Python code, `tooling: uses Python` auto-graduates from `candidate` to `provisional`
-2. Active/provisional preferences appear in `[User Preferences]` block in every subsequent run
-3. `veto` preferences suppress future extraction of the same value
-4. Agent-level override shadows global preference for the same class
-5. Pinned preferences survive 90+ days without decay
-6. All test files pass; no regressions in existing middleware tests
+1. Fresh user: onboarding questionnaire shown on first login; answers immediately visible in profile page as active preferences
+2. CV upload: dropping a PDF résumé inserts 10–25 preferences as active within 5s; preview shown before confirmation
+3. After 2 runs where the user consistently asks for Python code, `tooling: uses Python` auto-graduates from `candidate` to `provisional` (score reaches 0.7)
+4. Active/provisional preferences appear in `[User Preferences]` block in every subsequent run
+5. `veto` preferences suppress future extraction of the same value
+6. Agent-level override shadows global preference for the same class
+7. Pinned preferences survive 90+ days without decay
+8. All test files pass; no regressions in existing middleware tests
