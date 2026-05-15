@@ -78,6 +78,7 @@ type AgentVersion = {
   template: string;
   created_at: string;
   created_by: string | null;
+  prompt_hash: string | null;
 };
 
 /* ------------------------------------------------------------------ */
@@ -444,6 +445,21 @@ export function AgentDetailDrawer({
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-foreground">{v.version_label}</span>
+                            {v.prompt_hash ? (
+                              <span
+                                title={`prompt SHA-256: ${v.prompt_hash}`}
+                                className="rounded border border-flow-brand/30 bg-flow-brand/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-flow-brand/90"
+                              >
+                                cache:{v.prompt_hash.slice(0, 8)}
+                              </span>
+                            ) : (
+                              <span
+                                title="No prompt hash recorded yet — run the agent once to populate"
+                                className="rounded border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60"
+                              >
+                                cache:—
+                              </span>
+                            )}
                             <span className="text-[10px] text-muted-foreground ml-auto">
                               <Clock className="inline h-2.5 w-2.5 mr-0.5" />
                               {new Date(v.created_at).toLocaleDateString(undefined, {

@@ -294,7 +294,7 @@ export default function ProposalsPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                 Resolved
               </h2>
-              <div className="space-y-3 opacity-70">
+              <div className="space-y-3 opacity-70 transition-opacity hover:opacity-100">
                 {resolved.map((p, i) => (
                   <ProposalCard
                     key={p.id}
@@ -332,7 +332,7 @@ function ProposalCard({
 
   return (
     <Card
-      className="shadow-sm transition-shadow hover:shadow-md"
+      className="group surface-glass border-border/50 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-brand/40 hover:shadow-md hover:shadow-flow-brand/5"
       style={{
         opacity: 0,
         animation: `fadeIn 320ms ease-out forwards`,

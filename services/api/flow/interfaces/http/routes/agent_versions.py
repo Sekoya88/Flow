@@ -59,7 +59,7 @@ async def list_versions(
 
     rows = await repo._pool.fetch(
         """
-        SELECT id, version_label, config_snapshot, template, created_at, created_by
+        SELECT id, version_label, config_snapshot, template, created_at, created_by, prompt_hash
         FROM agent_versions
         WHERE agent_id = $1
         ORDER BY created_at DESC
@@ -74,6 +74,7 @@ async def list_versions(
             "template": r["template"],
             "created_at": r["created_at"].isoformat(),
             "created_by": str(r["created_by"]) if r["created_by"] else None,
+            "prompt_hash": r["prompt_hash"],
         }
         for r in rows
     ]

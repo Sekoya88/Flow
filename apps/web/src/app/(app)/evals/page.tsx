@@ -12,6 +12,7 @@ import {
   Play,
   Plus,
   Sparkles,
+  Target,
   Terminal,
   Trash2,
   TrendingDown,
@@ -23,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { apiFetch, getApiBase } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { logger } from "@/lib/logger";
@@ -280,8 +280,20 @@ export default function EvalsPage() {
 
   if (!loadingSets && sets.length === 0) {
     return (
-      <div className="flex h-full flex-col">
-        <FlowPageHeader title="Evaluations" />
+      <div className="flex h-full flex-col animate-fade-in">
+        <header className="border-b border-border/40 bg-background/60 px-4 py-3 backdrop-blur-md">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-flow-brand" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+                Evals
+              </span>
+            </div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              Benchmark agents, track regressions
+            </h1>
+          </div>
+        </header>
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
           <div className="flex flex-col items-center gap-3 text-center max-w-md">
             <div className="h-16 w-16 rounded-2xl bg-flow-brand/10 border border-flow-brand/20 flex items-center justify-center">
@@ -337,8 +349,30 @@ export default function EvalsPage() {
   // ── Main layout ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col">
-      <FlowPageHeader title="Evaluations" />
+    <div className="flex h-full flex-col animate-fade-in">
+      <header className="border-b border-border/40 bg-background/60 px-4 py-3 backdrop-blur-md">
+        <div className="mx-auto flex max-w-full items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-flow-brand" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+                Evals
+              </span>
+            </div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              Benchmark agents, track regressions
+            </h1>
+          </div>
+          {history.length > 0 && (
+            <div className="hidden items-center gap-3 sm:flex">
+              <Sparkline data={history.map((h) => h.avg_score)} uid="page-spark" />
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {history.length} run{history.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      </header>
 
       <div className="flex flex-1 overflow-hidden">
 
@@ -378,12 +412,19 @@ export default function EvalsPage() {
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-flow-brand border-t-transparent" />
               </div>
             ) : (
-              sets.map((s) => {
+              sets.map((s, i) => {
                 const isSelected = selectedSetId === s.id;
                 const isExpanded = expandedSetId === s.id;
                 const items = setItems[s.id] ?? [];
                 return (
-                  <div key={s.id} className={cn("border-b border-border/30 last:border-0 transition-colors", isSelected && "bg-flow-brand/5")}>
+                  <div
+                    key={s.id}
+                    className={cn(
+                      "border-b border-border/30 last:border-0 transition-all duration-200 animate-slide-up",
+                      isSelected ? "bg-flow-brand/5 border-l-2 border-l-flow-brand" : "border-l-2 border-l-transparent hover:border-l-flow-brand/30",
+                    )}
+                    style={{ animationDelay: `${Math.min(i * 40, 600)}ms` }}
+                  >
                     <button
                       type="button"
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"

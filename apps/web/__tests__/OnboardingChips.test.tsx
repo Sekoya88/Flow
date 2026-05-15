@@ -74,8 +74,9 @@ describe('OnboardingQuestionnaire — chip suggestions', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledOnce()
+      const url = fetchMock.mock.calls[0][0] as string
+      expect(url).toContain('workspace_id=ws-xyz')
       const body = JSON.parse(fetchMock.mock.calls[0][1].body)
-      expect(body.workspace_id).toBe('ws-xyz')
 
       const toolingEntries = body.answers.filter((a: { class: string }) => a.class === 'tooling')
       expect(toolingEntries.length).toBe(2)

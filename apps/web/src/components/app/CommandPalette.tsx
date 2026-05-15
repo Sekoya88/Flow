@@ -6,24 +6,42 @@ import { Command } from "cmdk";
 import {
   BookOpen,
   Brain,
+  Command as CommandIcon,
+  CornerDownLeft,
+  GitBranch,
   LayoutDashboard,
-  MessageSquare,
-  ScrollText,
+  Lightbulb,
+  MessageSquarePlus,
+  Network,
   Settings,
   Sparkles,
-  Workflow,
+  Target,
+  Users,
 } from "lucide-react";
 import { FlowMark } from "@/components/brand/FlowLogo";
 
-const ITEMS = [
-  { id: "run", label: "Run agent", href: "/run", icon: MessageSquare, section: "Navigate" },
-  { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Navigate" },
-  { id: "knowledge", label: "Knowledge", href: "/knowledge", icon: ScrollText, section: "Navigate" },
-  { id: "proposals", label: "Proposals", href: "/proposals", icon: Sparkles, section: "Navigate" },
-  { id: "memory", label: "Memory", href: "/memory", icon: Brain, section: "Navigate" },
-  { id: "agents", label: "Agent graphs", href: "/agents", icon: Workflow, section: "Navigate" },
-  { id: "settings", label: "Settings", href: "/settings", icon: Settings, section: "Navigate" },
-  { id: "onboarding", label: "Setup guide", href: "/onboarding", icon: BookOpen, section: "Help" },
+interface PaletteEntry {
+  id: string;
+  label: string;
+  hint?: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  section: "Navigate" | "Settings";
+  keywords: string;
+}
+
+const ITEMS: PaletteEntry[] = [
+  { id: "run", label: "New chat", hint: "Start a new agent run", href: "/run", icon: MessageSquarePlus, section: "Navigate", keywords: "ask query chat" },
+  { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Navigate", keywords: "" },
+  { id: "agents", label: "Agents", hint: "List & configure agents", href: "/agents", icon: Users, section: "Navigate", keywords: "configure config" },
+  { id: "knowledge", label: "Knowledge", hint: "Sources & RAG corpus", href: "/knowledge", icon: BookOpen, section: "Navigate", keywords: "sources rag corpus" },
+  { id: "memory", label: "Memory", hint: "Stored facts & patterns", href: "/memory", icon: Brain, section: "Navigate", keywords: "facts patterns episodic semantic" },
+  { id: "graph", label: "Knowledge Graph", href: "/graph", icon: Network, section: "Navigate", keywords: "kg entities" },
+  { id: "proposals", label: "Proposals", href: "/proposals", icon: Lightbulb, section: "Navigate", keywords: "suggestions" },
+  { id: "schedules", label: "Schedules", hint: "Cron-driven runs", href: "/schedules", icon: GitBranch, section: "Navigate", keywords: "cron jobs" },
+  { id: "evals", label: "Evals", hint: "Golden set benchmarks", href: "/evals", icon: Target, section: "Navigate", keywords: "benchmark golden eval" },
+  { id: "profile", label: "Profile & preferences", hint: "Facets, CV import, decay", href: "/settings/profile", icon: Settings, section: "Settings", keywords: "preferences settings facets cv" },
+  { id: "onboarding", label: "Finish onboarding", hint: "Run the setup wizard", href: "/onboarding/profile", icon: Sparkles, section: "Settings", keywords: "wizard setup" },
 ];
 
 export function CommandPalette() {
@@ -32,7 +50,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
       }
@@ -51,51 +69,75 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] animate-fade-in"
       role="dialog"
       aria-modal
       aria-label="Command palette"
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/70 backdrop-blur-md"
         onClick={() => setOpen(false)}
         aria-hidden
       />
 
       {/* Panel */}
-      <div className="surface-glass-heavy relative w-full max-w-md overflow-hidden rounded-2xl shadow-2xl">
+      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-flow-brand/20 bg-card/95 shadow-2xl shadow-flow-brand/10 backdrop-blur-xl animate-slide-up">
         <Command className="text-foreground" shouldFilter>
-          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-            <FlowMark size={20} className="shrink-0 text-flow-brand opacity-80" />
+          {/* Header */}
+          <div className="flex items-center gap-3 border-b border-border/40 px-4 py-3">
+            <FlowMark size={18} className="shrink-0 text-flow-brand opacity-80" />
             <Command.Input
               autoFocus
-              placeholder="Search or navigate…"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+              placeholder="Jump to…  (try 'graph', 'memory', 'profile')"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
             />
-            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-              ESC
-            </kbd>
+            <span className="hidden items-center gap-1 rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:flex">
+              <CommandIcon className="h-2.5 w-2.5" />K
+            </span>
           </div>
 
-          <Command.List className="max-h-72 overflow-y-auto p-2">
-            <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-              No results found.
+          {/* Results */}
+          <Command.List className="max-h-[60vh] overflow-y-auto py-2">
+            <Command.Empty className="py-8 text-center text-xs text-muted-foreground">
+              No matches.
             </Command.Empty>
 
-            {(["Navigate", "Help"] as const).map((section) => {
+            {(["Navigate", "Settings"] as const).map((section) => {
               const items = ITEMS.filter((i) => i.section === section);
               return (
-                <Command.Group key={section} heading={section}>
+                <Command.Group
+                  key={section}
+                  heading={section}
+                  className="[&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.2em] [&_[cmdk-group-heading]]:text-muted-foreground/60"
+                >
                   {items.map((item) => (
                     <Command.Item
                       key={item.id}
-                      value={item.label}
+                      value={`${item.label} ${item.hint ?? ""} ${item.keywords}`}
                       onSelect={() => navigate(item.href)}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-foreground/80 aria-selected:bg-accent aria-selected:text-foreground"
+                      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-brand/10"
                     >
-                      <item.icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-                      {item.label}
+                      <div
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-brand/40 group-aria-selected:bg-flow-brand/15 group-aria-selected:text-flow-brand"
+                        aria-hidden
+                      >
+                        <item.icon className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-foreground/90 group-aria-selected:text-foreground">
+                          {item.label}
+                        </p>
+                        {item.hint && (
+                          <p className="truncate text-[11px] text-muted-foreground/70">
+                            {item.hint}
+                          </p>
+                        )}
+                      </div>
+                      <CornerDownLeft
+                        className="h-3 w-3 shrink-0 text-flow-brand/0 transition-colors group-aria-selected:text-flow-brand/70"
+                        aria-hidden
+                      />
                     </Command.Item>
                   ))}
                 </Command.Group>
@@ -103,8 +145,16 @@ export function CommandPalette() {
             })}
           </Command.List>
 
-          <div className="border-t border-border/40 px-4 py-2 text-[10px] text-muted-foreground/50">
-            ↑↓ navigate · ↵ select · ESC close
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-border/40 bg-muted/20 px-4 py-2">
+            <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/70">
+              <span>↑ ↓ navigate</span>
+              <span>⏎ open</span>
+              <span>esc close</span>
+            </div>
+            <span className="font-mono text-[10px] text-muted-foreground/50">
+              {ITEMS.length} actions
+            </span>
           </div>
         </Command>
       </div>

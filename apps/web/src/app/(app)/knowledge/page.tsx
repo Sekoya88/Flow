@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BookOpen, FileUp, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, BookOpen, BookOpenCheck, FileUp, Loader2, Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -23,7 +24,6 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Me = { workspaces: { id: string }[] };
 
@@ -282,10 +282,22 @@ export default function KnowledgePage() {
         />
       )}
 
-      <FlowPageHeader
-        title="Knowledge"
-        description="Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content manually."
-        meta={
+      <header className="space-y-2 animate-fade-in">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-flow-brand" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+            Knowledge
+          </span>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1.5">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Sources & retrieval corpus
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground leading-relaxed">
+              Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content manually.
+            </p>
+          </div>
           <Link
             href="/run"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex w-fit items-center gap-1.5")}
@@ -293,8 +305,8 @@ export default function KnowledgePage() {
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
             Back to Run
           </Link>
-        }
-      />
+        </div>
+      </header>
 
       {listErr ? (
         <Alert variant="destructive">
@@ -346,7 +358,19 @@ export default function KnowledgePage() {
               </>
             )}
           </Button>
-          {uploadMsg ? <p className="text-muted-foreground text-sm">{uploadMsg}</p> : null}
+          {uploadMsg ? (
+            <p
+              className={cn(
+                "rounded-lg px-3 py-2 text-xs animate-fade-in",
+                /fail|error|❌/i.test(uploadMsg)
+                  ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+              )}
+              role="status"
+            >
+              {uploadMsg}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -384,7 +408,19 @@ export default function KnowledgePage() {
               )}
             </Button>
           </div>
-          {crawlMsg ? <p className="text-muted-foreground text-sm">{crawlMsg}</p> : null}
+          {crawlMsg ? (
+            <p
+              className={cn(
+                "rounded-lg px-3 py-2 text-xs animate-fade-in",
+                /fail|error|❌/i.test(crawlMsg)
+                  ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+              )}
+              role="status"
+            >
+              {crawlMsg}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -432,15 +468,17 @@ export default function KnowledgePage() {
               Loading sources…
             </div>
           ) : sources.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/80 bg-muted/10 px-4 py-8 text-center">
-              <p className="text-muted-foreground text-sm">
-                No sources yet. Upload a README or paste a short doc — then run an agent with{" "}
-                <strong className="text-foreground">Knowledge search</strong> enabled.
-              </p>
-              <Button type="button" className="mt-4" variant="secondary" onClick={() => router.push("/run")}>
-                Go to Run
-              </Button>
-            </div>
+            <EmptyState
+              icon={BookOpenCheck}
+              tone="brand"
+              title="No sources yet"
+              description="Upload a README or paste a short doc — then run an agent with Knowledge search enabled."
+              action={
+                <Button type="button" variant="secondary" onClick={() => router.push("/run")}>
+                  Go to Run
+                </Button>
+              }
+            />
           ) : (
             <>
               <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -450,8 +488,8 @@ export default function KnowledgePage() {
                   <button
                     type="button"
                     className={cn(
-                      "w-full flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/5 px-3 py-3 text-left transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between",
-                      selectedSource?.id === s.id && "border-[var(--color-flow-brand)]/40 bg-[var(--color-flow-brand)]/5",
+                      "group w-full flex flex-col gap-2 rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-brand/40 hover:bg-flow-brand/[0.04] hover:shadow-md hover:shadow-flow-brand/5 sm:flex-row sm:items-center sm:justify-between",
+                      selectedSource?.id === s.id && "border-flow-brand/50 bg-flow-brand/[0.06]",
                     )}
                     style={{
                       opacity: 0,
