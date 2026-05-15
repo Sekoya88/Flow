@@ -4,16 +4,20 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { OnboardingQuestionnaire } from '@/components/preferences/OnboardingQuestionnaire'
 import { useOnboardingStatus } from '@/lib/useOnboardingStatus'
-
-const workspaceId = 'default'
+import { useWorkspaceId } from '@/lib/useWorkspace'
 
 export default function OnboardingProfilePage() {
   const router = useRouter()
-  const { status, loading, error } = useOnboardingStatus(workspaceId)
+  const { workspaceId, loading: wsLoading } = useWorkspaceId()
+  const { status, loading, error } = useOnboardingStatus(workspaceId ?? '')
   const [completedCount, setCompletedCount] = useState<number | null>(null)
 
-  if (loading) {
+  if (wsLoading || loading) {
     return <p>Checking setup status...</p>
+  }
+
+  if (!workspaceId) {
+    return <p>No workspace found. Sign in again.</p>
   }
 
   if (error) {

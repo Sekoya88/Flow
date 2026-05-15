@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { PreferenceSection } from "@/components/preferences/PreferenceSection";
 import { usePreferences } from "@/lib/usePreferences";
+import { useWorkspaceId } from "@/lib/useWorkspace";
 
 const FACET_CLASSES = ["style", "tooling", "goal", "veto", "domain", "channel"] as const;
 
@@ -12,10 +13,10 @@ type Tab = "preferences";
 export default function AgentConfigPage() {
   const params = useParams<{ id: string }>();
   const agentId = params?.id ?? "";
-  const workspaceId = "default";
+  const { workspaceId, loading: wsLoading } = useWorkspaceId();
 
   const [activeTab, setActiveTab] = useState<Tab>("preferences");
-  const { data, loading, error, patchPreference, createPreference } = usePreferences(workspaceId, agentId);
+  const { data, loading, error, patchPreference, createPreference } = usePreferences(workspaceId ?? "", agentId);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 pb-10 animate-fade-in">
@@ -39,7 +40,7 @@ export default function AgentConfigPage() {
       {/* Preferences tab content */}
       {activeTab === "preferences" && (
         <div className="space-y-1">
-          {loading && (
+          {(wsLoading || loading) && (
             <p className="text-sm text-muted-foreground py-4">Loading preferences...</p>
           )}
           {error && (

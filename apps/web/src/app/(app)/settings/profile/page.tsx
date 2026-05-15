@@ -2,19 +2,21 @@
 
 import { useRef } from 'react'
 import { usePreferences } from '@/lib/usePreferences'
+import { useWorkspaceId } from '@/lib/useWorkspace'
 import { PreferenceSection } from '@/components/preferences/PreferenceSection'
 import { CandidateQueue } from '@/components/preferences/CandidateQueue'
 import { CVDropzone } from '@/components/preferences/CVDropzone'
 
-const WORKSPACE_ID = 'default'
 const FACET_CLASSES = ['style', 'tooling', 'goal', 'veto', 'domain', 'channel'] as const
 
 export default function ProfilePage() {
   const candidateSectionRef = useRef<HTMLDivElement>(null)
+  const { workspaceId, loading: wsLoading } = useWorkspaceId()
   const { data, loading, error, reload, patchPreference, createPreference } =
-    usePreferences(WORKSPACE_ID)
+    usePreferences(workspaceId ?? '')
 
-  if (loading) return <p className="p-6 text-slate-400">Loading preferences...</p>
+  if (wsLoading || loading) return <p className="p-6 text-slate-400">Loading preferences...</p>
+  if (!workspaceId) return <p className="p-6 text-red-400">No workspace found. Sign in again.</p>
   if (error) return <p className="p-6 text-red-400">Failed to load preferences.</p>
 
   const global = data?.global ?? []
@@ -47,7 +49,7 @@ export default function ProfilePage() {
 
       <section>
         <h2 className="text-base font-semibold text-slate-200 mb-3">Import from Résumé</h2>
-        <CVDropzone workspaceId={WORKSPACE_ID} onImported={() => reload()} />
+        <CVDropzone workspaceId={workspaceId} onImported={() => reload()} />
       </section>
 
       <section className="space-y-1">

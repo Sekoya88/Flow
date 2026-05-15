@@ -144,6 +144,9 @@ export default function RunPage() {
   const [threadTurns, setThreadTurns] = useState<ThreadTurn[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
 
+  // Onboarding completion banner
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -162,6 +165,9 @@ export default function RunPage() {
         const w = m.workspaces[0];
         if (!w) return;
         setWsId(w.id);
+        apiFetch<{ completed: boolean }>(`/api/v1/preferences/onboarding-status?workspace_id=${w.id}`)
+          .then((s) => setOnboardingDone(s.completed))
+          .catch(() => setOnboardingDone(true));
         return apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${w.id}/agents`);
       })
       .then(async (a) => {
@@ -474,6 +480,26 @@ export default function RunPage() {
               ))}
             </div>
           ))}
+        </div>
+
+        {/* Sidebar footer — profile / onboarding access */}
+        <div className="border-t border-border/40 px-3 py-3 space-y-2">
+          {onboardingDone === false && (
+            <button
+              onClick={() => router.push("/onboarding/profile")}
+              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-flow-brand/15 text-flow-brand border border-flow-brand/30 hover:bg-flow-brand/25 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Finish onboarding
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/settings/profile")}
+            className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <User className="h-3.5 w-3.5" />
+            Profile & preferences
+          </button>
         </div>
       </aside>
 
