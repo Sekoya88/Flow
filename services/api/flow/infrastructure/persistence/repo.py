@@ -330,6 +330,207 @@ class FlowRepository:
             user_id,
         )
 
+    # ── Typed user preferences ────────────────────────────────────────────
+
+    async def load_profile(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        agent_id: UUID | None,
+    ) -> list[asyncpg.Record]:
+        """Load active/provisional preferences, delete decayed rows, return merged list."""
+        rows = await self._pool.fetch(
+            """
+            SELECT id, class, value, score, status, pinned,
+                   agent_id, last_reinforced_at, decay_half_life_days, created_at
+            FROM user_preferences
+            WHERE workspace_id = $1
+              AND user_id = $2
+              AND (agent_id = $3 OR agent_id IS NULL)
+              AND status IN ('provisional', 'active')
+            ORDER BY agent_id NULLS LAST, score DESC
+            """,
+            workspace_id, user_id, agent_id,
+        )
+        from datetime import datetime, timezone
+
+        to_delete: list[asyncpg.Record] = []
+        live: list[asyncpg.Record] = []
+        for row in rows:
+            pinned = row["pinned"]
+            if pinned:
+                live.append(row)
+                continue
+            lra = row["last_reinforced_at"]
+            if lra.tzinfo is None:
+                lra = lra.replace(tzinfo=timezone.utc)
+            days = (datetime.now(tz=timezone.utc) - lra).total_seconds() / 86400
+            eff = row["score"] * (0.5 ** (days / row["decay_half_life_days"]))
+            if eff < 0.1:
+                to_delete.append(row)
+            else:
+                live.append(row)
+
+        if to_delete:
+            ids = [r["id"] for r in to_delete]
+            await self._pool.execute(
+                "DELETE FROM user_preferences WHERE id = ANY($1::uuid[])", ids
+            )
+        return live
+
+    async def upsert_typed_preference(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        class_: str,
+        value: str,
+        agent_id: UUID | None = None,
+        initial_status: str = "candidate",
+    ) -> asyncpg.Record:
+        """Upsert (reinforce) a preference; returns updated row."""
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO user_preferences
+                (workspace_id, user_id, agent_id, class, value, status)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (workspace_id, user_id,
+                         COALESCE(agent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                         class, value)
+            DO UPDATE SET
+                score = LEAST(1.0, user_preferences.score + 0.1),
+                last_reinforced_at = NOW()
+            RETURNING *
+            """,
+            workspace_id, user_id, agent_id, class_, value, initial_status,
+        )
+        return row
+
+    async def apply_preference_graduation(
+        self,
+        pref_id: UUID,
+        new_status: str,
+    ) -> None:
+        await self._pool.execute(
+            "UPDATE user_preferences SET status = $1 WHERE id = $2",
+            new_status, pref_id,
+        )
+
+    async def get_typed_preferences(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        agent_id: UUID | None = None,
+        status: str | None = None,
+        class_: str | None = None,
+    ) -> tuple[list[asyncpg.Record], list[asyncpg.Record]]:
+        """Return (global_rows, agent_specific_rows)."""
+        conditions = ["workspace_id = $1", "user_id = $2"]
+        params: list = [workspace_id, user_id]
+        idx = 3
+
+        if status:
+            conditions.append(f"status = ${idx}")
+            params.append(status)
+            idx += 1
+        if class_:
+            conditions.append(f"class = ${idx}")
+            params.append(class_)
+            idx += 1
+
+        where = " AND ".join(conditions)
+        rows = await self._pool.fetch(
+            f"""
+            SELECT id, class, value, score, status, pinned,
+                   agent_id, last_reinforced_at, decay_half_life_days, created_at
+            FROM user_preferences
+            WHERE {where}
+            ORDER BY score DESC
+            """,
+            *params,
+        )
+        global_rows = [r for r in rows if r["agent_id"] is None]
+        agent_rows = [r for r in rows if r["agent_id"] == agent_id] if agent_id else []
+        return global_rows, agent_rows
+
+    async def get_preference_by_id(
+        self, pref_id: UUID, user_id: UUID
+    ) -> asyncpg.Record | None:
+        return await self._pool.fetchrow(
+            """
+            SELECT id, class, value, score, status, pinned,
+                   agent_id, workspace_id, last_reinforced_at, decay_half_life_days, created_at
+            FROM user_preferences WHERE id = $1 AND user_id = $2
+            """,
+            pref_id, user_id,
+        )
+
+    async def patch_typed_preference(
+        self,
+        pref_id: UUID,
+        user_id: UUID,
+        action: str,
+    ) -> asyncpg.Record | None:
+        """Apply promote/pin/unpin/forget/veto actions. Returns updated row or None if deleted."""
+        row = await self.get_preference_by_id(pref_id, user_id)
+        if not row:
+            return None
+
+        if action == "promote":
+            _ORDER = ["candidate", "provisional", "active"]
+            current_idx = _ORDER.index(row["status"]) if row["status"] in _ORDER else -1
+            if current_idx < len(_ORDER) - 1:
+                next_status = _ORDER[current_idx + 1]
+                return await self._pool.fetchrow(
+                    "UPDATE user_preferences SET status = $1 WHERE id = $2 RETURNING *",
+                    next_status, pref_id,
+                )
+            return row
+
+        if action == "pin":
+            return await self._pool.fetchrow(
+                "UPDATE user_preferences SET status = 'active', pinned = TRUE WHERE id = $1 RETURNING *",
+                pref_id,
+            )
+
+        if action == "unpin":
+            return await self._pool.fetchrow(
+                "UPDATE user_preferences SET pinned = FALSE WHERE id = $1 RETURNING *",
+                pref_id,
+            )
+
+        if action == "forget":
+            await self._pool.execute(
+                "DELETE FROM user_preferences WHERE id = $1", pref_id
+            )
+            return None
+
+        if action == "veto":
+            # Delete original + insert veto entry to suppress future extraction
+            await self._pool.execute(
+                "DELETE FROM user_preferences WHERE id = $1", pref_id
+            )
+            veto_row = await self.upsert_typed_preference(
+                row["workspace_id"], user_id, "veto", row["value"],
+                row["agent_id"], initial_status="active",
+            )
+            return veto_row
+
+        return row
+
+    async def delete_typed_preference(self, pref_id: UUID, user_id: UUID) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM user_preferences WHERE id = $1 AND user_id = $2",
+            pref_id, user_id,
+        )
+        return result == "DELETE 1"
+
+    async def get_onboarding_status(self, workspace_id: UUID, user_id: UUID) -> dict:
+        count = await self._pool.fetchval(
+            "SELECT COUNT(*) FROM user_preferences WHERE workspace_id = $1 AND user_id = $2",
+            workspace_id, user_id,
+        )
+        return {"completed": int(count) > 0, "preference_count": int(count)}
+
     async def insert_memory(
         self,
         workspace_id: UUID,
