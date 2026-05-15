@@ -1,9 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import { OnboardingQuestionnaire } from '@/components/preferences/OnboardingQuestionnaire'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.clearAllMocks()
+})
 
 const defaultProps = {
   workspaceId: 'ws-123',
@@ -175,6 +178,31 @@ describe('OnboardingQuestionnaire', () => {
         screen.getByText('Something went wrong. Please try again.')
       ).toBeInTheDocument()
     })
+  })
+
+  it('shows error on server error response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    )
+    render(<OnboardingQuestionnaire {...defaultProps} />)
+    fillAndAdvance('Python')
+    fillAndAdvance('Engineering')
+    fillAndAdvance('Concise')
+    fillAndAdvance('Build a compiler')
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^skip$/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Something went wrong. Please try again.')).toBeInTheDocument()
+    })
+  })
+
+  it('shows error when required field is empty', () => {
+    render(<OnboardingQuestionnaire {...defaultProps} />)
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    expect(screen.getByText('This field is required.')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
   })
 
   it('skip setup calls onDismiss', () => {

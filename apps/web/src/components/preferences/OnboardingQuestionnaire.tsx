@@ -40,6 +40,11 @@ export function OnboardingQuestionnaire({
   const isOptional = question.optional === true
 
   function handleNext() {
+    if (!isOptional && !currentInput.trim()) {
+      setError('This field is required.')
+      return
+    }
+    setError(null)
     if (currentInput.trim()) {
       setAnswers((prev) => ({ ...prev, [step]: currentInput.trim() }))
     }
@@ -82,7 +87,7 @@ export function OnboardingQuestionnaire({
         throw new Error('Request failed')
       }
       const data = await res.json()
-      onComplete(data.created)
+      onComplete(data.created ?? 0)
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
