@@ -16,7 +16,7 @@ rebuild:
 up:
 	docker compose up -d
 
-# ── Quick rebuild (uses cache) ────────────────────────────────────────────────
+# ── Quick rebuild (uses cache, KEEPS volumes/data) ────────────────────────────
 build:
 	docker compose up --build -d
 	@sleep 5
@@ -24,6 +24,14 @@ build:
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
 	docker compose exec api uv run python scripts/seed_skills.py
 	@echo "\n✓ Ready → http://localhost:13000"
+
+# ── Apply migrations + restart services WITHOUT wiping volumes ────────────────
+# Use this for code changes + new migrations. NEVER destroys the DB.
+update:
+	docker compose up --build -d api worker web
+	@sleep 4
+	docker compose exec api uv run alembic upgrade head
+	@echo "\n✓ Updated (data preserved) → http://localhost:13000"
 
 # ── Stop everything ───────────────────────────────────────────────────────────
 down:
