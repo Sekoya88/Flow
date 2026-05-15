@@ -4,7 +4,7 @@ import io
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from flow.application.preference_service import (
     effective_score,
@@ -102,7 +102,7 @@ async def submit_onboarding(
 
 @router.post("/import-cv")
 async def import_cv(
-    workspace_id: UUID,
+    workspace_id: UUID = Form(...),
     file: UploadFile = File(...),
     user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
     repo: Annotated[FlowRepository, Depends(get_repo)] = ...,

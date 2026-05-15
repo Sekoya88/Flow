@@ -1,7 +1,17 @@
 'use client'
 
 import React, { useState } from 'react'
+import { ArrowRight, AlertCircle, Loader2, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from '@/components/ui/card'
 
 interface OnboardingQuestionnaireProps {
   workspaceId: string
@@ -39,6 +49,7 @@ export function OnboardingQuestionnaire({
   const question = QUESTIONS[step]
   const isLast = step === QUESTIONS.length - 1
   const isOptional = question.optional === true
+  const progress = ((step + 1) / QUESTIONS.length) * 100
 
   function handleNext() {
     if (!isOptional && !currentInput.trim()) {
@@ -91,36 +102,129 @@ export function OnboardingQuestionnaire({
     }
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      handleNext()
+    }
+  }
+
   return (
-    <div role="dialog" aria-modal="true">
-      <div>
-        <span>Step {step + 1} of 7</span>
-        <button type="button" onClick={onDismiss}>
-          Skip setup
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-2xl px-4 py-10 animate-fade-in">
+      <Card
+        role="dialog"
+        aria-modal="true"
+        className="surface-glass-heavy border-flow-brand/20 shadow-xl shadow-flow-brand/10"
+      >
+        <CardHeader className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-flow-brand" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-flow-brand/80">
+                Step {step + 1} of {QUESTIONS.length}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onDismiss}
+              disabled={submitting}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Skip setup
+            </Button>
+          </div>
+          <div
+            className="h-1 w-full overflow-hidden rounded-full bg-muted/50"
+            role="progressbar"
+            aria-valuenow={Math.round(progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full rounded-full bg-flow-brand transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </CardHeader>
 
-      <p>{question.text}</p>
+        <CardContent key={step} className="space-y-5 animate-slide-up">
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
+                {question.text}
+              </h2>
+              {isOptional && (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 font-mono text-[10px] uppercase tracking-wider"
+                >
+                  Optional
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs font-mono text-muted-foreground/70">
+              {question.class}
+            </p>
+          </div>
 
-      <input
-        type="text"
-        value={currentInput}
-        onChange={(e) => setCurrentInput(e.target.value)}
-        disabled={submitting}
-      />
+          <Textarea
+            value={currentInput}
+            onChange={(e) => setCurrentInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={submitting}
+            autoFocus
+            placeholder={isOptional ? 'Skip or type your answer…' : 'Type your answer…'}
+            className="min-h-[88px] resize-none rounded-xl border-border/60 bg-card/60 text-sm focus-visible:border-flow-brand/50 focus-visible:ring-flow-brand/30"
+          />
 
-      {error && <p role="alert">{error}</p>}
+          {error && (
+            <p
+              role="alert"
+              className="flex items-center gap-1.5 text-sm text-destructive"
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              {error}
+            </p>
+          )}
 
-      <div>
-        {isOptional && (
-          <button type="button" onClick={handleSkip} disabled={submitting}>
-            Skip
-          </button>
-        )}
-        <button type="button" onClick={handleNext} disabled={submitting}>
-          {isLast ? 'Submit' : 'Next'}
-        </button>
-      </div>
+          <p className="text-[11px] font-mono text-muted-foreground/50">
+            ⌘ / Ctrl + Enter to continue
+          </p>
+        </CardContent>
+
+        <CardFooter className="flex items-center justify-end gap-2 pt-2">
+          {isOptional && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSkip}
+              disabled={submitting}
+            >
+              Skip
+            </Button>
+          )}
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={submitting}
+            className="gap-1.5 bg-flow-brand text-white shadow-md shadow-flow-brand/20 hover:bg-flow-brand/90"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                {isLast ? 'Submit' : 'Next'}
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { AlertTriangle, FileUp, Layers, Loader2, UserCog } from 'lucide-react'
 import { usePreferences } from '@/lib/usePreferences'
 import { useWorkspaceId } from '@/lib/useWorkspace'
 import { PreferenceSection } from '@/components/preferences/PreferenceSection'
@@ -15,9 +16,28 @@ export default function ProfilePage() {
   const { data, loading, error, reload, patchPreference, createPreference } =
     usePreferences(workspaceId ?? '')
 
-  if (wsLoading || loading) return <p className="p-6 text-slate-400">Loading preferences...</p>
-  if (!workspaceId) return <p className="p-6 text-red-400">No workspace found. Sign in again.</p>
-  if (error) return <p className="p-6 text-red-400">Failed to load preferences.</p>
+  if (wsLoading || loading) {
+    return (
+      <div className="mx-auto flex max-w-2xl items-center justify-center gap-2 px-4 py-16 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading preferences…</span>
+      </div>
+    )
+  }
+  if (!workspaceId) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-sm text-destructive">
+        No workspace found. Sign in again.
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-sm text-destructive">
+        Failed to load preferences.
+      </div>
+    )
+  }
 
   const global = data?.global ?? []
   const candidates = global.filter(p => p.status === 'candidate')
@@ -35,35 +55,75 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-      <h1 className="text-2xl font-bold text-slate-100">Profile</h1>
+    <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-12 pt-6 animate-fade-in">
+      {/* Header */}
+      <header className="space-y-2">
+        <div className="flex items-center gap-2">
+          <UserCog className="h-4 w-4 text-flow-brand" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+            Profile
+          </span>
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Your preferences
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Tune how every agent run feels. Pinned facets stay forever; candidates graduate as they prove themselves.
+        </p>
+      </header>
 
+      {/* Pending review banner */}
       {candidates.length > 0 && (
         <button
           onClick={scrollToCandidates}
-          className="w-full text-left px-4 py-3 rounded-lg bg-amber-900/40 border border-amber-700/60 text-amber-300 text-sm hover:bg-amber-900/60"
+          className="surface-glass flex w-full items-center gap-3 rounded-2xl border border-amber-500/30 px-4 py-3 text-left transition-colors hover:border-amber-500/60 hover:bg-amber-500/[0.04]"
         >
-          {candidates.length} preference{candidates.length !== 1 ? 's' : ''} pending review
+          <AlertTriangle className="h-4 w-4 text-amber-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-200">
+              {candidates.length} preference{candidates.length !== 1 ? 's' : ''} pending review
+            </p>
+            <p className="font-mono text-[11px] text-amber-200/60">
+              Promote or dismiss them below
+            </p>
+          </div>
         </button>
       )}
 
-      <section>
-        <h2 className="text-base font-semibold text-slate-200 mb-3">Import from Résumé</h2>
+      {/* CV import */}
+      <section className="surface-glass rounded-2xl border border-border/50 p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <FileUp className="h-3.5 w-3.5 text-flow-brand" />
+          <h2 className="text-sm font-semibold text-foreground">
+            Import from Résumé
+          </h2>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            optional
+          </span>
+        </div>
         <CVDropzone workspaceId={workspaceId} onImported={() => reload()} />
       </section>
 
-      <section className="space-y-1">
-        {FACET_CLASSES.map(cls => (
-          <PreferenceSection
-            key={cls}
-            cls={cls}
-            prefs={global.filter(p => p.class === cls)}
-            onPatch={patchPreference}
-            onAdd={(c, val) => createPreference(c, val)}
-          />
-        ))}
+      {/* Facets */}
+      <section className="surface-glass rounded-2xl border border-border/50 p-2 shadow-sm">
+        <div className="mb-2 flex items-center gap-2 px-3 pt-2">
+          <Layers className="h-3.5 w-3.5 text-flow-brand" />
+          <h2 className="text-sm font-semibold text-foreground">Facets</h2>
+        </div>
+        <div className="space-y-1">
+          {FACET_CLASSES.map(cls => (
+            <PreferenceSection
+              key={cls}
+              cls={cls}
+              prefs={global.filter(p => p.class === cls)}
+              onPatch={patchPreference}
+              onAdd={(c, val) => createPreference(c, val)}
+            />
+          ))}
+        </div>
       </section>
 
+      {/* Candidate queue */}
       <section ref={candidateSectionRef} id="candidate-section">
         <CandidateQueue
           candidates={candidates}
