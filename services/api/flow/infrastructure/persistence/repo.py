@@ -164,10 +164,38 @@ class FlowRepository:
         assert row is not None
         return row["id"]
 
+    async def list_executions_for_user(
+        self, user_id: UUID, *, limit: int = 60
+    ) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            """
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message,
+                   e.created_at, e.completed_at,
+                   a.name AS agent_name, a.template AS agent_template,
+                   (SELECT ee.payload->>'answer'
+                    FROM execution_events ee
+                    WHERE ee.execution_id = e.id AND ee.kind = 'final'
+                    LIMIT 1) AS answer
+            FROM executions e
+            JOIN agents a ON a.id = e.agent_id
+            JOIN workspace_members m ON m.workspace_id = e.workspace_id
+            WHERE m.user_id = $1
+            ORDER BY e.created_at DESC
+            LIMIT $2
+            """,
+            user_id,
+            limit,
+        )
+
     async def get_execution_for_user(self, execution_id: UUID, user_id: UUID) -> asyncpg.Record | None:
         return await self._pool.fetchrow(
             """
-            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message, e.created_at
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message, e.created_at,
+                   a.name AS agent_name, a.template AS agent_template,
+                   (SELECT ee.payload->>'answer'
+                    FROM execution_events ee
+                    WHERE ee.execution_id = e.id AND ee.kind = 'final'
+                    LIMIT 1) AS answer
             FROM executions e
             JOIN agents a ON a.id = e.agent_id
             JOIN workspace_members m ON m.workspace_id = a.workspace_id

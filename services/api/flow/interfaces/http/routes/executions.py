@@ -16,6 +16,54 @@ from flow.interfaces.http.deps import get_current_user_id, get_repo, get_setting
 router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
 
 
+@router.get("")
+async def list_executions(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    rows = await repo.list_executions_for_user(user_id)
+    return {
+        "executions": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"] or r["agent_template"],
+                "user_message": r["user_message"],
+                "answer": r["answer"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/{execution_id}")
+async def get_execution(
+    execution_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    row = await repo.get_execution_for_user(execution_id, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="execution not found")
+    events = await repo.list_events(execution_id)
+    return {
+        "id": str(row["id"]),
+        "status": row["status"],
+        "agent_id": str(row["agent_id"]),
+        "agent_name": row["agent_name"] or row["agent_template"],
+        "user_message": row["user_message"],
+        "answer": row["answer"],
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "events": [
+            {"id": e["id"], "kind": e["kind"], "payload": dict(e["payload"])}
+            for e in events
+        ],
+    }
+
+
 @router.post("/{execution_id}/stream-token")
 async def mint_stream_token(
     execution_id: UUID,
