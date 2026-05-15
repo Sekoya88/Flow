@@ -55,7 +55,7 @@ export default function ProfilePage() {
           <PreferenceSection
             key={cls}
             cls={cls}
-            prefs={global.filter(p => p.class === cls && p.status !== 'candidate')}
+            prefs={global.filter(p => p.class === cls)}
             onPatch={patchPreference}
             onAdd={(c, val) => createPreference(c, val)}
           />
