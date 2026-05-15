@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -85,3 +86,42 @@ class ProposalActionIn(BaseModel):
 
 class VibeIn(BaseModel):
     description: str = Field(min_length=10, max_length=2000)
+
+
+class PreferenceOut(BaseModel):
+    id: UUID
+    class_: str = Field(alias="class")
+    value: str
+    score: float
+    status: str
+    pinned: bool
+    agent_id: UUID | None
+    last_reinforced_at: datetime
+    created_at: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class PreferenceCreateIn(BaseModel):
+    workspace_id: UUID
+    agent_id: UUID | None = None
+    class_: str = Field(alias="class")
+    value: str = Field(min_length=1, max_length=200)
+    status: str = "active"
+
+    model_config = {"populate_by_name": True}
+
+
+class PreferencePatchIn(BaseModel):
+    action: str  # promote | pin | unpin | forget | veto
+
+
+class OnboardingAnswerIn(BaseModel):
+    class_: str = Field(alias="class")
+    value: str
+
+    model_config = {"populate_by_name": True}
+
+
+class OnboardingAnswersIn(BaseModel):
+    answers: list[OnboardingAnswerIn]
