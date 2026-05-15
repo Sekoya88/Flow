@@ -13,12 +13,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS user_preferences")
     op.execute("""
         CREATE TABLE user_preferences (
             id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id              UUID NOT NULL,
+            user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             agent_id             UUID REFERENCES agents(id) ON DELETE CASCADE,
             class                TEXT NOT NULL CHECK (class IN
                                      ('style','tooling','veto','goal','domain','channel')),
