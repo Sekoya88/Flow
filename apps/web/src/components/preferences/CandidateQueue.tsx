@@ -22,13 +22,15 @@ export function CandidateQueue({ candidates, onPatch, onBulkPromote, onBulkDismi
         <div className="flex gap-2">
           <button
             onClick={onBulkPromote}
-            className="text-xs px-2 py-1 rounded bg-emerald-900/60 text-emerald-300 hover:bg-emerald-800/60"
+            disabled={candidates.length === 0}
+            className="text-xs px-2 py-1 rounded bg-emerald-900/60 text-emerald-300 hover:bg-emerald-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Promote all
           </button>
           <button
             onClick={onBulkDismiss}
-            className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600"
+            disabled={candidates.length === 0}
+            className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Dismiss all
           </button>

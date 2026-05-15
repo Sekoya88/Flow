@@ -22,13 +22,13 @@ const makeCandidate = (id: string, value: string): Preference => ({
   created_at: new Date().toISOString(),
 })
 
-const twoCandiates = [makeCandidate('c1', 'uses TypeScript'), makeCandidate('c2', 'prefers dark mode')]
+const twoCandidates = [makeCandidate('c1', 'uses TypeScript'), makeCandidate('c2', 'prefers dark mode')]
 
 describe('CandidateQueue', () => {
   it('renders pending review heading', () => {
     render(
       <CandidateQueue
-        candidates={twoCandiates}
+        candidates={twoCandidates}
         onPatch={vi.fn()}
         onBulkPromote={vi.fn()}
         onBulkDismiss={vi.fn()}
@@ -40,7 +40,7 @@ describe('CandidateQueue', () => {
   it('shows candidate count', () => {
     render(
       <CandidateQueue
-        candidates={twoCandiates}
+        candidates={twoCandidates}
         onPatch={vi.fn()}
         onBulkPromote={vi.fn()}
         onBulkDismiss={vi.fn()}
@@ -53,7 +53,7 @@ describe('CandidateQueue', () => {
     const onBulkPromote = vi.fn()
     render(
       <CandidateQueue
-        candidates={twoCandiates}
+        candidates={twoCandidates}
         onPatch={vi.fn()}
         onBulkPromote={onBulkPromote}
         onBulkDismiss={vi.fn()}
@@ -67,7 +67,7 @@ describe('CandidateQueue', () => {
     const onBulkDismiss = vi.fn()
     render(
       <CandidateQueue
-        candidates={twoCandiates}
+        candidates={twoCandidates}
         onPatch={vi.fn()}
         onBulkPromote={vi.fn()}
         onBulkDismiss={onBulkDismiss}
@@ -80,7 +80,7 @@ describe('CandidateQueue', () => {
   it('renders each candidate row', () => {
     render(
       <CandidateQueue
-        candidates={twoCandiates}
+        candidates={twoCandidates}
         onPatch={vi.fn()}
         onBulkPromote={vi.fn()}
         onBulkDismiss={vi.fn()}
@@ -89,6 +89,19 @@ describe('CandidateQueue', () => {
     expect(screen.getByText('uses TypeScript')).toBeInTheDocument()
     expect(screen.getByText('prefers dark mode')).toBeInTheDocument()
     expect(screen.getAllByTestId('preference-row')).toHaveLength(2)
+  })
+
+  it('disables bulk buttons when no candidates', () => {
+    render(
+      <CandidateQueue
+        candidates={[]}
+        onPatch={vi.fn()}
+        onBulkPromote={vi.fn()}
+        onBulkDismiss={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/promote all/i)).toBeDisabled()
+    expect(screen.getByText(/dismiss all/i)).toBeDisabled()
   })
 
   it('shows empty message when no candidates', () => {
