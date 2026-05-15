@@ -164,6 +164,19 @@ def build_agent_from_ctx(ctx: "GraphContext", checkpointer: Any | None = None) -
 
         system_prompt: Any = ctx.agent_config.get("system_prompt")
 
+        # Byte-stability tracking — hash the raw string before any wrapping so
+        # the hash is invariant to provider-specific transformations.
+        if system_prompt:
+            from flow.application.prompt_hash import compute_prompt_hash, record_prompt_hash
+            _ph = compute_prompt_hash(system_prompt)
+            if _ph and ctx.pool is not None:
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(record_prompt_hash(ctx.pool, agent_id=ctx.agent_id, prompt_hash=_ph))
+                except RuntimeError:
+                    pass
+
         # Anthropic prompt caching — wrap system prompt in a content block with cache_control
         # so that repeated calls with the same system prompt hit Anthropic's 5-min cache.
         if provider == "anthropic" and system_prompt:
