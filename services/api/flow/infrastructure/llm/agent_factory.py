@@ -101,7 +101,7 @@ def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
 
     if ctx.store is not None:
         embed = _make_embed_fn(ctx)
-        middleware.append(FlowMemoryMiddleware(store=ctx.store, llm=judge_llm, embed=embed))
+        middleware.append(FlowMemoryMiddleware(store=ctx.store, llm=judge_llm, embed=embed, pool=ctx.pool))
 
     middleware.append(FlowResilienceMiddleware())
 

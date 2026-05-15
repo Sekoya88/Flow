@@ -307,8 +307,11 @@ def make_worker(ctx: GraphContext):
             plan = state.get("plan") or ""
             user_text = _last_human_text(state)
             rag_bits, rag_sources, mem_bits = await _rag_and_memory(ctx, user_text, tools)
-            prefs = await repo.get_preferences(ctx.user_id)
-            pref_lines = [f"{r['key']}: {r['value']}" for r in prefs[:20]]
+            try:
+                prefs = await repo.load_profile(ctx.workspace_id, ctx.user_id, ctx.agent_id)
+            except Exception:
+                prefs = []
+            pref_lines = [f"{r['class']}: {r['value']}" for r in prefs[:20]]
 
             neg_rows = await repo.list_agent_negatives(ctx.workspace_id, ctx.agent_id, limit=5)
             neg_bits = [r["content"] for r in neg_rows]

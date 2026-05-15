@@ -387,24 +387,6 @@ class FlowRepository:
             limit,
         )
 
-    async def upsert_preference(self, user_id: UUID, key: str, value: dict) -> None:
-        await self._pool.execute(
-            """
-            INSERT INTO user_preferences (user_id, key, value)
-            VALUES ($1, $2, $3::jsonb)
-            ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-            """,
-            user_id,
-            key,
-            json.dumps(value),
-        )
-
-    async def get_preferences(self, user_id: UUID) -> list[asyncpg.Record]:
-        return await self._pool.fetch(
-            "SELECT key, value, updated_at FROM user_preferences WHERE user_id = $1 ORDER BY key",
-            user_id,
-        )
-
     # ── Typed user preferences ────────────────────────────────────────────
 
     async def load_profile(

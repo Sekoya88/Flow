@@ -13,6 +13,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Drop legacy (user_id, key, value JSONB) schema from migration 0001 so the
+    # typed facet schema below can take over the same table name.
+    op.execute("DROP TABLE IF EXISTS user_preferences CASCADE")
     op.execute("""
         CREATE TABLE user_preferences (
             id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
