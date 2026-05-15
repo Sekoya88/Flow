@@ -47,7 +47,7 @@ export function usePreferences(workspaceId: string, agentId?: string) {
       setMutationError(null)
       await apiFetch(`/api/v1/preferences/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ action }),
+        json: { action },
       })
       await load()
     } catch (e) {
@@ -62,12 +62,12 @@ export function usePreferences(workspaceId: string, agentId?: string) {
       setMutationError(null)
       await apiFetch('/api/v1/preferences', {
         method: 'POST',
-        body: JSON.stringify({
+        json: {
           workspace_id: workspaceId,
           class: cls,
           value,
           ...(agentId ? { agent_id: agentId } : {}),
-        }),
+        },
       })
       await load()
     } catch (e) {

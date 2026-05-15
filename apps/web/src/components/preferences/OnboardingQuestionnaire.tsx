@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { ArrowRight, AlertCircle, Loader2, Sparkles } from 'lucide-react'
+import { ArrowRight, AlertCircle, Check, Loader2, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,6 +12,7 @@ import {
   CardFooter,
   CardHeader,
 } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 interface OnboardingQuestionnaireProps {
   workspaceId: string
@@ -22,18 +23,77 @@ interface OnboardingQuestionnaireProps {
 interface Question {
   class: string
   text: string
+  suggestions: string[]
   optional?: boolean
 }
 
 const QUESTIONS: Question[] = [
-  { class: 'tooling', text: 'What programming languages do you use most?' },
-  { class: 'domain', text: "What's your main professional domain?" },
-  { class: 'style', text: 'How do you prefer answers formatted?' },
-  { class: 'goal', text: 'What are you currently working on or trying to learn?' },
-  { class: 'veto', text: 'Are there tools, patterns, or suggestions you never want to see?', optional: true },
-  { class: 'tooling', text: 'Any tech stack preferences we should know about?', optional: true },
-  { class: 'channel', text: 'How should code examples be presented?', optional: true },
+  {
+    class: 'tooling',
+    text: 'What programming languages do you use most?',
+    suggestions: [
+      'Python', 'TypeScript', 'JavaScript', 'Go', 'Rust', 'Java',
+      'C++', 'Swift', 'Kotlin', 'Ruby', 'Scala', 'Elixir',
+    ],
+  },
+  {
+    class: 'domain',
+    text: "What's your main professional domain?",
+    suggestions: [
+      'Software Engineering', 'Data Science', 'ML/AI', 'DevOps',
+      'Backend', 'Frontend', 'Full-Stack', 'Product', 'Design', 'QA', 'Security',
+    ],
+  },
+  {
+    class: 'style',
+    text: 'How do you prefer answers formatted?',
+    suggestions: [
+      'Bullet points', 'Markdown', 'Plain text', 'With code examples',
+      'Step-by-step', 'Concise', 'Verbose', 'Technical', 'With diagrams',
+    ],
+  },
+  {
+    class: 'goal',
+    text: 'What are you currently working on or trying to learn?',
+    suggestions: [
+      'Web development', 'Mobile apps', 'APIs / Backends', 'Databases',
+      'Cloud architecture', 'ML models', 'DevOps pipelines',
+      'Performance', 'Security', 'Mentoring',
+    ],
+  },
+  {
+    class: 'veto',
+    text: 'Are there tools, patterns, or suggestions you never want to see?',
+    suggestions: [
+      'Docker', 'Kubernetes', 'GraphQL', 'Microservices', 'Monolith',
+      'jQuery', 'PHP', 'Excessive jargon', 'Walls of text', 'Apologetic tone',
+    ],
+    optional: true,
+  },
+  {
+    class: 'tooling',
+    text: 'Any tech stack preferences we should know about?',
+    suggestions: [
+      'Node.js', 'Next.js', 'Django', 'FastAPI', 'Spring Boot', '.NET',
+      'AWS', 'GCP', 'Azure', 'PostgreSQL', 'MongoDB', 'Redis',
+    ],
+    optional: true,
+  },
+  {
+    class: 'channel',
+    text: 'How should code examples be presented?',
+    suggestions: [
+      'Inline snippets', 'Separate files', 'Syntax-highlighted blocks',
+      'With comments', 'With explanations', 'Interactive playground', 'GitHub Gist',
+    ],
+    optional: true,
+  },
 ]
+
+interface AnswerEntry {
+  class: string
+  value: string
+}
 
 export function OnboardingQuestionnaire({
   workspaceId,
@@ -41,8 +101,10 @@ export function OnboardingQuestionnaire({
   onDismiss,
 }: OnboardingQuestionnaireProps) {
   const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, string>>({})
-  const [currentInput, setCurrentInput] = useState('')
+  // Chip selections per step index
+  const [chipSelections, setChipSelections] = useState<Record<number, Set<string>>>({})
+  // Free-text answers per step index
+  const [freeTexts, setFreeTexts] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,49 +113,92 @@ export function OnboardingQuestionnaire({
   const isOptional = question.optional === true
   const progress = ((step + 1) / QUESTIONS.length) * 100
 
+  const currentChips = chipSelections[step] ?? new Set<string>()
+  const currentFreeText = freeTexts[step] ?? ''
+
+  function toggleChip(value: string) {
+    setError(null)
+    setChipSelections((prev) => {
+      const next = new Set(prev[step] ?? new Set<string>())
+      if (next.has(value)) {
+        next.delete(value)
+      } else {
+        next.add(value)
+      }
+      return { ...prev, [step]: next }
+    })
+  }
+
+  function updateFreeText(value: string) {
+    setError(null)
+    setFreeTexts((prev) => ({ ...prev, [step]: value }))
+  }
+
+  function hasAnswer(stepIdx: number): boolean {
+    const chips = chipSelections[stepIdx] ?? new Set<string>()
+    const txt = (freeTexts[stepIdx] ?? '').trim()
+    return chips.size > 0 || txt.length > 0
+  }
+
+  function buildAnswers(): AnswerEntry[] {
+    const out: AnswerEntry[] = []
+    const seen = new Set<string>()
+    for (let i = 0; i < QUESTIONS.length; i++) {
+      const q = QUESTIONS[i]
+      const chips = chipSelections[i] ?? new Set<string>()
+      for (const value of chips) {
+        const key = `${q.class}:${value.toLowerCase()}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          out.push({ class: q.class, value })
+        }
+      }
+      const txt = (freeTexts[i] ?? '').trim()
+      if (txt) {
+        const key = `${q.class}:${txt.toLowerCase()}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          out.push({ class: q.class, value: txt })
+        }
+      }
+    }
+    return out
+  }
+
   function handleNext() {
-    if (!isOptional && !currentInput.trim()) {
+    if (!isOptional && !hasAnswer(step)) {
       setError('This field is required.')
       return
     }
     setError(null)
-    if (currentInput.trim()) {
-      setAnswers((prev) => ({ ...prev, [step]: currentInput.trim() }))
-    }
     if (isLast) {
-      submit({ ...answers, ...(currentInput.trim() ? { [step]: currentInput.trim() } : {}) })
+      void submit()
     } else {
       setStep((s) => s + 1)
-      setCurrentInput('')
     }
   }
 
   function handleSkip() {
+    setError(null)
     if (isLast) {
-      submit(answers)
+      void submit()
     } else {
       setStep((s) => s + 1)
-      setCurrentInput('')
     }
   }
 
-  async function submit(finalAnswers: Record<number, string>) {
+  async function submit() {
     setSubmitting(true)
     setError(null)
     try {
-      const payload = {
-        workspace_id: workspaceId,
-        answers: Object.entries(finalAnswers)
-          .filter(([, value]) => value && value.trim())
-          .map(([index, value]) => ({
-            class: QUESTIONS[Number(index)].class,
-            value,
-          })),
-      }
-      const data = await apiFetch<{ created: number }>('/api/v1/preferences/onboarding', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
+      const qs = new URLSearchParams({ workspace_id: workspaceId })
+      const data = await apiFetch<{ created: number }>(
+        `/api/v1/preferences/onboarding?${qs.toString()}`,
+        {
+          method: 'POST',
+          json: { answers: buildAnswers() },
+        },
+      )
       onComplete(data.created ?? 0)
     } catch {
       setError('Something went wrong. Please try again.')
@@ -169,15 +274,55 @@ export function OnboardingQuestionnaire({
             </p>
           </div>
 
-          <Textarea
-            value={currentInput}
-            onChange={(e) => setCurrentInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={submitting}
-            autoFocus
-            placeholder={isOptional ? 'Skip or type your answer…' : 'Type your answer…'}
-            className="min-h-[88px] resize-none rounded-xl border-border/60 bg-card/60 text-sm focus-visible:border-flow-brand/50 focus-visible:ring-flow-brand/30"
-          />
+          {/* Chip suggestions */}
+          <div className="flex flex-wrap gap-2">
+            {question.suggestions.map((suggestion) => {
+              const selected = currentChips.has(suggestion)
+              return (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => toggleChip(suggestion)}
+                  disabled={submitting}
+                  className={cn(
+                    'group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                    selected
+                      ? 'border-flow-brand bg-flow-brand/15 text-flow-brand shadow-sm shadow-flow-brand/10'
+                      : 'border-border/50 bg-card/30 text-foreground/70 hover:border-flow-brand/40 hover:bg-flow-brand/[0.04] hover:text-foreground',
+                  )}
+                  aria-pressed={selected}
+                >
+                  {selected && <Check className="h-3 w-3" />}
+                  {suggestion}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Separator + free text */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border/40" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                or type your own
+              </span>
+              <div className="h-px flex-1 bg-border/40" />
+            </div>
+            <Textarea
+              value={currentFreeText}
+              onChange={(e) => updateFreeText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={submitting}
+              placeholder={
+                currentChips.size > 0
+                  ? 'Add anything else…'
+                  : isOptional
+                    ? 'Skip or type your answer…'
+                    : 'Type your answer…'
+              }
+              className="min-h-[72px] resize-none rounded-xl border-border/60 bg-card/60 text-sm focus-visible:border-flow-brand/50 focus-visible:ring-flow-brand/30"
+            />
+          </div>
 
           {error && (
             <p
@@ -189,9 +334,16 @@ export function OnboardingQuestionnaire({
             </p>
           )}
 
-          <p className="text-[11px] font-mono text-muted-foreground/50">
-            ⌘ / Ctrl + Enter to continue
-          </p>
+          {currentChips.size > 0 && (
+            <p className="text-[11px] font-mono text-muted-foreground/50">
+              {currentChips.size} selected · ⌘ / Ctrl + Enter to continue
+            </p>
+          )}
+          {currentChips.size === 0 && (
+            <p className="text-[11px] font-mono text-muted-foreground/50">
+              ⌘ / Ctrl + Enter to continue
+            </p>
+          )}
         </CardContent>
 
         <CardFooter className="flex items-center justify-end gap-2 pt-2">

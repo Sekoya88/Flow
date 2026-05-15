@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Preferences / profile regression checks
+
+From the **Flow repo root** (where `docker-compose.yml` lives), API contract for `PATCH /api/v1/preferences/{id}` with JSON body:
+
+```bash
+cd services/api && uv run pytest tests/test_preference_routes_patch.py -v
+```
+
+Optional UI smoke (not in CI by default): add `@playwright/test` to this package, then exercise `/settings/profile` — promote a candidate preference and confirm the network tab shows `PATCH` with `Content-Type: application/json` and no `422` from missing `action`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

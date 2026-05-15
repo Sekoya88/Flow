@@ -1,17 +1,20 @@
 from __future__ import annotations
 
-import io
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
+from flow.application.cv_import_service import (
+    extract_cv_text_from_bytes,
+    run_cv_preference_extraction,
+)
 from flow.application.preference_service import (
-    effective_score,
     auto_graduate,
-    extract_preferences_from_cv,
+    effective_score,
     process_onboarding_answers,
 )
+from flow.config import get_settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import (
@@ -102,8 +105,8 @@ async def submit_onboarding(
 
 @router.post("/import-cv")
 async def import_cv(
-    workspace_id: UUID = Form(...),
-    file: UploadFile = File(...),
+    workspace_id: UUID = Form(...),  # noqa: B008
+    file: UploadFile = File(...),  # noqa: B008
     user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
     repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
 ) -> dict:
@@ -121,29 +124,18 @@ async def import_cv(
     if len(raw) > _MAX_CV_BYTES:
         raise HTTPException(status_code=413, detail="file exceeds 5 MB limit")
 
-    if is_pdf:
-        import pypdf
-        reader = pypdf.PdfReader(io.BytesIO(raw))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        import docx
-        doc = docx.Document(io.BytesIO(raw))
-        text = "\n".join(p.text for p in doc.paragraphs)
+    text = extract_cv_text_from_bytes(raw, is_pdf=is_pdf)
 
-    from flow.config import get_settings
-    from langchain_anthropic import ChatAnthropic
     settings = get_settings()
-    llm = ChatAnthropic(model="claude-haiku-4-5-20251001", api_key=settings.anthropic_api_key)
-
-    prefs = await extract_preferences_from_cv(llm, text)
+    prefs, _meta = await run_cv_preference_extraction(settings, text)
 
     for item in prefs:
         await repo.upsert_typed_preference(
             workspace_id, user_id, item["class"], item["value"],
-            initial_status="active",
+            initial_status="candidate",
         )
 
-    return {"extracted": len(prefs), "preview": prefs}
+    return {"extracted": len(prefs), "preview": prefs, "staged": True}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

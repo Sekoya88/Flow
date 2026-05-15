@@ -5,6 +5,7 @@ import {
   Background,
   useNodesState,
   useEdgesState,
+  type Node as RFNode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useEntityGraph } from '@/lib/graph/useEntityGraph'
@@ -54,7 +55,7 @@ export function EntityGraphPanel({
   }, [initialNodes, initialEdges, setNodes, setEdges])
 
   const onNodeDoubleClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (_: React.MouseEvent, node: RFNode) => {
       const nt = node.data?.nodeType
       const rid = node.data?.refId as string | null
       if (typeof nt !== 'string') return

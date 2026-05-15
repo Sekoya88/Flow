@@ -167,7 +167,7 @@ export default function RunPage() {
         setWsId(w.id);
         apiFetch<{ completed: boolean }>(`/api/v1/preferences/onboarding-status?workspace_id=${w.id}`)
           .then((s) => setOnboardingDone(s.completed))
-          .catch(() => setOnboardingDone(true));
+          .catch(() => setOnboardingDone(false));
         return apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${w.id}/agents`);
       })
       .then(async (a) => {

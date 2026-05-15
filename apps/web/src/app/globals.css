@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -8,6 +10,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --font-ui-sans: "Inter";
+  --font-jetbrains-mono: "JetBrains Mono";
   --font-sans: var(--font-ui-sans), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-ui-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;

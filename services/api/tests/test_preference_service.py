@@ -10,7 +10,9 @@ from flow.application.preference_service import (
     auto_graduate,
     extract_preferences,
     extract_preferences_from_cv,
+    merge_facets,
     process_onboarding_answers,
+    regex_extract_facets,
 )
 
 
@@ -139,3 +141,70 @@ class TestProcessOnboardingAnswers:
         result = process_onboarding_answers(answers)
         assert len(result) == 1
         assert result[0]["class"] == "goal"
+
+
+class TestRegexExtractFacets:
+    def test_empty_text_returns_empty(self):
+        assert regex_extract_facets("") == []
+
+    def test_extracts_common_languages(self):
+        text = "Senior engineer fluent in Python, TypeScript and Rust."
+        result = regex_extract_facets(text)
+        values = {r["value"] for r in result}
+        assert "Python" in values
+        assert "TypeScript" in values
+        assert "Rust" in values
+
+    def test_canonicalizes_aliases(self):
+        text = "Worked on K8s clusters with terraform and used postgres."
+        result = regex_extract_facets(text)
+        values = {r["value"] for r in result}
+        assert "Kubernetes" in values
+        assert "Terraform" in values
+        assert "PostgreSQL" in values
+
+    def test_all_entries_are_tooling_class(self):
+        text = "Python, AWS, Docker, React, MongoDB"
+        result = regex_extract_facets(text)
+        assert len(result) > 0
+        assert all(r["class"] == "tooling" for r in result)
+
+    def test_dedupes_repeat_mentions(self):
+        text = "Python python PYTHON python"
+        result = regex_extract_facets(text)
+        python_hits = [r for r in result if r["value"] == "Python"]
+        assert len(python_hits) == 1
+
+    def test_case_insensitive(self):
+        text = "POSTGRES and react"
+        result = regex_extract_facets(text)
+        values = {r["value"] for r in result}
+        assert "PostgreSQL" in values
+        assert "React" in values
+
+
+class TestMergeFacets:
+    def test_merge_disjoint(self):
+        a = [{"class": "tooling", "value": "Python"}]
+        b = [{"class": "tooling", "value": "Rust"}]
+        merged = merge_facets(a, b)
+        assert len(merged) == 2
+
+    def test_merge_dedupes_case_insensitive(self):
+        a = [{"class": "tooling", "value": "Python"}]
+        b = [{"class": "tooling", "value": "python"}]
+        merged = merge_facets(a, b)
+        assert len(merged) == 1
+        # Primary wins for casing
+        assert merged[0]["value"] == "Python"
+
+    def test_merge_keeps_distinct_classes(self):
+        a = [{"class": "tooling", "value": "Python"}]
+        b = [{"class": "goal", "value": "Python"}]
+        merged = merge_facets(a, b)
+        assert len(merged) == 2
+
+    def test_merge_drops_empty_values(self):
+        a = [{"class": "tooling", "value": ""}, {"class": "tooling", "value": "  "}]
+        merged = merge_facets(a, [])
+        assert merged == []

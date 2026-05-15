@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import { OnboardingQuestionnaire } from '@/components/preferences/OnboardingQuestionnaire'
@@ -85,7 +85,9 @@ describe('OnboardingQuestionnaire', () => {
     await waitFor(() => {
       const fetchMock = (global.fetch as ReturnType<typeof vi.fn>)
       expect(fetchMock).toHaveBeenCalledOnce()
-      const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+      const [url, opts] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('workspace_id=ws-123')
+      const body = JSON.parse((opts as RequestInit).body as string)
       // The skipped step 4 should not appear in answers
       const classes = body.answers.map((a: { class: string }) => a.class)
       // step 4 class is 'veto', should not be present
@@ -116,16 +118,18 @@ describe('OnboardingQuestionnaire', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledOnce()
       const [url, options] = fetchMock.mock.calls[0]
-      expect(url).toContain('/api/v1/preferences/onboarding')
+      expect(String(url)).toContain('/api/v1/preferences/onboarding')
+      expect(String(url)).toContain('workspace_id=ws-456')
       expect(options.method).toBe('POST')
-      const body = JSON.parse(options.body)
-      expect(body.workspace_id).toBe('ws-456')
-      expect(body.answers).toEqual([
-        { class: 'tooling', value: 'Python, TypeScript' },
-        { class: 'domain', value: 'Software Engineering' },
-        { class: 'style', value: 'Bullet points' },
-        { class: 'goal', value: 'Learning Rust' },
-      ])
+      const body = JSON.parse((options as RequestInit).body as string)
+      expect(body).toEqual({
+        answers: [
+          { class: 'tooling', value: 'Python, TypeScript' },
+          { class: 'domain', value: 'Software Engineering' },
+          { class: 'style', value: 'Bullet points' },
+          { class: 'goal', value: 'Learning Rust' },
+        ],
+      })
     })
   })
 

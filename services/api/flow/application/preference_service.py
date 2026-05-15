@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -101,6 +102,110 @@ async def extract_preferences_from_cv(llm: Any, text: str) -> list[dict[str, str
         return _parse_prefs(response.content)
     except Exception:
         return []
+
+
+# Curated list of common skills/tools to regex-match in résumé text. Each entry is
+# (regex_pattern, canonical_name). Case-insensitive word-boundary matching.
+_REGEX_FACETS: list[tuple[str, str]] = [
+    # Languages
+    (r"\bpython\b", "Python"),
+    (r"\btypescript\b|\btype\s?script\b", "TypeScript"),
+    (r"\bjavascript\b|\bjs\b", "JavaScript"),
+    (r"\bgolang\b|\bgo\b(?!ogle)", "Go"),
+    (r"\brust\b", "Rust"),
+    (r"\bjava\b(?!script)", "Java"),
+    (r"\bkotlin\b", "Kotlin"),
+    (r"\bswift\b", "Swift"),
+    (r"\bc\+\+\b|\bcpp\b", "C++"),
+    (r"\bc#\b|\bcsharp\b", "C#"),
+    (r"\bruby\b", "Ruby"),
+    (r"\bphp\b", "PHP"),
+    (r"\bscala\b", "Scala"),
+    (r"\belixir\b", "Elixir"),
+    (r"\bsql\b", "SQL"),
+    # Frontend
+    (r"\breact\b", "React"),
+    (r"\bnext\.?js\b", "Next.js"),
+    (r"\bvue\b", "Vue"),
+    (r"\bangular\b", "Angular"),
+    (r"\bsvelte\b", "Svelte"),
+    (r"\btailwind\b", "Tailwind"),
+    # Backend frameworks
+    (r"\bdjango\b", "Django"),
+    (r"\bfastapi\b", "FastAPI"),
+    (r"\bflask\b", "Flask"),
+    (r"\bspring\s?boot\b|\bspring\b", "Spring Boot"),
+    (r"\bnode\.?js\b|\bnodejs\b", "Node.js"),
+    (r"\bexpress\b", "Express"),
+    (r"\b\.net\b|\bdotnet\b", ".NET"),
+    # Cloud / Infra
+    (r"\baws\b|\bamazon\s+web\s+services\b", "AWS"),
+    (r"\bgcp\b|\bgoogle\s+cloud\b", "GCP"),
+    (r"\bazure\b", "Azure"),
+    (r"\bdocker\b", "Docker"),
+    (r"\bkubernetes\b|\bk8s\b", "Kubernetes"),
+    (r"\bterraform\b", "Terraform"),
+    (r"\bansible\b", "Ansible"),
+    # Data
+    (r"\bpostgres(?:ql)?\b", "PostgreSQL"),
+    (r"\bmysql\b", "MySQL"),
+    (r"\bmongo(?:db)?\b", "MongoDB"),
+    (r"\bredis\b", "Redis"),
+    (r"\belastic(?:search)?\b", "Elasticsearch"),
+    (r"\bkafka\b", "Kafka"),
+    # ML
+    (r"\bpytorch\b", "PyTorch"),
+    (r"\btensorflow\b", "TensorFlow"),
+    (r"\bpandas\b", "Pandas"),
+    (r"\bnumpy\b", "NumPy"),
+    (r"\bscikit[-\s]?learn\b|\bsklearn\b", "scikit-learn"),
+    (r"\blangchain\b", "LangChain"),
+    (r"\blanggraph\b", "LangGraph"),
+    # Tools
+    (r"\bgit\b", "Git"),
+    (r"\bgithub\b", "GitHub"),
+    (r"\bgitlab\b", "GitLab"),
+]
+
+
+def regex_extract_facets(text: str) -> list[dict[str, str]]:
+    """Deterministic facet extraction from résumé text. No LLM required.
+
+    Scans for canonical tool/language names. Each unique hit becomes a single
+    ``{"class": "tooling", "value": "<name>"}`` entry. Order is the order they
+    were declared in ``_REGEX_FACETS``.
+    """
+    if not text:
+        return []
+    found: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for pattern, canonical in _REGEX_FACETS:
+        if canonical in seen:
+            continue
+        if re.search(pattern, text, flags=re.IGNORECASE):
+            seen.add(canonical)
+            found.append({"class": "tooling", "value": canonical})
+    return found
+
+
+def merge_facets(
+    primary: list[dict[str, str]],
+    secondary: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Merge two preference lists, deduping on (class, value) — primary wins."""
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, str]] = []
+    for item in primary + secondary:
+        cls = item.get("class", "")
+        val = (item.get("value") or "").strip()
+        if not cls or not val:
+            continue
+        key = (cls, val.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"class": cls, "value": val})
+    return out
 
 
 def process_onboarding_answers(
