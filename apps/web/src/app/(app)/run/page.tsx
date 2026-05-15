@@ -42,8 +42,17 @@ type ExecutionRow = {
   agent_name: string;
   user_message: string;
   answer: string | null;
+  thread_id: string;
   created_at: string | null;
   completed_at: string | null;
+};
+
+type ThreadTurn = {
+  id: string;
+  status: string;
+  user_message: string;
+  answer: string | null;
+  created_at: string | null;
 };
 
 type SseEvent = {
@@ -132,6 +141,8 @@ export default function RunPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [liveAnswer, setLiveAnswer] = useState<string | null>(null);
+  const [threadTurns, setThreadTurns] = useState<ThreadTurn[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -185,11 +196,25 @@ export default function RunPage() {
   const startNewChat = useCallback(() => {
     setSelectedId(null);
     setLiveAnswer(null);
+    setThreadTurns([]);
     reset();
     setToolCalls([]);
     setCitations([]);
     textareaRef.current?.focus();
   }, [reset]);
+
+  // Load all turns when a thread is selected
+  useEffect(() => {
+    if (!selectedExec) {
+      setThreadTurns([]);
+      return;
+    }
+    setThreadLoading(true);
+    apiFetch<{ executions: ThreadTurn[] }>(`/api/v1/executions/threads/${selectedExec.thread_id}`)
+      .then((r) => setThreadTurns(r.executions))
+      .catch(() => setThreadTurns([]))
+      .finally(() => setThreadLoading(false));
+  }, [selectedExec]);
 
   const run = useCallback(async () => {
     if (!agentId || !message.trim() || running) return;
@@ -201,6 +226,15 @@ export default function RunPage() {
     setToolCalls([]);
     setCitations([]);
 
+    // If we're continuing a selected thread, send parent_execution_id
+    const parentId =
+      selectedId && selectedId !== "pending" && history.find((e) => e.id === selectedId)
+        ? selectedId
+        : null;
+    const continuingThreadId = parentId
+      ? history.find((e) => e.id === parentId)?.thread_id ?? null
+      : null;
+
     // Optimistic entry in history
     const optimisticId = "pending";
     const optimistic: ExecutionRow = {
@@ -210,20 +244,46 @@ export default function RunPage() {
       agent_name: agents.find((a) => a.id === agentId)?.name || "Agent",
       user_message: userMsg,
       answer: null,
+      thread_id: continuingThreadId ?? optimisticId,
       created_at: new Date().toISOString(),
       completed_at: null,
     };
     setHistory((prev) => [optimistic, ...prev]);
     setSelectedId(optimisticId);
+    if (continuingThreadId) {
+      setThreadTurns((prev) => [
+        ...prev,
+        {
+          id: optimisticId,
+          status: "running",
+          user_message: userMsg,
+          answer: null,
+          created_at: optimistic.created_at,
+        },
+      ]);
+    } else {
+      setThreadTurns([]);
+    }
 
     try {
-      const res = await apiFetch<{ execution_id: string }>(`/api/v1/agents/${agentId}/execute`, {
-        method: "POST",
-        json: { message: userMsg },
-      });
+      const res = await apiFetch<{ execution_id: string; thread_id: string }>(
+        `/api/v1/agents/${agentId}/execute`,
+        {
+          method: "POST",
+          json: parentId
+            ? { message: userMsg, parent_execution_id: parentId }
+            : { message: userMsg },
+        },
+      );
       const eid = res.execution_id;
+      const tid = res.thread_id;
       // Replace optimistic entry
-      setHistory((prev) => prev.map((e) => e.id === optimisticId ? { ...e, id: eid } : e));
+      setHistory((prev) =>
+        prev.map((e) => (e.id === optimisticId ? { ...e, id: eid, thread_id: tid } : e)),
+      );
+      setThreadTurns((prev) =>
+        prev.map((t) => (t.id === optimisticId ? { ...t, id: eid } : t)),
+      );
       setSelectedId(eid);
       setActiveExecution(eid);
       setNode("planner", { status: "thinking" });
@@ -270,6 +330,11 @@ export default function RunPage() {
             setHistory((prev) =>
               prev.map((e) =>
                 e.id === eid ? { ...e, status: "completed", answer: fullAnswer, completed_at: new Date().toISOString() } : e,
+              ),
+            );
+            setThreadTurns((prev) =>
+              prev.map((t) =>
+                t.id === eid ? { ...t, status: "completed", answer: fullAnswer } : t,
               ),
             );
           } else if (data.kind === "error") {
@@ -338,10 +403,6 @@ export default function RunPage() {
       </div>
     );
   }
-
-  const showAnswer = selectedExec
-    ? (selectedExec.id === selectedId && running ? liveAnswer : selectedExec.answer)
-    : liveAnswer;
 
   const isRunningSelected = running && selectedId !== null && history.some((e) => e.id === selectedId && e.status === "running");
 
@@ -459,86 +520,96 @@ export default function RunPage() {
                 </div>
               </div>
             ) : (
-              /* Conversation view */
-              <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-4">
-                {/* User message */}
-                {(selectedExec || isRunningSelected) && (
-                  <div className="flex gap-3 justify-end animate-slide-up">
-                    <div className="flex flex-col gap-1.5 max-w-[80%]">
-                      <div className="rounded-2xl rounded-br-md bg-flow-brand px-5 py-3.5 text-sm leading-relaxed text-white shadow-md shadow-flow-brand/20">
-                        <p className="whitespace-pre-wrap">
-                          {selectedExec?.user_message ?? message}
-                        </p>
-                      </div>
-                      {selectedExec?.created_at && (
-                        <div className="flex items-center justify-end gap-1.5 pr-1">
-                          <Clock className="h-3 w-3 text-muted-foreground/40" />
-                          <span className="text-[10px] text-muted-foreground/50">
-                            {timeAgo(selectedExec.created_at)}
-                          </span>
-                          {selectedExec.agent_name && (
-                            <>
-                              <span className="text-[10px] text-muted-foreground/30">·</span>
-                              <span className="text-[10px] text-muted-foreground/50">{selectedExec.agent_name}</span>
-                            </>
+              /* Conversation view — multi-turn thread */
+              <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-6">
+                {threadLoading && threadTurns.length === 0 && (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                {(threadTurns.length > 0 ? threadTurns : selectedExec ? [{
+                  id: selectedExec.id,
+                  status: selectedExec.status,
+                  user_message: selectedExec.user_message,
+                  answer: selectedExec.answer,
+                  created_at: selectedExec.created_at,
+                }] : []).map((turn, idx, arr) => {
+                  const isLastTurn = idx === arr.length - 1;
+                  const isStreamingTurn = isLastTurn && running && turn.id === selectedId;
+                  const displayAnswer = isStreamingTurn ? (liveAnswer ?? turn.answer) : turn.answer;
+                  return (
+                    <div key={turn.id} className="space-y-4">
+                      {/* User message */}
+                      <div className="flex gap-3 justify-end animate-slide-up">
+                        <div className="flex flex-col gap-1.5 max-w-[80%]">
+                          <div className="rounded-2xl rounded-br-md bg-flow-brand px-5 py-3.5 text-sm leading-relaxed text-white shadow-md shadow-flow-brand/20">
+                            <p className="whitespace-pre-wrap">{turn.user_message}</p>
+                          </div>
+                          {turn.created_at && (
+                            <div className="flex items-center justify-end gap-1.5 pr-1">
+                              <Clock className="h-3 w-3 text-muted-foreground/40" />
+                              <span className="text-[10px] text-muted-foreground/50">
+                                {timeAgo(turn.created_at)}
+                              </span>
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                )}
-
-                {/* Agent response */}
-                {(showAnswer || isRunningSelected) && (
-                  <div className="flex gap-3 animate-slide-up">
-                    <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card",
-                      isRunningSelected && "border-flow-streaming/30 shadow-[0_0_12px_rgba(var(--color-flow-streaming),0.25)]",
-                    )}>
-                      <Bot className={cn(
-                        "h-4 w-4",
-                        isRunningSelected ? "text-flow-streaming animate-pulse" : "text-flow-brand",
-                      )} />
-                    </div>
-                    <div className="flex flex-col gap-1.5 max-w-[80%]">
-                      <div className="surface-glass rounded-2xl rounded-bl-md px-5 py-3.5 shadow-sm text-sm leading-relaxed text-foreground">
-                        {isRunningSelected && !showAnswer ? (
-                          <TokenStream placeholder="Thinking…" />
-                        ) : (
-                          <p className="whitespace-pre-wrap">{showAnswer}</p>
-                        )}
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
-                      {selectedExec?.answer && goldenSetId && (
-                        <div className="flex justify-start pl-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
-                              markedItems.has(selectedExec.id)
-                                ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
-                                : "text-muted-foreground/50 hover:text-flow-brand hover:bg-flow-brand/10",
+
+                      {/* Agent response */}
+                      {(displayAnswer || isStreamingTurn) && (
+                        <div className="flex gap-3 animate-slide-up">
+                          <div className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card",
+                            isStreamingTurn && "border-flow-streaming/30 shadow-[0_0_12px_rgba(var(--color-flow-streaming),0.25)]",
+                          )}>
+                            <Bot className={cn(
+                              "h-4 w-4",
+                              isStreamingTurn ? "text-flow-streaming animate-pulse" : "text-flow-brand",
+                            )} />
+                          </div>
+                          <div className="flex flex-col gap-1.5 max-w-[80%]">
+                            <div className="surface-glass rounded-2xl rounded-bl-md px-5 py-3.5 shadow-sm text-sm leading-relaxed text-foreground">
+                              {isStreamingTurn && !displayAnswer ? (
+                                <TokenStream placeholder="Thinking…" />
+                              ) : (
+                                <p className="whitespace-pre-wrap">{displayAnswer}</p>
+                              )}
+                            </div>
+                            {turn.answer && goldenSetId && (
+                              <div className="flex justify-start pl-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={cn(
+                                    "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
+                                    markedItems.has(turn.id)
+                                      ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
+                                      : "text-muted-foreground/50 hover:text-flow-brand hover:bg-flow-brand/10",
+                                  )}
+                                  disabled={markedItems.has(turn.id) || markingId === turn.id}
+                                  onClick={() => void handleMarkAsGolden(turn.id, turn.user_message, turn.answer!)}
+                                >
+                                  {markingId === turn.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : markedItems.has(turn.id) ? (
+                                    <CheckCircle2 className="h-3 w-3" />
+                                  ) : (
+                                    <Target className="h-3 w-3" />
+                                  )}
+                                  {markedItems.has(turn.id) ? "Added to Golden" : "Mark as Golden"}
+                                </Button>
+                              </div>
                             )}
-                            disabled={markedItems.has(selectedExec.id) || markingId === selectedExec.id}
-                            onClick={() => void handleMarkAsGolden(selectedExec.id, selectedExec.user_message, selectedExec.answer!)}
-                          >
-                            {markingId === selectedExec.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : markedItems.has(selectedExec.id) ? (
-                              <CheckCircle2 className="h-3 w-3" />
-                            ) : (
-                              <Target className="h-3 w-3" />
-                            )}
-                            {markedItems.has(selectedExec.id) ? "Added to Golden" : "Mark as Golden"}
-                          </Button>
+                          </div>
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  );
+                })}
 
                 <div ref={messagesEndRef} />
               </div>

@@ -107,6 +107,7 @@ async def run_deer_execution(
     repo = FlowRepository(pool)
     cfg = dict(agent_config) if isinstance(agent_config, dict) else {}
     _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
+    thread_id = await repo.get_thread_id(execution_id) or execution_id
     ctx = GraphContext(
         pool=pool,
         workspace_id=workspace_id,
@@ -122,7 +123,7 @@ async def run_deer_execution(
     )
     graph = build_agent_from_ctx(ctx, checkpointer=checkpointer)
     config: dict[str, Any] = {
-        "configurable": {"thread_id": str(execution_id)},
+        "configurable": {"thread_id": str(thread_id)},
         "metadata": {
             "execution_id": str(execution_id),
             "agent_id": str(agent_id),

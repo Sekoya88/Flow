@@ -31,11 +31,39 @@ async def list_executions(
                 "agent_name": r["agent_name"] or r["agent_template"],
                 "user_message": r["user_message"],
                 "answer": r["answer"],
+                "thread_id": str(r["thread_id"]) if r["thread_id"] else str(r["id"]),
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
             }
             for r in rows
         ]
+    }
+
+
+@router.get("/threads/{thread_id}")
+async def get_thread(
+    thread_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    rows = await repo.list_executions_in_thread(thread_id, user_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="thread not found")
+    return {
+        "thread_id": str(thread_id),
+        "executions": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"] or r["agent_template"],
+                "user_message": r["user_message"],
+                "answer": r["answer"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+            }
+            for r in rows
+        ],
     }
 
 
@@ -56,6 +84,7 @@ async def get_execution(
         "agent_name": row["agent_name"] or row["agent_template"],
         "user_message": row["user_message"],
         "answer": row["answer"],
+        "thread_id": str(row["thread_id"]) if row["thread_id"] else str(row["id"]),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "events": [
             {"id": e["id"], "kind": e["kind"], "payload": dict(e["payload"])}

@@ -62,6 +62,7 @@ class AnalyticsBatchIn(BaseModel):
 
 class ExecuteIn(BaseModel):
     message: str = Field(min_length=1, max_length=32000)
+    parent_execution_id: UUID | None = None
 
 
 class KnowledgeCreateIn(BaseModel):

@@ -121,7 +121,17 @@ async def execute_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="agent not found")
     workspace_id = agent["workspace_id"]
-    eid = await repo.create_execution(agent_id, workspace_id, body.message)
+
+    thread_id: UUID | None = None
+    if body.parent_execution_id is not None:
+        parent_row = await repo.get_execution_for_user(body.parent_execution_id, user_id)
+        if not parent_row:
+            raise HTTPException(status_code=404, detail="parent execution not found")
+        thread_id = parent_row["thread_id"]
+
+    eid, resolved_thread = await repo.create_execution(
+        agent_id, workspace_id, body.message, thread_id=thread_id
+    )
     raw_cfg = agent["config"]
     agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
     # SSE uses Redis pub/sub per execution id — no hub registration needed.
@@ -135,7 +145,7 @@ async def execute_agent(
         user_message=body.message,
         agent_config=agent_config,
     )
-    return {"execution_id": str(eid)}
+    return {"execution_id": str(eid), "thread_id": str(resolved_thread)}
 
 
 @router.post("/workspaces/{workspace_id}/agents/vibe")

@@ -150,26 +150,51 @@ class FlowRepository:
         )
 
     async def create_execution(
-        self, agent_id: UUID, workspace_id: UUID, user_message: str
-    ) -> UUID:
+        self, agent_id: UUID, workspace_id: UUID, user_message: str,
+        *, thread_id: UUID | None = None,
+    ) -> tuple[UUID, UUID]:
+        """Create execution. Returns (execution_id, thread_id).
+
+        When thread_id is None (single-turn), thread_id = the new execution_id.
+        Passing a thread_id from a prior execution continues the same LangGraph
+        checkpoint thread (multi-turn resume).
+        """
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO executions (agent_id, workspace_id, status, user_message, thread_id)
+                    VALUES ($1, $2, 'running', $3, $4)
+                    RETURNING id
+                    """,
+                    agent_id,
+                    workspace_id,
+                    user_message,
+                    thread_id,
+                )
+                assert row is not None
+                eid = row["id"]
+                if thread_id is None:
+                    await conn.execute(
+                        "UPDATE executions SET thread_id = id WHERE id = $1",
+                        eid,
+                    )
+                    return eid, eid
+                return eid, thread_id
+
+    async def get_thread_id(self, execution_id: UUID) -> UUID | None:
         row = await self._pool.fetchrow(
-            """
-            INSERT INTO executions (agent_id, workspace_id, status, user_message)
-            VALUES ($1, $2, 'running', $3) RETURNING id
-            """,
-            agent_id,
-            workspace_id,
-            user_message,
+            "SELECT COALESCE(thread_id, id) AS thread_id FROM executions WHERE id = $1",
+            execution_id,
         )
-        assert row is not None
-        return row["id"]
+        return row["thread_id"] if row else None
 
     async def list_executions_for_user(
         self, user_id: UUID, *, limit: int = 60
     ) -> list[asyncpg.Record]:
         return await self._pool.fetch(
             """
-            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message,
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id, e.user_message,
                    e.created_at, e.completed_at,
                    a.name AS agent_name, a.template AS agent_template,
                    (SELECT ee.payload->>'answer'
@@ -187,10 +212,32 @@ class FlowRepository:
             limit,
         )
 
+    async def list_executions_in_thread(
+        self, thread_id: UUID, user_id: UUID
+    ) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            """
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id, e.user_message,
+                   e.created_at, e.completed_at,
+                   a.name AS agent_name, a.template AS agent_template,
+                   (SELECT ee.payload->>'answer'
+                    FROM execution_events ee
+                    WHERE ee.execution_id = e.id AND ee.kind = 'final'
+                    LIMIT 1) AS answer
+            FROM executions e
+            JOIN agents a ON a.id = e.agent_id
+            JOIN workspace_members m ON m.workspace_id = e.workspace_id
+            WHERE COALESCE(e.thread_id, e.id) = $1 AND m.user_id = $2
+            ORDER BY e.created_at ASC
+            """,
+            thread_id,
+            user_id,
+        )
+
     async def get_execution_for_user(self, execution_id: UUID, user_id: UUID) -> asyncpg.Record | None:
         return await self._pool.fetchrow(
             """
-            SELECT e.id, e.status, e.agent_id, e.workspace_id, e.user_message, e.created_at,
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id, e.user_message, e.created_at,
                    a.name AS agent_name, a.template AS agent_template,
                    (SELECT ee.payload->>'answer'
                     FROM execution_events ee
