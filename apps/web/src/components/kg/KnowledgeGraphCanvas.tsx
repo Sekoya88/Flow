@@ -166,11 +166,10 @@ export function KnowledgeGraphCanvas({
       }
     };
     timers.push(window.setTimeout(fit, 400));
-    timers.push(window.setTimeout(fit, 1200));
     timers.push(window.setTimeout(() => {
       fit();
-      fittedRef.current = true;
-    }, 2500));
+      fittedRef.current = true; // stop auto-fitting after second pass
+    }, 1200));
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [graphData.nodes.length]);
 
@@ -183,13 +182,15 @@ export function KnowledgeGraphCanvas({
       if (cancelled || !fgRef.current) return;
       try {
         const charge = fg.d3Force?.("charge");
-        if (charge?.strength) charge.strength(-160);
+        if (charge?.strength) charge.strength(-120);
         const link = fg.d3Force?.("link");
-        if (link?.distance) link.distance(28);
+        if (link?.distance) link.distance(30);
         if (link?.strength) link.strength(0.7);
         const center = fg.d3Force?.("center");
         if (center?.strength) center.strength(0.12);
-        fg.d3ReheatSimulation?.();
+        // NOTE: do NOT call d3ReheatSimulation — the engine reheats
+        // automatically when forces change. Manual reheat keeps the
+        // sim permanently hot, which makes drag/click feel laggy.
       } catch {
         /* ignore — defaults still better than nothing */
       }
@@ -361,8 +362,9 @@ export function KnowledgeGraphCanvas({
           enableZoomInteraction={true}
           enablePanInteraction={true}
           warmupTicks={120}
-          cooldownTicks={600}
-          d3AlphaDecay={0.015}
+          cooldownTicks={300}
+          cooldownTime={4000}
+          d3AlphaDecay={0.02}
           d3VelocityDecay={0.4}
           nodeRelSize={2.4}
           onEngineStop={handleEngineStop}

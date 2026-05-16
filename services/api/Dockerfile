@@ -1,6 +1,5 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 WORKDIR /app
-RUN pip install --no-cache-dir --timeout 300 uv
 COPY pyproject.toml README.md uv.lock ./
 COPY alembic.ini ./
 COPY migrations ./migrations
