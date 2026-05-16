@@ -789,39 +789,39 @@ GOLDEN_SETS: dict[str, dict] = {
 # Main seeding function
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
-    logger.info("seeding", workspace_id=str(workspace_id))
+async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID, *, prune: bool = False) -> None:
+    logger.info("seeding", workspace_id=str(workspace_id), prune=prune)
 
-    # Remove non-canonical agents (and their FK-referenced rows)
-    stale_ids = await pool.fetch(
-        "SELECT id FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
-        workspace_id, CANONICAL_AGENT_NAMES,
-    )
-    # Always clear ab_tests for this workspace first — they reference agents by FK
-    # without ON DELETE CASCADE, so any agent deletion would fail otherwise.
-    await pool.execute("DELETE FROM ab_tests WHERE workspace_id = $1", workspace_id)
-
-    if stale_ids:
-        ids = [r["id"] for r in stale_ids]
-        # Only delete from tables that actually exist — some are legacy / optional
-        candidate_tables = [
-            "agent_skills", "agent_memories", "episodic_memories",
-            "agent_negatives", "reasoning_patterns", "agent_schedules",
-            "agent_versions", "golden_results",
-        ]
-        existing_rows = await pool.fetch(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = 'public' AND table_name = ANY($1::text[])",
-            candidate_tables,
+    # DESTRUCTIVE: only when --prune is passed (used by make rebuild).
+    # By default we only upsert canonical agents — no user data is touched.
+    if prune:
+        stale_ids = await pool.fetch(
+            "SELECT id FROM agents WHERE workspace_id = $1 AND name != ALL($2::text[])",
+            workspace_id, CANONICAL_AGENT_NAMES,
         )
-        existing_tables = {r["table_name"] for r in existing_rows}
-        for tbl in candidate_tables:
-            if tbl not in existing_tables:
-                continue
-            await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
-        await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
-        await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
-        logger.info("cleanup.old_agents", count=len(ids), names=[r for r in CANONICAL_AGENT_NAMES])
+        # ab_tests reference agents without ON DELETE CASCADE, clear first
+        await pool.execute("DELETE FROM ab_tests WHERE workspace_id = $1", workspace_id)
+
+        if stale_ids:
+            ids = [r["id"] for r in stale_ids]
+            candidate_tables = [
+                "agent_skills", "agent_memories", "episodic_memories",
+                "agent_negatives", "reasoning_patterns", "agent_schedules",
+                "agent_versions", "golden_results",
+            ]
+            existing_rows = await pool.fetch(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = ANY($1::text[])",
+                candidate_tables,
+            )
+            existing_tables = {r["table_name"] for r in existing_rows}
+            for tbl in candidate_tables:
+                if tbl not in existing_tables:
+                    continue
+                await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
+            await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
+            await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
+            logger.info("cleanup.old_agents", count=len(ids), names=CANONICAL_AGENT_NAMES)
 
     seeded_agents: dict[str, uuid.UUID] = {}
 
@@ -879,21 +879,29 @@ async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seed.done", agents=len(seeded_agents), golden_sets=len(GOLDEN_SETS))
 
 
-async def seed(pool: asyncpg.Pool) -> None:
+async def seed(pool: asyncpg.Pool, *, prune: bool = False) -> None:
     workspaces = await pool.fetch("SELECT id FROM workspaces")
     if not workspaces:
         logger.error("no_workspace", message="No workspace found. Run migrations and create a user first.")
         return
     for ws in workspaces:
-        await seed_workspace(pool, ws["id"])
+        await seed_workspace(pool, ws["id"], prune=prune)
 
 
 async def main() -> None:
+    import os
+    import sys
     configure_logging(level="INFO", json_output=False, force_colors=True, service="seed")
+    # --prune CLI flag OR SEED_PRUNE=1 env var enables destructive cleanup
+    prune = "--prune" in sys.argv or os.environ.get("SEED_PRUNE") == "1"
+    if prune:
+        logger.info("seed.mode", mode="prune (destructive — removes non-canonical agents)")
+    else:
+        logger.info("seed.mode", mode="upsert-only (safe, no data deletion)")
     settings = get_settings()
     pool = await asyncpg.create_pool(settings.database_url)
     try:
-        await seed(pool)
+        await seed(pool, prune=prune)
     finally:
         await pool.close()
 

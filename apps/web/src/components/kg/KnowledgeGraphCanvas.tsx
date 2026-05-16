@@ -150,39 +150,58 @@ export function KnowledgeGraphCanvas({
     }
   }, [onNodeClick]);
 
-  // Deterministic auto-fit: re-fit shortly after the dataset changes,
-  // regardless of whether the physics engine has settled.
+  // Multi-pass auto-fit: physics settles over ~2s, so refit at intervals
+  // to catch outliers as they're pulled toward the cluster.
   useEffect(() => {
     fittedRef.current = false;
     if (graphData.nodes.length === 0) return;
-    const t = window.setTimeout(() => {
-      if (!fittedRef.current && fgRef.current) {
-        fittedRef.current = true;
+    const timers: number[] = [];
+    const fit = () => {
+      if (fgRef.current) {
         try {
-          fgRef.current.zoomToFit(400, 80);
+          fgRef.current.zoomToFit(400, 60);
         } catch {
           /* ignore */
         }
       }
-    }, 600);
-    return () => window.clearTimeout(t);
+    };
+    timers.push(window.setTimeout(fit, 400));
+    timers.push(window.setTimeout(fit, 1200));
+    timers.push(window.setTimeout(() => {
+      fit();
+      fittedRef.current = true;
+    }, 2500));
+    return () => timers.forEach((t) => window.clearTimeout(t));
   }, [graphData.nodes.length]);
 
-  // Tighten physics so the graph clusters around hubs instead of drifting outward.
+  // Tight physics so the graph clusters around hubs instead of drifting outward.
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg || graphData.nodes.length === 0) return;
-    try {
-      const charge = fg.d3Force?.("charge");
-      if (charge?.strength) charge.strength(-90);
-      const link = fg.d3Force?.("link");
-      if (link?.distance) link.distance(38);
-      const center = fg.d3Force?.("center");
-      if (center?.strength) center.strength(0.04);
-      fg.d3ReheatSimulation?.();
-    } catch {
-      /* ignore */
-    }
+    let cancelled = false;
+    const apply = () => {
+      if (cancelled || !fgRef.current) return;
+      try {
+        const charge = fg.d3Force?.("charge");
+        if (charge?.strength) charge.strength(-160);
+        const link = fg.d3Force?.("link");
+        if (link?.distance) link.distance(28);
+        if (link?.strength) link.strength(0.7);
+        const center = fg.d3Force?.("center");
+        if (center?.strength) center.strength(0.12);
+        fg.d3ReheatSimulation?.();
+      } catch {
+        /* ignore — defaults still better than nothing */
+      }
+    };
+    // Apply once now; sometimes the force-graph instance binds d3 forces
+    // slightly after mount, so re-apply after a tick to be safe.
+    apply();
+    const t = window.setTimeout(apply, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [graphData.nodes.length]);
 
   const handleEngineStop = useCallback(() => {
@@ -341,10 +360,11 @@ export function KnowledgeGraphCanvas({
           enableNodeDrag={true}
           enableZoomInteraction={true}
           enablePanInteraction={true}
-          warmupTicks={80}
-          cooldownTicks={400}
-          d3AlphaDecay={0.012}
-          d3VelocityDecay={0.35}
+          warmupTicks={120}
+          cooldownTicks={600}
+          d3AlphaDecay={0.015}
+          d3VelocityDecay={0.4}
+          nodeRelSize={2.4}
           onEngineStop={handleEngineStop}
         />
       )}
