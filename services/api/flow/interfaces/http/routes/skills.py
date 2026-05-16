@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Annotated
 from uuid import UUID
 
@@ -212,3 +213,136 @@ async def test_skill(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Skill self-improvement loop ───────────────────────────────────────────────
+
+
+@router.post("/{skill_id}/improve")
+async def improve_skill(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Run the skill rewriter: fetch linked golden items, rewrite the skill body,
+    create an inactive candidate version, and post a proposal for human review."""
+    from flow.application.skill_rewriter import rewrite_skill, SkillRewriteResult
+    from flow.application.prompt_rewriter import FailedItem
+
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    allowed = {r["id"] for r in ws_rows}
+    if skill["workspace_id"] not in allowed:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    # Gather failed golden items linked to this skill
+    linked = await repo.list_golden_items_for_skill(skill_id)
+    if not linked:
+        raise HTTPException(status_code=422, detail="no golden items linked to this skill — attach items first")
+
+    # Pull recent golden_results for those items to find failures
+    item_ids = [r["id"] for r in linked]
+    results_rows = await repo._pool.fetch(
+        """
+        SELECT gr.item_id, gi.input_text, gi.expected_output,
+               gr.actual_output, gr.score, gr.grading_rationale
+        FROM golden_results gr
+        JOIN golden_items gi ON gi.id = gr.item_id
+        WHERE gr.item_id = ANY($1::uuid[])
+          AND gr.score < 0.7
+        ORDER BY gr.created_at DESC
+        LIMIT 20
+        """,
+        item_ids,
+    )
+    if not results_rows:
+        raise HTTPException(status_code=422, detail="no recent failures found — run an evaluation first")
+
+    failed_items = [
+        FailedItem(
+            input_text=r["input_text"],
+            expected_output=r["expected_output"],
+            actual_output=r["actual_output"] or "",
+            score=float(r["score"]),
+            rationale=r["grading_rationale"] or "",
+        )
+        for r in results_rows
+    ]
+
+    openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    result: SkillRewriteResult = await rewrite_skill(
+        current_content_md=skill["content_md"],
+        failed_items=failed_items,
+        openai_api_key=openai_key,
+    )
+
+    if result.confidence < 0.3:
+        return {
+            "improved": False,
+            "reason": "low confidence rewrite",
+            "confidence": result.confidence,
+        }
+
+    if result.improved_content_md.strip() == skill["content_md"].strip():
+        return {"improved": False, "reason": "no change proposed", "confidence": result.confidence}
+
+    # Create inactive candidate version
+    candidate_id = await repo.upsert_agent_skill(
+        agent_id=skill["agent_id"],
+        workspace_id=skill["workspace_id"],
+        name=skill["name"],
+        content_md=result.improved_content_md,
+        initial_active=False,
+    )
+
+    # Post proposal with embedded skill_candidate_id for approval routing
+    changelog_md = "\n".join(f"- {c}" for c in result.changelog)
+    proposal_body = json.dumps({
+        "skill_candidate_id": str(candidate_id),
+        "failure_analysis": result.failure_analysis,
+        "changelog": result.changelog,
+        "confidence": result.confidence,
+        "num_failures": len(failed_items),
+    })
+    proposal_id = await repo.create_proposal(
+        workspace_id=skill["workspace_id"],
+        user_id=user_id,
+        title=f"Skill improvement: {skill['name']}",
+        body=proposal_body,
+    )
+
+    return {
+        "improved": True,
+        "candidate_skill_id": str(candidate_id),
+        "proposal_id": str(proposal_id),
+        "confidence": result.confidence,
+        "changelog": result.changelog,
+        "failure_analysis": result.failure_analysis,
+    }
+
+
+@router.get("/{skill_id}/usage")
+async def skill_usage(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    window: Annotated[int, Query(ge=1, le=90)] = 7,
+) -> dict:
+    """Return daily match counts for the last N days (for sparkline chart)."""
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    rows = await repo.count_skill_events_by_day(skill_id, window_days=window)
+    return {
+        "skill_id": str(skill_id),
+        "window_days": window,
+        "data": [{"date": str(r["date"]), "count": r["count"]} for r in rows],
+    }

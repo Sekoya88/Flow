@@ -366,3 +366,19 @@ async def auto_eval_tick(ctx: dict) -> None:
             "cron.auto_eval_tick.partial_failure",
             failed_count=failed_count,
         )
+
+
+async def skill_decay_tick(ctx: dict) -> None:
+    """Cron job (04:00 UTC daily): decay all active skill scores across every workspace/agent pair."""
+    pool = ctx["pool"]
+    agent_rows = await pool.fetch("SELECT id, workspace_id FROM agents")
+    from flow.infrastructure.persistence.repo import FlowRepository
+    repo = FlowRepository(pool)
+    decayed = 0
+    for row in agent_rows:
+        try:
+            pruned = await repo.decay_skill_scores(row["id"], row["workspace_id"])
+            decayed += pruned
+        except Exception:
+            pass
+    structlog.get_logger().info("cron.skill_decay_tick.done", pruned=decayed)

@@ -66,15 +66,15 @@ def app(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_cron_jobs_returns_two_system_jobs(app):
+async def test_list_cron_jobs_returns_system_jobs(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/api/v1/schedules/cron-jobs", headers=_auth())
     assert r.status_code == 200
     data = r.json()
     assert "cron_jobs" in data
-    assert len(data["cron_jobs"]) == 2
+    assert len(data["cron_jobs"]) == 3
     names = {j["name"] for j in data["cron_jobs"]}
-    assert names == {"scheduler_tick", "auto_eval_tick"}
+    assert names == {"scheduler_tick", "auto_eval_tick", "skill_decay_tick"}
 
 
 @pytest.mark.asyncio

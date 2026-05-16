@@ -26,6 +26,12 @@ _SYSTEM_CRON_JOBS = [
         "human_readable": "Every day at 3:00 AM UTC",
         "description": "Runs nightly golden set evaluation across all workspaces",
     },
+    {
+        "name": "skill_decay_tick",
+        "cron_expr": "0 4 * * *",
+        "human_readable": "Every day at 4:00 AM UTC",
+        "description": "Decays active skill scores; prunes skills with low score and sufficient usage",
+    },
 ]
 
 
@@ -33,8 +39,9 @@ def _next_run_for(cron_expr: str) -> str:
     now = datetime.datetime.utcnow().replace(second=0, microsecond=0)
     if cron_expr == "* * * * *":
         nxt = now + datetime.timedelta(minutes=1)
-    elif cron_expr == "0 3 * * *":
-        candidate = now.replace(hour=3, minute=0)
+    elif cron_expr in ("0 3 * * *", "0 4 * * *"):
+        target_hour = 3 if cron_expr == "0 3 * * *" else 4
+        candidate = now.replace(hour=target_hour, minute=0)
         if candidate <= now:
             candidate += datetime.timedelta(days=1)
         nxt = candidate

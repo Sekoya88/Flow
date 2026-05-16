@@ -1340,25 +1340,30 @@ class FlowRepository:
     # ── Agent Skills ─────────────────────────────────────────────────────
 
     async def upsert_agent_skill(
-        self, agent_id: UUID, workspace_id: UUID, name: str, content_md: str
+        self, agent_id: UUID, workspace_id: UUID, name: str, content_md: str, *, initial_active: bool = True
     ) -> UUID:
-        """Insert a new version of a skill (append-only versioning)."""
+        """Insert a new version of a skill (append-only versioning).
+
+        When initial_active=False the new version is created as inactive (candidate).
+        The caller is responsible for activating it later (e.g., after proposal approval).
+        """
         row = await self._pool.fetchrow(
             "SELECT COALESCE(MAX(version), 0) as max_v FROM agent_skills WHERE agent_id=$1 AND name=$2",
             agent_id, name,
         )
         next_version = (row["max_v"] if row else 0) + 1
-        await self._pool.execute(
-            "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
-            agent_id, name,
-        )
+        if initial_active:
+            await self._pool.execute(
+                "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
+                agent_id, name,
+            )
         new_row = await self._pool.fetchrow(
             """
             INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, active)
-            VALUES ($1, $2, $3, $4, $5, true)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
-            agent_id, workspace_id, name, next_version, content_md,
+            agent_id, workspace_id, name, next_version, content_md, initial_active,
         )
         assert new_row is not None
         return new_row["id"]

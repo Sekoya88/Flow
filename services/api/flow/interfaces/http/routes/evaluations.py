@@ -185,7 +185,7 @@ async def run_evaluation_sse(
         else:
             yield evt("success", message="Performance meets production criteria (≥70% pass rate)")
 
-        # Post-eval hooks: regression proposal + genome snapshot
+        # Post-eval hooks: regression proposal + genome snapshot + skill boost
         candidate_version_id = None
         try:
             await check_regression_and_propose(
@@ -212,6 +212,24 @@ async def run_evaluation_sse(
                         "info",
                         message="Score improved — genome candidate created. Check Proposals to promote.",
                     )
+
+            # Boost skill scores for items that passed and have a skill linkage
+            try:
+                passing_item_ids = [
+                    r["item_id"] for r in results if r["score"] >= 0.7
+                ]
+                if passing_item_ids:
+                    skill_rows = await repo._pool.fetch(
+                        "SELECT DISTINCT skill_id FROM golden_items "
+                        "WHERE id = ANY($1::uuid[]) AND skill_id IS NOT NULL",
+                        [r for r in passing_item_ids],
+                    )
+                    for sr in skill_rows:
+                        await repo.boost_skill_score(sr["skill_id"])
+            except Exception as boost_exc:
+                import logging as _log
+                _log.getLogger(__name__).debug("skill_boost_skipped: %s", boost_exc)
+
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning("post_eval_hooks failed: %s", exc)

@@ -69,6 +69,42 @@ async def act_on_proposal(
                 raise HTTPException(status_code=404, detail="proposal not found")
 
             if body.status == "approved":
+                # Check for a skill-improvement candidate embedded in the proposal body
+                proposal_rec = await conn.fetchrow(
+                    "SELECT body FROM proposals WHERE id = $1", proposal_id
+                )
+                if proposal_rec:
+                    import json as _json
+                    try:
+                        meta = _json.loads(proposal_rec["body"]) if proposal_rec["body"].strip().startswith("{") else {}
+                    except Exception:
+                        meta = {}
+                    skill_candidate_id = meta.get("skill_candidate_id")
+                    if skill_candidate_id:
+                        from uuid import UUID as _UUID
+                        sid = _UUID(skill_candidate_id)
+                        sibling = await conn.fetchrow(
+                            "SELECT agent_id, name FROM agent_skills WHERE id = $1 AND workspace_id = $2",
+                            sid, ws,
+                        )
+                        if sibling:
+                            await conn.execute(
+                                "UPDATE agent_skills SET active = false "
+                                "WHERE agent_id = $1 AND name = $2 AND active = true",
+                                sibling["agent_id"], sibling["name"],
+                            )
+                            await conn.execute(
+                                "UPDATE agent_skills SET active = true WHERE id = $1",
+                                sid,
+                            )
+                            logger.info(
+                                "skill.activated_via_proposal",
+                                extra={
+                                    "proposal_id": str(proposal_id),
+                                    "skill_id": str(sid),
+                                },
+                            )
+
                 version_row = await conn.fetchrow(
                     "SELECT av.id, av.agent_id FROM agent_versions av "
                     "JOIN agents a ON a.id = av.agent_id "
