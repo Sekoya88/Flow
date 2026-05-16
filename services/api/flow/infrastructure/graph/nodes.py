@@ -228,6 +228,12 @@ def make_planner(ctx: GraphContext):
                         if skill_matches_query(parsed, user_text):
                             matched_skills.append((s, parsed))
                             await repo.increment_skill_use(s["id"])
+                            await repo.log_skill_match(
+                                skill_id=s["id"],
+                                workspace_id=ctx.workspace_id,
+                                execution_id=ctx.execution_id,
+                                matched_text=user_text[:500] if user_text else None,
+                            )
 
                     if matched_skills:
                         skill_lines = []

@@ -1403,6 +1403,55 @@ class FlowRepository:
             boost, skill_id,
         )
 
+    async def set_golden_item_skill(self, item_id: UUID, skill_id: UUID | None) -> None:
+        """Link (or unlink) a golden_items row to a specific skill."""
+        await self._pool.execute(
+            "UPDATE golden_items SET skill_id = $1 WHERE id = $2",
+            skill_id, item_id,
+        )
+
+    async def list_golden_items_for_skill(self, skill_id: UUID) -> list[asyncpg.Record]:
+        """Return all golden_items linked to a skill (for rewriter / per-skill eval)."""
+        return await self._pool.fetch(
+            "SELECT id, set_id, input_text, expected_output, scoring_criteria, created_at "
+            "FROM golden_items WHERE skill_id = $1 ORDER BY created_at",
+            skill_id,
+        )
+
+    async def log_skill_match(
+        self,
+        skill_id: UUID,
+        workspace_id: UUID,
+        execution_id: UUID | None = None,
+        matched_text: str | None = None,
+    ) -> None:
+        """Insert a skill_execution_events row. Fire-and-forget — callers should not await failures."""
+        await self._pool.execute(
+            """
+            INSERT INTO skill_execution_events (skill_id, execution_id, workspace_id, matched_text)
+            VALUES ($1, $2, $3, $4)
+            """,
+            skill_id, execution_id, workspace_id, matched_text,
+        )
+
+    async def count_skill_events_by_day(
+        self,
+        skill_id: UUID,
+        window_days: int = 7,
+    ) -> list[asyncpg.Record]:
+        """Return daily match counts for the last N days (date, count columns)."""
+        return await self._pool.fetch(
+            """
+            SELECT date_trunc('day', created_at)::date AS date, count(*)::int AS count
+            FROM skill_execution_events
+            WHERE skill_id = $1
+              AND created_at >= now() - ($2 || ' days')::interval
+            GROUP BY 1
+            ORDER BY 1
+            """,
+            skill_id, str(window_days),
+        )
+
     # ── Agent Versions ────────────────────────────────────────────────────
 
     async def get_version_by_proposal(self, proposal_id: UUID) -> asyncpg.Record | None:
