@@ -73,8 +73,13 @@ interface GraphLink {
   edge_type: string;
 }
 
-const LABEL_ZOOM_THRESHOLD = 2.2;
-const HUB_PAGERANK = 0.08;
+const LABEL_ZOOM_THRESHOLD = 1.3;
+const HUB_PAGERANK = 0.04;
+const HUB_VAL = 6;
+
+function nodeRadius(val: number): number {
+  return Math.max(2.6, Math.min((val || 4) * 0.7, 9));
+}
 
 export function KnowledgeGraphCanvas({
   nodes,
@@ -145,10 +150,40 @@ export function KnowledgeGraphCanvas({
     }
   }, [onNodeClick]);
 
-  // Reset auto-fit flag when nodes change (e.g. filter toggled)
+  // Deterministic auto-fit: re-fit shortly after the dataset changes,
+  // regardless of whether the physics engine has settled.
   useEffect(() => {
     fittedRef.current = false;
-  }, [nodes.length]);
+    if (graphData.nodes.length === 0) return;
+    const t = window.setTimeout(() => {
+      if (!fittedRef.current && fgRef.current) {
+        fittedRef.current = true;
+        try {
+          fgRef.current.zoomToFit(400, 80);
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [graphData.nodes.length]);
+
+  // Tighten physics so the graph clusters around hubs instead of drifting outward.
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || graphData.nodes.length === 0) return;
+    try {
+      const charge = fg.d3Force?.("charge");
+      if (charge?.strength) charge.strength(-90);
+      const link = fg.d3Force?.("link");
+      if (link?.distance) link.distance(38);
+      const center = fg.d3Force?.("center");
+      if (center?.strength) center.strength(0.04);
+      fg.d3ReheatSimulation?.();
+    } catch {
+      /* ignore */
+    }
+  }, [graphData.nodes.length]);
 
   const handleEngineStop = useCallback(() => {
     if (!fittedRef.current && fgRef.current && graphData.nodes.length > 0) {
@@ -165,12 +200,12 @@ export function KnowledgeGraphCanvas({
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const isHighlighted = highlightedNodeIds?.has(node.id) ?? false;
       const isHovered = hoveredId === node.id;
-      const isHub = node.pagerank > HUB_PAGERANK || node.val > 6;
+      const isHub = node.pagerank > HUB_PAGERANK || node.val >= HUB_VAL;
       const isIncident =
         hoveredId != null && adjacency.get(hoveredId)?.has(node.id) === true;
 
-      // Dot radius — calmer scaling
-      const baseRadius = Math.max(1.6, Math.sqrt(Math.max(node.val, 1)) * 0.95);
+      // Dot radius — linear scale on NODE_SIZE so hubs read as hubs
+      const baseRadius = nodeRadius(node.val);
       const radius = isHighlighted || isHovered ? baseRadius * 1.45 : baseRadius;
 
       // Faded vs lit alpha when something is hovered/highlighted elsewhere
@@ -191,8 +226,8 @@ export function KnowledgeGraphCanvas({
       // Halo for highlighted / hovered nodes
       if (isHighlighted || isHovered) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, radius * 2.2, 0, 2 * Math.PI, false);
-        ctx.fillStyle = withAlpha(node.color, 0.13);
+        ctx.arc(node.x, node.y, radius * 2.4, 0, 2 * Math.PI, false);
+        ctx.fillStyle = withAlpha(node.color, 0.16);
         ctx.fill();
       }
 
@@ -213,9 +248,11 @@ export function KnowledgeGraphCanvas({
         const padY = 2;
         const labelY = node.y + radius + fontSize + 2;
 
-        // Pill background for highlighted / hovered (avoids clutter otherwise)
-        if (isHighlighted || isHovered) {
-          ctx.fillStyle = "rgba(15,23,42,0.7)";
+        // Pill background for highlighted / hovered / hub (avoids clutter on leaves)
+        if (isHighlighted || isHovered || isHub) {
+          ctx.fillStyle = isHighlighted || isHovered
+            ? "rgba(15,23,42,0.7)"
+            : "rgba(15,23,42,0.45)";
           const px = node.x - textW / 2 - padX;
           const py = labelY - fontSize - padY;
           const pw = textW + padX * 2;
@@ -235,13 +272,13 @@ export function KnowledgeGraphCanvas({
     [highlightedNodeIds, hoveredId, adjacency],
   );
 
-  // Increase hit area for pointer events so tiny dots stay clickable
+  // Increase hit area for pointer events so dots stay clickable
   const nodePointerAreaPaint = useCallback(
     (node: any, color: string, ctx: CanvasRenderingContext2D) => {
-      const baseRadius = Math.max(1.6, Math.sqrt(Math.max(node.val, 1)) * 0.95);
+      const r = nodeRadius(node.val);
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(node.x, node.y, baseRadius * 2.5, 0, 2 * Math.PI, false);
+      ctx.arc(node.x, node.y, r * 2.4, 0, 2 * Math.PI, false);
       ctx.fill();
     },
     [],
@@ -257,11 +294,11 @@ export function KnowledgeGraphCanvas({
         highlightedNodeIds &&
         (highlightedNodeIds.has(sourceId) || highlightedNodeIds.has(targetId));
       if (incidentToHover || incidentToHighlight) {
-        return "rgba(94,234,212,0.55)";
+        return "rgba(94,234,212,0.65)";
       }
-      // Faded when something is in focus elsewhere
-      if (hoveredId != null) return "rgba(148,163,184,0.07)";
-      return "rgba(148,163,184,0.18)";
+      // Faded when something else is in focus
+      if (hoveredId != null) return "rgba(148,163,184,0.10)";
+      return "rgba(148,163,184,0.28)";
     },
     [hoveredId, highlightedNodeIds],
   );
@@ -275,8 +312,8 @@ export function KnowledgeGraphCanvas({
       const highlighted =
         highlightedNodeIds &&
         (highlightedNodeIds.has(sourceId) || highlightedNodeIds.has(targetId));
-      if (incident || highlighted) return 1.4;
-      return 0.4;
+      if (incident || highlighted) return 1.6;
+      return 0.55;
     },
     [hoveredId, highlightedNodeIds],
   );
