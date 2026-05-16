@@ -803,11 +803,21 @@ async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
 
     if stale_ids:
         ids = [r["id"] for r in stale_ids]
-        for tbl in [
+        # Only delete from tables that actually exist — some are legacy / optional
+        candidate_tables = [
             "agent_skills", "agent_memories", "episodic_memories",
             "agent_negatives", "reasoning_patterns", "agent_schedules",
             "agent_versions", "golden_results",
-        ]:
+        ]
+        existing_rows = await pool.fetch(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = ANY($1::text[])",
+            candidate_tables,
+        )
+        existing_tables = {r["table_name"] for r in existing_rows}
+        for tbl in candidate_tables:
+            if tbl not in existing_tables:
+                continue
             await pool.execute(f"DELETE FROM {tbl} WHERE agent_id = ANY($1)", ids)
         await pool.execute("DELETE FROM executions WHERE agent_id = ANY($1)", ids)
         await pool.execute("DELETE FROM agents WHERE id = ANY($1)", ids)
