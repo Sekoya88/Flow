@@ -55,6 +55,34 @@ async def run_arxiv_search(query: str, max_results: int = 5) -> list[dict]:
     ]
 
 
+async def run_http_post(
+    url: str,
+    json_body: dict | None = None,
+    headers: dict | None = None,
+    method: str = "POST",
+) -> dict:
+    """Perform an HTTP POST/PUT/PATCH/DELETE request and return the response.
+
+    Returns: {"status_code": int, "body": str (truncated to 8KB), "headers": dict}
+    """
+    allowed_methods = {"POST", "PUT", "PATCH", "DELETE"}
+    method = method.upper()
+    if method not in allowed_methods:
+        return {"error": f"Method must be one of {allowed_methods}"}
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        resp = await client.request(
+            method,
+            url,
+            json=json_body,
+            headers=headers or {},
+        )
+    return {
+        "status_code": resp.status_code,
+        "body": resp.text[:8192],
+        "headers": dict(resp.headers),
+    }
+
+
 async def run_hf_papers(date: str = "") -> list[dict]:
     url = "https://huggingface.co/api/daily_papers"
     if date:
