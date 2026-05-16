@@ -6,6 +6,7 @@ from flow.infrastructure.llm.middleware.base import (
 from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
 from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
 from flow.infrastructure.llm.middleware.observability import FlowObservabilityMiddleware
+from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
 from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "FlowCostMiddleware",
     "FlowMemoryMiddleware",
     "FlowObservabilityMiddleware",
+    "FlowPersonaMiddleware",
     "FlowResilienceMiddleware",
     "HarnessRuntime",
 ]

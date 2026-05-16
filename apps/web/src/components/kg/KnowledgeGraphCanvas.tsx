@@ -73,9 +73,9 @@ interface GraphLink {
   edge_type: string;
 }
 
-const LABEL_ZOOM_THRESHOLD = 1.3;
-const HUB_PAGERANK = 0.04;
-const HUB_VAL = 6;
+const LABEL_ZOOM_THRESHOLD = 2.0;
+const HUB_PAGERANK = 0.06;
+const HUB_VAL = 8;
 
 function nodeRadius(val: number): number {
   return Math.max(2.6, Math.min((val || 4) * 0.7, 9));

@@ -41,6 +41,7 @@ from flow.interfaces.http.routes import (
     knowledge,
     memory,
     meta,
+    personas,
     preferences,
     proposals,
     schedules,
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(feedback.router)
     app.include_router(knowledge.router)
     app.include_router(preferences.router)
+    app.include_router(personas.router)
     app.include_router(proposals.router)
     app.include_router(memory.router)
     app.include_router(meta.router)

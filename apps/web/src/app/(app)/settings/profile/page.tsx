@@ -7,6 +7,7 @@ import { useWorkspaceId } from '@/lib/useWorkspace'
 import { PreferenceSection } from '@/components/preferences/PreferenceSection'
 import { CandidateQueue } from '@/components/preferences/CandidateQueue'
 import { CVDropzone } from '@/components/preferences/CVDropzone'
+import { PersonaSection } from '@/components/preferences/PersonaSection'
 
 const FACET_CLASSES = ['style', 'tooling', 'goal', 'veto', 'domain', 'channel'] as const
 
@@ -89,6 +90,9 @@ export default function ProfilePage() {
           </div>
         </button>
       )}
+
+      {/* SOUL.md persona */}
+      <PersonaSection workspaceId={workspaceId} />
 
       {/* CV import */}
       <section className="surface-glass rounded-2xl border border-border/50 p-5 shadow-sm">

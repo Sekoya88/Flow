@@ -92,6 +92,7 @@ def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
         FlowCostMiddleware,
         FlowMemoryMiddleware,
         FlowObservabilityMiddleware,
+        FlowPersonaMiddleware,
         FlowResilienceMiddleware,
     )
     from flow.infrastructure.observability.logging import get_logger
@@ -114,6 +115,10 @@ def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
         workspace_id=str(ctx.workspace_id),
     )
     middleware.append(FlowObservabilityMiddleware(logger=bound_logger))
+
+    # Persona runs LAST so its SystemMessage lands at slot #0 (each before_agent
+    # does `prepend + messages`, so the last writer wraps everything).
+    middleware.append(FlowPersonaMiddleware(pool=ctx.pool))
 
     return middleware
 
