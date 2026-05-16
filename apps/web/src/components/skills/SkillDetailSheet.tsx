@@ -9,7 +9,37 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SkillCatalogRow } from '@/lib/useSkillsCatalog'
 import { useSkillHistory } from '@/lib/useSkillHistory'
+import { useSkillUsage, type UsageDay } from '@/lib/useSkillUsage'
 import { SkillPlayground } from './SkillPlayground'
+
+function UsageSparkline({ data }: { data: UsageDay[] }) {
+  if (data.length < 2) return null
+  const max = Math.max(...data.map(d => d.count), 1)
+  const w = 140
+  const h = 32
+  const pad = 3
+  const step = (w - pad * 2) / (data.length - 1)
+  const points = data
+    .map((d, i) => {
+      const x = pad + i * step
+      const y = h - pad - ((d.count / max) * (h - pad * 2))
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  return (
+    <svg width={w} height={h} className="overflow-visible">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="hsl(var(--flow-brand))"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.8}
+      />
+    </svg>
+  )
+}
 
 interface SkillDetailSheetProps {
   skill: SkillCatalogRow | null
@@ -31,6 +61,7 @@ export function SkillDetailSheet({
     skill?.agent_id,
     skill?.name,
   )
+  const { data: usageData } = useSkillUsage(skill?.id)
 
   const activeVersion = useMemo(
     () => versions.find(v => v.active) ?? versions[0] ?? null,
@@ -147,6 +178,14 @@ export function SkillDetailSheet({
                         </div>
                       </div>
                     </section>
+                    {usageData.length >= 2 && (
+                      <section className="surface-glass rounded-lg border border-border/40 p-3">
+                        <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                          Activity (7d)
+                        </div>
+                        <UsageSparkline data={usageData} />
+                      </section>
+                    )}
                   </div>
                 </ScrollArea>
               </TabsContent>

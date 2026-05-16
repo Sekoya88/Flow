@@ -14,6 +14,7 @@ from flow.application.skill_playground import run_skill_test
 from flow.config import Settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
+from flow.interfaces.http.rate_limit import skill_test_rate_limit
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"])
 
@@ -184,6 +185,7 @@ async def test_skill(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
+    _rate: Annotated[None, Depends(skill_test_rate_limit)],
 ) -> StreamingResponse:
     """Stream LLM tokens for a single-skill, single-prompt isolated run."""
     skill = await repo.get_skill_by_id(skill_id)

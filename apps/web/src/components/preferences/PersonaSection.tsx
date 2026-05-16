@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Loader2, RefreshCw, Save, Sparkles } from 'lucide-react'
+import { AlertTriangle, Loader2, RefreshCw, Save, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,6 +43,7 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
 
   const chips = persona ? derivationChips(persona.derived_from ?? {}) : []
   const charCount = draft.length
+  const isStale = Boolean(persona?.derived_from?.stale_since)
 
   return (
     <section className="surface-glass rounded-2xl border border-border/50 p-5 shadow-sm">
@@ -79,6 +80,13 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
         Identity block injected as the first system message of every agent run.
         Regenerate from your facets + CV, or edit by hand.
       </p>
+
+      {isStale && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Your preferences have changed since this was last regenerated — click Regenerate to refresh.
+        </div>
+      )}
 
       {loading ? (
         <Skeleton className="h-64 w-full rounded-lg" />

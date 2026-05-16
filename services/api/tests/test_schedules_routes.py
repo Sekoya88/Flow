@@ -72,9 +72,9 @@ async def test_list_cron_jobs_returns_system_jobs(app):
     assert r.status_code == 200
     data = r.json()
     assert "cron_jobs" in data
-    assert len(data["cron_jobs"]) == 3
+    assert len(data["cron_jobs"]) == 4
     names = {j["name"] for j in data["cron_jobs"]}
-    assert names == {"scheduler_tick", "auto_eval_tick", "skill_decay_tick"}
+    assert names == {"scheduler_tick", "auto_eval_tick", "skill_decay_tick", "persona_freshness_tick"}
 
 
 @pytest.mark.asyncio

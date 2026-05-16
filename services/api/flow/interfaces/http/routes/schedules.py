@@ -32,6 +32,12 @@ _SYSTEM_CRON_JOBS = [
         "human_readable": "Every day at 4:00 AM UTC",
         "description": "Decays active skill scores; prunes skills with low score and sufficient usage",
     },
+    {
+        "name": "persona_freshness_tick",
+        "cron_expr": "30 3 * * *",
+        "human_readable": "Every day at 3:30 AM UTC",
+        "description": "Flags SOUL.md personas as stale when user preferences have changed since last regeneration",
+    },
 ]
 
 
@@ -39,9 +45,10 @@ def _next_run_for(cron_expr: str) -> str:
     now = datetime.datetime.utcnow().replace(second=0, microsecond=0)
     if cron_expr == "* * * * *":
         nxt = now + datetime.timedelta(minutes=1)
-    elif cron_expr in ("0 3 * * *", "0 4 * * *"):
-        target_hour = 3 if cron_expr == "0 3 * * *" else 4
-        candidate = now.replace(hour=target_hour, minute=0)
+    elif cron_expr in ("0 3 * * *", "0 4 * * *", "30 3 * * *"):
+        hour = 3 if cron_expr in ("0 3 * * *", "30 3 * * *") else 4
+        minute = 30 if cron_expr == "30 3 * * *" else 0
+        candidate = now.replace(hour=hour, minute=minute)
         if candidate <= now:
             candidate += datetime.timedelta(days=1)
         nxt = candidate
