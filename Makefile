@@ -27,11 +27,14 @@ build:
 
 # ── Apply migrations + restart services WITHOUT wiping volumes ────────────────
 # Use this for code changes + new migrations. NEVER destroys the DB.
+# Also re-runs seeds so newly added canonical agents/skills appear immediately.
 update:
 	docker compose up --build -d api worker web
 	@sleep 4
 	docker compose exec api uv run alembic upgrade head
-	@echo "\n✓ Updated (data preserved) → http://localhost:13000"
+	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
+	docker compose exec api uv run python scripts/seed_skills.py
+	@echo "\n✓ Updated (data preserved, seeds refreshed) → http://localhost:13000"
 
 # ── Stop everything ───────────────────────────────────────────────────────────
 down:

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import * as THREE from "three";
 import { NODE_COLORS, NODE_SIZE } from "@/lib/graph/graphColors";
 import { cn } from "@/lib/utils";
 
-const ForceGraph3D = dynamic(() => import("react-force-graph-3d"), { ssr: false });
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 export interface KGNode {
   id: string;
@@ -52,6 +51,31 @@ interface Props {
   onNodeClick?: (node: KGNode) => void;
 }
 
+interface GraphNode {
+  id: string;
+  label: string;
+  node_type: string;
+  summary: string | null;
+  pagerank: number;
+  cluster_id: number | null;
+  color: string;
+  val: number;
+  _raw: KGNode;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+}
+
+interface GraphLink {
+  source: string | GraphNode;
+  target: string | GraphNode;
+  edge_type: string;
+}
+
+const LABEL_ZOOM_THRESHOLD = 2.2;
+const HUB_PAGERANK = 0.08;
+
 export function KnowledgeGraphCanvas({
   nodes,
   edges,
@@ -63,6 +87,8 @@ export function KnowledgeGraphCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<KGNode | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const fittedRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -75,7 +101,7 @@ export function KnowledgeGraphCanvas({
   }, []);
 
   const graphData = useMemo(() => {
-    const gNodes = nodes.map((n) => ({
+    const gNodes: GraphNode[] = nodes.map((n) => ({
       id: n.id,
       label: n.label,
       node_type: n.node_type,
@@ -87,7 +113,7 @@ export function KnowledgeGraphCanvas({
       _raw: n,
     }));
     const nodeIds = new Set(gNodes.map((n) => n.id));
-    const gLinks = edges
+    const gLinks: GraphLink[] = edges
       .filter((e) => nodeIds.has(e.source_id) && nodeIds.has(e.target_id))
       .map((e) => ({
         source: e.source_id,
@@ -97,104 +123,192 @@ export function KnowledgeGraphCanvas({
     return { nodes: gNodes, links: gLinks };
   }, [nodes, edges]);
 
+  // Adjacency map for incident-edge highlighting
+  const adjacency = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const link of graphData.links) {
+      const a = typeof link.source === "object" ? link.source.id : link.source;
+      const b = typeof link.target === "object" ? link.target.id : link.target;
+      if (!map.has(a)) map.set(a, new Set());
+      if (!map.has(b)) map.set(b, new Set());
+      map.get(a)!.add(b);
+      map.get(b)!.add(a);
+    }
+    return map;
+  }, [graphData.links]);
+
   const handleNodeClick = useCallback((node: any) => {
     if (onNodeClick && node._raw) onNodeClick(node._raw);
     if (fgRef.current) {
-      const distance = 120;
-      const distRatio = 1 + distance / Math.hypot(node.x || 1, node.y || 1, node.z || 1);
-      fgRef.current.cameraPosition(
-        { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
-        node,
-        1000,
-      );
+      fgRef.current.centerAt(node.x ?? 0, node.y ?? 0, 600);
+      fgRef.current.zoom(3.2, 600);
     }
   }, [onNodeClick]);
 
-  const nodeThreeObject = useCallback((node: any) => {
-    const isHighlighted = highlightedNodeIds?.has(node.id);
-    const radius = node.val * (isHighlighted ? 1.5 : 1);
+  // Reset auto-fit flag when nodes change (e.g. filter toggled)
+  useEffect(() => {
+    fittedRef.current = false;
+  }, [nodes.length]);
 
-    const group = new THREE.Group();
-
-    // Core sphere with improved material
-    const geometry = new THREE.SphereGeometry(radius, 32, 32);
-    const material = new THREE.MeshStandardMaterial({
-      color: node.color,
-      transparent: true,
-      opacity: isHighlighted ? 0.95 : 0.75,
-      roughness: 0.2,
-      metalness: 0.15,
-      emissive: node.color,
-      emissiveIntensity: isHighlighted ? 0.5 : 0.12,
-    });
-    const sphere = new THREE.Mesh(geometry, material);
-    group.add(sphere);
-
-    // Inner glow for all nodes (not just large ones)
-    const glowGeo = new THREE.SphereGeometry(radius * 1.8, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: node.color,
-      transparent: true,
-      opacity: isHighlighted ? 0.12 : 0.04,
-    });
-    group.add(new THREE.Mesh(glowGeo, glowMat));
-
-    // Outer ambient glow for highlighted nodes
-    if (isHighlighted) {
-      const outerGeo = new THREE.SphereGeometry(radius * 2.8, 12, 12);
-      const outerMat = new THREE.MeshBasicMaterial({
-        color: node.color,
-        transparent: true,
-        opacity: 0.06,
-      });
-      group.add(new THREE.Mesh(outerGeo, outerMat));
+  const handleEngineStop = useCallback(() => {
+    if (!fittedRef.current && fgRef.current && graphData.nodes.length > 0) {
+      fittedRef.current = true;
+      try {
+        fgRef.current.zoomToFit(400, 80);
+      } catch {
+        /* ignore */
+      }
     }
+  }, [graphData.nodes.length]);
 
-    // Text label with background — floor prevents invisible labels on tiny nodes
-    const labelW = Math.max(radius * 6, 16);
-    const labelH = Math.max(radius * 2.2, 6);
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: createTextTexture(node.label, node.color, isHighlighted ?? false),
-        transparent: true,
-        depthWrite: false,
-        opacity: isHighlighted ? 1 : 0.92,
-      }),
-    );
-    sprite.scale.set(labelW, labelH, 1);
-    sprite.position.y = radius + 5;
-    group.add(sprite);
+  const nodeCanvasObject = useCallback(
+    (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const isHighlighted = highlightedNodeIds?.has(node.id) ?? false;
+      const isHovered = hoveredId === node.id;
+      const isHub = node.pagerank > HUB_PAGERANK || node.val > 6;
+      const isIncident =
+        hoveredId != null && adjacency.get(hoveredId)?.has(node.id) === true;
 
-    return group;
-  }, [highlightedNodeIds]);
+      // Dot radius — calmer scaling
+      const baseRadius = Math.max(1.6, Math.sqrt(Math.max(node.val, 1)) * 0.95);
+      const radius = isHighlighted || isHovered ? baseRadius * 1.45 : baseRadius;
+
+      // Faded vs lit alpha when something is hovered/highlighted elsewhere
+      const anyFocus = isHighlighted || isHovered || isIncident || hoveredId == null;
+      const alpha = anyFocus ? 0.92 : 0.32;
+
+      // Dot fill
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+      ctx.fillStyle = withAlpha(node.color, alpha);
+      ctx.fill();
+
+      // Subtle dark ring for separation against the dark background
+      ctx.lineWidth = 0.6 / globalScale;
+      ctx.strokeStyle = `rgba(15,23,42,${0.65 * alpha})`;
+      ctx.stroke();
+
+      // Halo for highlighted / hovered nodes
+      if (isHighlighted || isHovered) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius * 2.2, 0, 2 * Math.PI, false);
+        ctx.fillStyle = withAlpha(node.color, 0.13);
+        ctx.fill();
+      }
+
+      // Label visibility rule
+      const shouldShowLabel =
+        isHighlighted ||
+        isHovered ||
+        isIncident ||
+        isHub ||
+        globalScale > LABEL_ZOOM_THRESHOLD;
+
+      if (shouldShowLabel) {
+        const fontSize = Math.max(9, 11 / Math.sqrt(globalScale));
+        ctx.font = `${isHub ? 600 : 500} ${fontSize}px system-ui, -apple-system, sans-serif`;
+        const text = node.label.length > 36 ? node.label.slice(0, 34) + "…" : node.label;
+        const textW = ctx.measureText(text).width;
+        const padX = 4;
+        const padY = 2;
+        const labelY = node.y + radius + fontSize + 2;
+
+        // Pill background for highlighted / hovered (avoids clutter otherwise)
+        if (isHighlighted || isHovered) {
+          ctx.fillStyle = "rgba(15,23,42,0.7)";
+          const px = node.x - textW / 2 - padX;
+          const py = labelY - fontSize - padY;
+          const pw = textW + padX * 2;
+          const ph = fontSize + padY * 2;
+          ctx.beginPath();
+          roundRect(ctx, px, py, pw, ph, 3);
+          ctx.fill();
+        }
+
+        const baseAlpha = isHighlighted || isHovered ? 1 : isHub ? 0.85 : 0.7;
+        ctx.fillStyle = `rgba(226,232,240,${baseAlpha})`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(text, node.x, labelY);
+      }
+    },
+    [highlightedNodeIds, hoveredId, adjacency],
+  );
+
+  // Increase hit area for pointer events so tiny dots stay clickable
+  const nodePointerAreaPaint = useCallback(
+    (node: any, color: string, ctx: CanvasRenderingContext2D) => {
+      const baseRadius = Math.max(1.6, Math.sqrt(Math.max(node.val, 1)) * 0.95);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, baseRadius * 2.5, 0, 2 * Math.PI, false);
+      ctx.fill();
+    },
+    [],
+  );
+
+  const linkColor = useCallback(
+    (link: any) => {
+      const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+      const targetId = typeof link.target === "object" ? link.target.id : link.target;
+      const incidentToHover =
+        hoveredId != null && (sourceId === hoveredId || targetId === hoveredId);
+      const incidentToHighlight =
+        highlightedNodeIds &&
+        (highlightedNodeIds.has(sourceId) || highlightedNodeIds.has(targetId));
+      if (incidentToHover || incidentToHighlight) {
+        return "rgba(94,234,212,0.55)";
+      }
+      // Faded when something is in focus elsewhere
+      if (hoveredId != null) return "rgba(148,163,184,0.07)";
+      return "rgba(148,163,184,0.18)";
+    },
+    [hoveredId, highlightedNodeIds],
+  );
+
+  const linkWidth = useCallback(
+    (link: any) => {
+      const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+      const targetId = typeof link.target === "object" ? link.target.id : link.target;
+      const incident =
+        hoveredId != null && (sourceId === hoveredId || targetId === hoveredId);
+      const highlighted =
+        highlightedNodeIds &&
+        (highlightedNodeIds.has(sourceId) || highlightedNodeIds.has(targetId));
+      if (incident || highlighted) return 1.4;
+      return 0.4;
+    },
+    [hoveredId, highlightedNodeIds],
+  );
 
   return (
     <div ref={containerRef} className={cn("relative h-full w-full overflow-hidden rounded-2xl", className)}>
       {graphData.nodes.length > 0 && (
-        <ForceGraph3D
+        <ForceGraph2D
           ref={fgRef}
           width={dimensions.width}
           height={dimensions.height}
           graphData={graphData}
-          nodeThreeObject={nodeThreeObject}
-          nodeThreeObjectExtend={false}
-          linkColor={() => "rgba(148,163,184,0.15)"}
-          linkWidth={0.5}
-          linkOpacity={0.4}
-          linkDirectionalParticles={2}
-          linkDirectionalParticleWidth={1.2}
-          linkDirectionalParticleSpeed={0.004}
-          linkDirectionalParticleColor={() => "rgba(94,234,212,0.5)"}
+          nodeCanvasObject={nodeCanvasObject}
+          nodeCanvasObjectMode={() => "replace"}
+          nodePointerAreaPaint={nodePointerAreaPaint}
+          linkColor={linkColor}
+          linkWidth={linkWidth}
+          linkLineDash={() => null}
           backgroundColor="rgba(0,0,0,0)"
           onNodeClick={handleNodeClick}
-          onNodeHover={(node: any) => setHoveredNode(node?._raw ?? null)}
+          onNodeHover={(node: any) => {
+            setHoveredNode(node?._raw ?? null);
+            setHoveredId(node?.id ?? null);
+          }}
           enableNodeDrag={true}
-          enableNavigationControls={true}
-          showNavInfo={false}
+          enableZoomInteraction={true}
+          enablePanInteraction={true}
           warmupTicks={80}
-          cooldownTicks={150}
-          d3AlphaDecay={0.018}
-          d3VelocityDecay={0.25}
+          cooldownTicks={400}
+          d3AlphaDecay={0.012}
+          d3VelocityDecay={0.35}
+          onEngineStop={handleEngineStop}
         />
       )}
 
@@ -205,8 +319,8 @@ export function KnowledgeGraphCanvas({
             <span
               className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-card"
               style={{
-                backgroundColor: TYPE_COLORS[hoveredNode.node_type],
-                boxShadow: `0 0 12px ${TYPE_COLORS[hoveredNode.node_type]}50`,
+                backgroundColor: TYPE_COLORS[hoveredNode.node_type] ?? "#8b9cb7",
+                boxShadow: `0 0 12px ${TYPE_COLORS[hoveredNode.node_type] ?? "#8b9cb7"}50`,
               }}
             />
             <span className="text-sm font-semibold text-foreground truncate">{hoveredNode.label}</span>
@@ -215,9 +329,9 @@ export function KnowledgeGraphCanvas({
             <span
               className="inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-mono font-medium"
               style={{
-                backgroundColor: `${TYPE_COLORS[hoveredNode.node_type]}15`,
-                color: TYPE_COLORS[hoveredNode.node_type],
-                border: `1px solid ${TYPE_COLORS[hoveredNode.node_type]}30`,
+                backgroundColor: `${TYPE_COLORS[hoveredNode.node_type] ?? "#8b9cb7"}15`,
+                color: TYPE_COLORS[hoveredNode.node_type] ?? "#8b9cb7",
+                border: `1px solid ${TYPE_COLORS[hoveredNode.node_type] ?? "#8b9cb7"}30`,
               }}
             >
               {hoveredNode.node_type.replace("_", " ")}
@@ -244,46 +358,37 @@ export function KnowledgeGraphCanvas({
   );
 }
 
-function createTextTexture(text: string, color: string, highlighted: boolean): any {
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  canvas.width = 512;
-  canvas.height = 96;
+function withAlpha(hex: string, alpha: number): string {
+  // Accept #rrggbb / rgba()/ rgb(). Best-effort fallback.
+  if (hex.startsWith("rgba")) return hex;
+  if (hex.startsWith("rgb(")) {
+    return hex.replace("rgb(", "rgba(").replace(")", `,${alpha})`);
+  }
+  if (hex.startsWith("#") && hex.length === 7) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  return hex;
+}
 
-  // Background pill
-  const label = text.length > 32 ? text.slice(0, 30) + "…" : text;
-  ctx.font = "600 26px system-ui, -apple-system, sans-serif";
-  const textWidth = ctx.measureText(label).width;
-  const pillWidth = Math.min(textWidth + 28, 500);
-  const pillHeight = 40;
-  const x = (512 - pillWidth) / 2;
-  const y = (96 - pillHeight) / 2;
-
-  // Draw rounded rect background
-  ctx.fillStyle = highlighted ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.35)";
-  ctx.beginPath();
-  const r = 10;
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + pillWidth - r, y);
-  ctx.quadraticCurveTo(x + pillWidth, y, x + pillWidth, y + r);
-  ctx.lineTo(x + pillWidth, y + pillHeight - r);
-  ctx.quadraticCurveTo(x + pillWidth, y + pillHeight, x + pillWidth - r, y + pillHeight);
-  ctx.lineTo(x + r, y + pillHeight);
-  ctx.quadraticCurveTo(x, y + pillHeight, x, y + pillHeight - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  ctx.fill();
-
-  // Draw text
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = highlighted ? "rgba(255,255,255,0.95)" : "rgba(226,232,240,0.85)";
-  ctx.fillText(label, 256, 48);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
 }
