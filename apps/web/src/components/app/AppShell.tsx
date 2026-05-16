@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Wand2,
   Workflow,
   CheckCircle,
 } from "lucide-react";
@@ -45,6 +46,7 @@ import { cn } from "@/lib/utils";
 const primaryNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/run", label: "Run", icon: MessageSquare },
+  { href: "/skills", label: "Skills", icon: Wand2 },
   { href: "/knowledge", label: "Knowledge", icon: ScrollText },
   { href: "/memory", label: "Memory", icon: Brain },
   { href: "/agents", label: "Agents", icon: Workflow },

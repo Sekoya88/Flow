@@ -1064,6 +1064,67 @@ class FlowRepository:
             skill_id,
         )
 
+    async def list_skills_catalog(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID | None = None,
+        q: str | None = None,
+        limit: int = 200,
+    ) -> list[asyncpg.Record]:
+        """Cross-agent catalog of active skills with the owning agent name joined.
+
+        Powers the Skills Hub. Returns active skills only; history is fetched
+        via the existing get_skill_history per (agent_id, name).
+        """
+        return await self._pool.fetch(
+            """
+            SELECT s.id, s.agent_id, s.workspace_id, s.name, s.version,
+                   s.content_md, s.description, s.allowed_tools, s.triggers,
+                   s.metadata, s.active, s.score, s.use_count, s.created_at,
+                   a.name AS agent_name
+            FROM agent_skills s
+            JOIN agents a ON a.id = s.agent_id
+            WHERE s.workspace_id = $1
+              AND s.active = true
+              AND ($2::uuid IS NULL OR s.agent_id = $2)
+              AND ($3::text IS NULL
+                   OR s.name ILIKE '%' || $3 || '%'
+                   OR s.description ILIKE '%' || $3 || '%')
+            ORDER BY s.score DESC, s.use_count DESC, s.created_at DESC
+            LIMIT $4
+            """,
+            workspace_id,
+            agent_id,
+            q,
+            limit,
+        )
+
+    async def activate_skill_version(self, skill_id: UUID) -> asyncpg.Record | None:
+        """Make this version active, deactivating siblings sharing (agent_id, name).
+
+        Returns the activated row (or None if the id was unknown). Used by the
+        Skills Hub's "Set active" action when reverting to a prior version.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT id, agent_id, name FROM agent_skills WHERE id = $1",
+                skill_id,
+            )
+            if row is None:
+                return None
+            await conn.execute(
+                "UPDATE agent_skills SET active = false "
+                "WHERE agent_id = $1 AND name = $2 AND id <> $3",
+                row["agent_id"], row["name"], skill_id,
+            )
+            return await conn.fetchrow(
+                "UPDATE agent_skills SET active = true WHERE id = $1 "
+                "RETURNING id, agent_id, workspace_id, name, version, content_md, "
+                "         description, allowed_tools, triggers, metadata, "
+                "         active, score, use_count, created_at",
+                skill_id,
+            )
+
     # ── Knowledge Graph ─────────────────────────────────────────────────────
 
     async def upsert_kg_node(
