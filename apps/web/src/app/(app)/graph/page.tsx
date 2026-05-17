@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, Sparkles, X, Zap } from "lucide-react";
+import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
@@ -70,8 +70,9 @@ export default function GraphPage() {
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [pathLabels, setPathLabels] = useState<string[]>([]);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(NODE_TYPES));
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
 
@@ -108,6 +109,27 @@ export default function GraphPage() {
   }, [workspaceId, activeTypes]);
 
   useEffect(() => { fetchGraph(); }, [fetchGraph, typesKey]);
+
+  const syncEntities = useCallback(async () => {
+    if (!workspaceId || syncing) return;
+    setSyncing(true);
+    try {
+      await apiFetch(`/api/v1/kg/sync-entities?workspace_id=${workspaceId}`, { method: "POST" });
+      fetchGraph();
+    } catch (e) {
+      logger.warn("sync-entities failed", { error: String(e) });
+    } finally {
+      setSyncing(false);
+    }
+  }, [workspaceId, syncing, fetchGraph]);
+
+  // Auto-sync agents+skills into graph on first load
+  const syncedRef = React.useRef(false);
+  useEffect(() => {
+    if (!workspaceId || syncedRef.current) return;
+    syncedRef.current = true;
+    void syncEntities();
+  }, [workspaceId, syncEntities]);
 
   const seedGraph = useCallback(async () => {
     if (!workspaceId || seeding) return;
@@ -416,6 +438,16 @@ export default function GraphPage() {
 
         {/* Action buttons */}
         <div className="flex gap-1.5">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 bg-card/85 backdrop-blur-xl border-border/50 shadow-sm"
+            onClick={() => void syncEntities()}
+            disabled={syncing}
+            title="Sync skills into graph"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+          </Button>
           <Button
             variant="outline"
             size="sm"

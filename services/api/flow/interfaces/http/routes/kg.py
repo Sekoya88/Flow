@@ -303,6 +303,105 @@ async def seed_demo_graph(
     return {"seeded": len(_DEMO_NODES), "edges": len(_DEMO_EDGES)}
 
 
+@router.post("/sync-entities", status_code=201)
+async def sync_entities(
+    request: Request,
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Upsert all workspace agents + active skills into kg_nodes with ref linkage.
+
+    Idempotent — uses uuid5 deterministic node IDs and ON CONFLICT upserts.
+    Call this whenever new agents or skills are created to keep the graph in sync.
+    """
+    await _assert_workspace(user_id, workspace_id, repo)
+    import json as _json
+    import uuid as _uuid
+
+    from flow.application.skill_parser import parse_skill_md
+
+    pool = repo._pool
+    agents = await repo.list_agents(workspace_id)
+    skills = await repo.list_skills_catalog(workspace_id)
+
+    agent_kg_ids: dict[str, _uuid.UUID] = {}
+    upserted_agents = 0
+    upserted_skills = 0
+
+    for ag in agents:
+        nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-agent-{workspace_id}-{ag['id']}")
+        agent_kg_ids[str(ag["id"])] = nid
+        meta = _json.dumps({"template": ag.get("template") or ""})
+        await pool.execute(
+            """
+            INSERT INTO kg_nodes
+              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
+            VALUES ($1, $2, $3, 'agent', $4, $5::jsonb, $6, 'agent')
+            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
+            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
+                          metadata = EXCLUDED.metadata
+            """,
+            nid, workspace_id, ag["name"], f"Agent: {ag['name']}",
+            meta, str(ag["id"]),
+        )
+        upserted_agents += 1
+
+    for sk in skills:
+        parsed = parse_skill_md(sk["content_md"])
+        desc = parsed.description or sk.get("description") or ""
+        nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-skill-{workspace_id}-{sk['id']}")
+        meta = _json.dumps({
+            "description": desc,
+            "triggers": parsed.triggers,
+            "allowed_tools": parsed.allowed_tools,
+            "score": float(sk.get("score") or 0.0),
+            "use_count": int(sk.get("use_count") or 0),
+            "version": int(sk.get("version") or 1),
+        })
+        await pool.execute(
+            """
+            INSERT INTO kg_nodes
+              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
+            VALUES ($1, $2, $3, 'skill', $4, $5::jsonb, $6, 'skill')
+            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
+            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
+                          metadata = EXCLUDED.metadata
+            """,
+            nid, workspace_id, sk["name"], desc or sk["name"],
+            meta, str(sk["id"]),
+        )
+        upserted_skills += 1
+
+        agent_nid = agent_kg_ids.get(str(sk["agent_id"]))
+        if agent_nid:
+            eid = _uuid.uuid5(
+                _uuid.NAMESPACE_DNS,
+                f"entity-edge-{workspace_id}-{sk['agent_id']}-{sk['id']}",
+            )
+            await pool.execute(
+                """
+                INSERT INTO kg_edges
+                  (id, workspace_id, source_id, target_id, edge_type, weight)
+                VALUES ($1, $2, $3, $4, 'has_skill', 1.0)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                eid, workspace_id, agent_nid, nid,
+            )
+
+    engine = KGGraphEngine(request.app.state.pool)
+    G = await engine.load_graph(workspace_id)
+    if G.number_of_nodes() > 0:
+        engine.compute_metrics(G)
+        positions = engine.spring_positions(G)
+        pageranks = {UUID(nid): G.nodes[nid]["pagerank"] for nid in G.nodes}
+        clusters = {UUID(nid): G.nodes[nid].get("cluster_id", 0) for nid in G.nodes}
+        pos_map = {UUID(nid): positions.get(nid, (0.0, 0.0)) for nid in G.nodes}
+        await repo.bulk_update_kg_metrics(pageranks, clusters, pos_map)
+
+    return {"agents": upserted_agents, "skills": upserted_skills}
+
+
 @router.post("/query")
 async def query_graph(
     request: Request,

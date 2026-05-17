@@ -73,9 +73,7 @@ interface GraphLink {
   edge_type: string;
 }
 
-const LABEL_ZOOM_THRESHOLD = 2.0;
-const HUB_PAGERANK = 0.06;
-const HUB_VAL = 8;
+const LABEL_ZOOM_THRESHOLD = 1.4;
 
 function nodeRadius(val: number): number {
   return Math.max(2.6, Math.min((val || 4) * 0.7, 9));
@@ -182,12 +180,12 @@ export function KnowledgeGraphCanvas({
       if (cancelled || !fgRef.current) return;
       try {
         const charge = fg.d3Force?.("charge");
-        if (charge?.strength) charge.strength(-120);
+        if (charge?.strength) charge.strength(-180);
         const link = fg.d3Force?.("link");
-        if (link?.distance) link.distance(30);
-        if (link?.strength) link.strength(0.7);
+        if (link?.distance) link.distance(50);
+        if (link?.strength) link.strength(0.25);
         const center = fg.d3Force?.("center");
-        if (center?.strength) center.strength(0.12);
+        if (center?.strength) center.strength(0.04);
         // NOTE: do NOT call d3ReheatSimulation — the engine reheats
         // automatically when forces change. Manual reheat keeps the
         // sim permanently hot, which makes drag/click feel laggy.
@@ -220,7 +218,6 @@ export function KnowledgeGraphCanvas({
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const isHighlighted = highlightedNodeIds?.has(node.id) ?? false;
       const isHovered = hoveredId === node.id;
-      const isHub = node.pagerank > HUB_PAGERANK || node.val >= HUB_VAL;
       const isIncident =
         hoveredId != null && adjacency.get(hoveredId)?.has(node.id) === true;
 
@@ -232,11 +229,18 @@ export function KnowledgeGraphCanvas({
       const anyFocus = isHighlighted || isHovered || isIncident || hoveredId == null;
       const alpha = anyFocus ? 0.92 : 0.32;
 
+      // Obsidian-style glow
+      ctx.shadowBlur = isHighlighted || isHovered ? 22 : isIncident ? 12 : 7;
+      ctx.shadowColor = withAlpha(node.color, isHighlighted || isHovered ? 0.95 : 0.55);
+
       // Dot fill
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = withAlpha(node.color, alpha);
       ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
 
       // Subtle dark ring for separation against the dark background
       ctx.lineWidth = 0.6 / globalScale;
@@ -246,47 +250,34 @@ export function KnowledgeGraphCanvas({
       // Halo for highlighted / hovered nodes
       if (isHighlighted || isHovered) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, radius * 2.4, 0, 2 * Math.PI, false);
-        ctx.fillStyle = withAlpha(node.color, 0.16);
+        ctx.arc(node.x, node.y, radius * 2.6, 0, 2 * Math.PI, false);
+        ctx.fillStyle = withAlpha(node.color, 0.12);
         ctx.fill();
       }
 
-      // Label visibility rule
+      // Labels only on zoom or interaction — never unconditionally for hub nodes
       const shouldShowLabel =
         isHighlighted ||
         isHovered ||
         isIncident ||
-        isHub ||
         globalScale > LABEL_ZOOM_THRESHOLD;
 
       if (shouldShowLabel) {
         const fontSize = Math.max(9, 11 / Math.sqrt(globalScale));
-        ctx.font = `${isHub ? 600 : 500} ${fontSize}px system-ui, -apple-system, sans-serif`;
+        ctx.font = `500 ${fontSize}px system-ui, -apple-system, sans-serif`;
         const text = node.label.length > 36 ? node.label.slice(0, 34) + "…" : node.label;
-        const textW = ctx.measureText(text).width;
-        const padX = 4;
-        const padY = 2;
         const labelY = node.y + radius + fontSize + 2;
 
-        // Pill background for highlighted / hovered / hub (avoids clutter on leaves)
-        if (isHighlighted || isHovered || isHub) {
-          ctx.fillStyle = isHighlighted || isHovered
-            ? "rgba(15,23,42,0.7)"
-            : "rgba(15,23,42,0.45)";
-          const px = node.x - textW / 2 - padX;
-          const py = labelY - fontSize - padY;
-          const pw = textW + padX * 2;
-          const ph = fontSize + padY * 2;
-          ctx.beginPath();
-          roundRect(ctx, px, py, pw, ph, 3);
-          ctx.fill();
-        }
-
-        const baseAlpha = isHighlighted || isHovered ? 1 : isHub ? 0.85 : 0.7;
+        // Text shadow for legibility instead of pill background
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = "rgba(0,0,0,0.95)";
+        const baseAlpha = isHighlighted || isHovered ? 1 : 0.82;
         ctx.fillStyle = `rgba(226,232,240,${baseAlpha})`;
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         ctx.fillText(text, node.x, labelY);
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = "transparent";
       }
     },
     [highlightedNodeIds, hoveredId, adjacency],
@@ -432,22 +423,3 @@ function withAlpha(hex: string, alpha: number): string {
   return hex;
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-}

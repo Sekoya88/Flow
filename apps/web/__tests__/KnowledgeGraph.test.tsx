@@ -125,10 +125,6 @@ describe('GraphPage', () => {
     await act(async () => {
       render(<GraphPage />)
     })
-    // Close query panel first (it hides detail panel)
-    const hideBtn = screen.getByRole('button', { name: /hide panel/i })
-    fireEvent.click(hideBtn)
-
     fireEvent.click(screen.getByTestId('node-n-agent'))
     expect(screen.getByText('Template')).toBeInTheDocument()
     // value appears in entity-specific section AND generic metadata keys section
@@ -145,9 +141,6 @@ describe('GraphPage', () => {
     await act(async () => {
       render(<GraphPage />)
     })
-    const hideBtn = screen.getByRole('button', { name: /hide panel/i })
-    fireEvent.click(hideBtn)
-
     fireEvent.click(screen.getByTestId('node-n-genome'))
     expect(screen.getAllByText(/anthropic/).length).toBeGreaterThanOrEqual(1)
   })
@@ -162,9 +155,7 @@ describe('GraphPage', () => {
     await act(async () => {
       render(<GraphPage />)
     })
-    const hideBtn = screen.getByRole('button', { name: /hide panel/i })
-    fireEvent.click(hideBtn)
-
+    // Panel is closed by default, so NodeDetailPanel renders on click without needing to hide it
     fireEvent.click(screen.getByTestId('node-n-exec'))
     expect(screen.getAllByText('completed').length).toBeGreaterThanOrEqual(1)
   })
