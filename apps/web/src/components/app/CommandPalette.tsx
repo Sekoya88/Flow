@@ -86,7 +86,7 @@ export function CommandPalette() {
         <Command className="text-foreground" shouldFilter>
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-flow-800 px-4 py-3">
-            <FlowMark size={18} className="shrink-0 text-flow-amber opacity-80" />
+            <FlowMark size={18} className="shrink-0 text-flow-violet opacity-80" />
             <Command.Input
               autoFocus
               placeholder="Jump to…  (try 'graph', 'memory', 'profile')"
@@ -116,10 +116,10 @@ export function CommandPalette() {
                       key={item.id}
                       value={`${item.label} ${item.hint ?? ""} ${item.keywords}`}
                       onSelect={() => navigate(item.href)}
-                      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-amber/10"
+                      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-violet/10"
                     >
                       <div
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-amber/40 group-aria-selected:bg-flow-amber/15 group-aria-selected:text-flow-amber"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-violet/40 group-aria-selected:bg-flow-violet/15 group-aria-selected:text-flow-violet"
                         aria-hidden
                       >
                         <item.icon className="h-3.5 w-3.5" />
@@ -135,7 +135,7 @@ export function CommandPalette() {
                         )}
                       </div>
                       <CornerDownLeft
-                        className="h-3 w-3 shrink-0 text-flow-amber/0 transition-colors group-aria-selected:text-flow-amber/70"
+                        className="h-3 w-3 shrink-0 text-flow-violet/0 transition-colors group-aria-selected:text-flow-violet/70"
                         aria-hidden
                       />
                     </Command.Item>

@@ -16,7 +16,7 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
 
   return (
     <article
-      className="flow-card group flex h-full cursor-pointer flex-col gap-3 rounded-[6px] border border-flow-800 p-4 transition-colors hover:border-flow-amber/50"
+      className="flow-card group flex h-full cursor-pointer flex-col gap-3 rounded-[6px] border border-flow-800 p-4 transition-colors hover:border-flow-violet/50"
       onClick={() => onOpen(skill)}
     >
       <header className="flex items-start justify-between gap-2">
@@ -72,7 +72,7 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
           type="button"
           size="sm"
           variant="outline"
-          className="border-flow-amber/40 text-flow-amber opacity-80 transition-opacity group-hover:opacity-100"
+          className="border-flow-violet/40 text-flow-violet opacity-80 transition-opacity group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation()
             onTry(skill)

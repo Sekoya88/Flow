@@ -284,8 +284,8 @@ export default function KnowledgePage() {
 
       <header className="space-y-2 animate-fade-in">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-flow-amber" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+          <BookOpen className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
             Knowledge
           </span>
         </div>
@@ -488,8 +488,8 @@ export default function KnowledgePage() {
                   <button
                     type="button"
                     className={cn(
-                      "group w-full flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-amber/50 hover:bg-flow-amber/[0.04] hover:shadow-md hover:shadow-none/5 sm:flex-row sm:items-center sm:justify-between",
-                      selectedSource?.id === s.id && "border-flow-amber/50 bg-flow-amber/[0.06]",
+                      "group w-full flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-violet/50 hover:bg-flow-violet/[0.04] hover:shadow-md hover:shadow-none/5 sm:flex-row sm:items-center sm:justify-between",
+                      selectedSource?.id === s.id && "border-flow-violet/50 bg-flow-violet/[0.06]",
                     )}
                     style={{
                       opacity: 0,

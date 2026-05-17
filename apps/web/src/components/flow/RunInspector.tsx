@@ -71,7 +71,7 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-flow-800 px-4 py-3">
-        <Layers className="h-3.5 w-3.5 text-flow-amber" aria-hidden />
+        <Layers className="h-3.5 w-3.5 text-flow-violet" aria-hidden />
         <span className="flex-1 text-xs font-semibold text-foreground/80">
           Inspector
         </span>
@@ -108,7 +108,7 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium transition-colors",
               tab === key
-                ? "text-foreground border-b-2 border-flow-amber"
+                ? "text-foreground border-b-2 border-flow-violet"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

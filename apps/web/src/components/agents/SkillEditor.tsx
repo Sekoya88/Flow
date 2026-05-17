@@ -71,7 +71,7 @@ export function SkillEditor({
     <div className={cn("rounded-[6px] border border-flow-800 bg-card/80 overflow-hidden", className)}>
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-flow-800 px-5 py-3">
-        <FileCode2 className="h-4 w-4 text-flow-amber" />
+        <FileCode2 className="h-4 w-4 text-flow-violet" />
         <span className="text-sm font-medium text-foreground">SKILL.md Editor</span>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-xs h-7">

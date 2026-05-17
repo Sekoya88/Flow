@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "flex h-full items-center gap-1.5 border-b-[1.5px] px-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.06em] transition-colors duration-150",
                     active
-                      ? "border-flow-amber text-flow-50"
+                      ? "border-flow-violet text-flow-50"
                       : "border-transparent text-flow-500 hover:text-flow-200",
                   )}
                 >
@@ -131,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
                 "hidden md:inline-flex",
-                settingsActive && "text-flow-amber",
+                settingsActive && "text-flow-violet",
               )}
               aria-label="Account menu"
             >

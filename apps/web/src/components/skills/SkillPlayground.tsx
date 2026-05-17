@@ -111,7 +111,7 @@ export function SkillPlayground({ skillId, triggers }: SkillPlaygroundProps) {
             <Badge
               key={`${t}-${i}`}
               variant="outline"
-              className="cursor-pointer border-flow-amber/40 text-flow-amber hover:bg-flow-amber/10"
+              className="cursor-pointer border-flow-violet/40 text-flow-violet hover:bg-flow-violet/10"
               onClick={() => setPrompt(t)}
             >
               {t}

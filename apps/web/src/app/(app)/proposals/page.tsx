@@ -332,7 +332,7 @@ function ProposalCard({
 
   return (
     <Card
-      className="group flow-card border-flow-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-amber/50 hover:shadow-md hover:shadow-none/5"
+      className="group flow-card border-flow-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-violet/50 hover:shadow-md hover:shadow-none/5"
       style={{
         opacity: 0,
         animation: `fadeIn 320ms ease-out forwards`,

@@ -32,7 +32,7 @@ export function HomeLanding() {
         {/* HERO */}
         <section className="mx-auto grid max-w-[1200px] grid-cols-1 gap-8 px-4 pt-16 md:grid-cols-[1.1fr_0.9fr] lg:gap-12 lg:pt-24">
           <div className="flex flex-col justify-center">
-            <p className="mb-4 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-flow-amber">
+            <p className="mb-4 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-flow-violet">
               Flow Workspace
             </p>
             <h1 className="font-mono text-3xl font-bold tracking-tighter text-flow-50 lg:text-4xl">
@@ -73,9 +73,9 @@ export function HomeLanding() {
           {/* Right: Code preview */}
           <div className="flex min-h-[320px] flex-col gap-3 rounded-[6px] border border-flow-800 bg-flow-900 p-5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 rounded-[4px] border border-flow-amber/30 bg-flow-amber/10 px-2.5 py-1">
-                <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-flow-amber" />
-                <span className="font-mono text-[10px] font-medium text-flow-amber">Execution active</span>
+              <div className="flex items-center gap-2 rounded-[4px] border border-flow-violet/30 bg-flow-violet/10 px-2.5 py-1">
+                <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-flow-violet" />
+                <span className="font-mono text-[10px] font-medium text-flow-violet">Execution active</span>
               </div>
               <span className="font-mono text-[10px] text-flow-500">deer-flow / trace</span>
             </div>
@@ -108,7 +108,7 @@ await agent.reflect(state);`}
         <section className="mx-auto mt-10 grid max-w-[1200px] grid-cols-1 gap-3 px-4 md:grid-cols-3">
           {pillars.map(({ icon: Icon, label, text }) => (
             <div key={label} className="rounded-[6px] border border-flow-800 bg-flow-900 p-5">
-              <Icon className="mb-3 h-5 w-5 text-flow-amber" />
+              <Icon className="mb-3 h-5 w-5 text-flow-violet" />
               <h3 className="mb-2 font-mono text-sm font-semibold tracking-tight text-flow-50">{label}</h3>
               <p className="font-mono text-xs leading-relaxed text-flow-400">{text}</p>
             </div>

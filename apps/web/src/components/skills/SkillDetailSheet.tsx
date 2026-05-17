@@ -31,7 +31,7 @@ function UsageSparkline({ data }: { data: UsageDay[] }) {
       <polyline
         points={points}
         fill="none"
-        stroke="var(--flow-amber)"
+        stroke="var(--flow-violet)"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -93,8 +93,8 @@ export function SkillDetailSheet({
           <div className="flex h-full flex-col">
             <SheetHeader className="border-b border-flow-800 px-6 py-5">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-flow-amber" />
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+                <Sparkles className="h-4 w-4 text-flow-violet" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
                   Skill
                 </span>
                 <Badge variant="outline" className="font-mono text-[10px]">
@@ -152,7 +152,7 @@ export function SkillDetailSheet({
                             <Badge
                               key={`${t}-${i}`}
                               variant="outline"
-                              className="border-flow-amber/40 text-flow-amber"
+                              className="border-flow-violet/40 text-flow-violet"
                             >
                               {t}
                             </Badge>
@@ -215,7 +215,7 @@ export function SkillDetailSheet({
                             key={v.id}
                             className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 transition-colors ${
                               v.id === selectedVid
-                                ? 'border-flow-amber/60 bg-flow-amber/[0.04]'
+                                ? 'border-flow-violet/60 bg-flow-violet/[0.04]'
                                 : 'border-flow-800 hover:border-flow-800'
                             }`}
                           >
@@ -228,14 +228,14 @@ export function SkillDetailSheet({
                                 variant="outline"
                                 className={
                                   v.active
-                                    ? 'border-flow-amber/60 text-flow-amber'
+                                    ? 'border-flow-violet/60 text-flow-violet'
                                     : 'border-flow-800 text-muted-foreground'
                                 }
                               >
                                 v{v.version}
                               </Badge>
                               {v.active && (
-                                <span className="font-mono text-[10px] uppercase tracking-wider text-flow-amber">
+                                <span className="font-mono text-[10px] uppercase tracking-wider text-flow-violet">
                                   active
                                 </span>
                               )}

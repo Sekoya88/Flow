@@ -154,8 +154,8 @@ export default function MemoryPage() {
       {/* Brand header */}
       <header className="space-y-2">
         <div className="flex items-center gap-2">
-          <Brain className="h-4 w-4 text-flow-amber" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+          <Brain className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
             Memory
           </span>
         </div>
@@ -172,7 +172,7 @@ export default function MemoryPage() {
       <section className="flow-card flex flex-col gap-4 rounded-[6px] border border-flow-800 p-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <Label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
-            <Sparkles className="h-3 w-3 text-flow-amber" />
+            <Sparkles className="h-3 w-3 text-flow-violet" />
             Agent
           </Label>
           <Select value={agentId ?? undefined} onValueChange={(v) => v != null && setAgentId(v)}>
@@ -247,7 +247,7 @@ export default function MemoryPage() {
               onChange={(e) => setDraft(e.target.value)}
               rows={3}
               placeholder="Paste a fact or preference to embed for this agent…"
-              className="resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-amber/50 focus-visible:ring-flow-amber/30"
+              className="resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-violet/50 focus-visible:ring-flow-violet/30"
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-mono text-muted-foreground/60">
@@ -257,7 +257,7 @@ export default function MemoryPage() {
                 type="button"
                 disabled={saving || !draft.trim()}
                 onClick={() => void saveSemantic()}
-                className="gap-1.5 bg-flow-50 text-flow-950 hover:bg-flow-amber/90"
+                className="gap-1.5 bg-flow-50 text-flow-950 hover:bg-flow-violet/90"
               >
                 {saving ? (
                   <>
@@ -323,8 +323,8 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
       className={cn(
         "flow-card group rounded-xl border p-4 text-sm leading-relaxed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         tier === "semantic"
-          ? "border-flow-amber/25 hover:border-flow-amber/50 hover:shadow-none/10"
-          : "border-flow-800 hover:border-flow-amber/30",
+          ? "border-flow-violet/25 hover:border-flow-violet/50 hover:shadow-none/10"
+          : "border-flow-800 hover:border-flow-violet/30",
       )}
     >
       <p className="text-foreground/90">{entry.content}</p>
@@ -343,7 +343,7 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
             {new Date(entry.created_at).toLocaleString()}
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-flow-amber/70">
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-flow-violet/70">
           {tier}
         </span>
       </div>

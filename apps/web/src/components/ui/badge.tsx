@@ -11,8 +11,8 @@ const badgeVariants = cva(
       variant: {
         default:
           "border-flow-700 bg-flow-800 text-flow-200",
-        amber:
-          "border-flow-amber/30 bg-flow-amber/10 text-flow-amber",
+        violet:
+          "border-flow-violet/30 bg-flow-violet/10 text-flow-violet",
         secondary:
           "border-flow-700 bg-flow-800 text-flow-300",
         destructive:

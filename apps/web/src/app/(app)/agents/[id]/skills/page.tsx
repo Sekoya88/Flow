@@ -237,8 +237,8 @@ export default function SkillsPage() {
         </div>
       ) : skills.length === 0 ? (
         <div className="flex flex-col items-center gap-5 py-16">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[6px] bg-flow-amber/10 border border-flow-amber/20">
-            <Sparkles className="h-7 w-7 text-flow-amber/50" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-[6px] bg-flow-violet/10 border border-flow-violet/20">
+            <Sparkles className="h-7 w-7 text-flow-violet/50" />
           </div>
           <div className="text-center space-y-2 max-w-sm">
             <p className="font-semibold text-foreground">No skills yet</p>
@@ -274,7 +274,7 @@ export default function SkillsPage() {
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   )}
 
-                  <FileCode2 className="h-4 w-4 text-flow-amber shrink-0" />
+                  <FileCode2 className="h-4 w-4 text-flow-violet shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground">{skill.name}</span>
@@ -287,7 +287,7 @@ export default function SkillsPage() {
                       {isAuto && (
                         <Badge
                           variant="outline"
-                          className="h-4 rounded px-1.5 py-0 text-[9px] gap-0.5 border-flow-amber/30 bg-flow-amber/10"
+                          className="h-4 rounded px-1.5 py-0 text-[9px] gap-0.5 border-flow-violet/30 bg-flow-violet/10"
                         >
                           <Sparkles className="h-2 w-2" />
                           auto
@@ -351,7 +351,7 @@ export default function SkillsPage() {
                               key={v.id}
                               className={cn(
                                 "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs",
-                                v.active ? "bg-flow-amber/5 border border-flow-amber/10" : "border border-transparent",
+                                v.active ? "bg-flow-violet/5 border border-flow-violet/10" : "border border-transparent",
                               )}
                             >
                               <span className="font-mono tabular-nums font-medium w-8">v{v.version}</span>
@@ -360,7 +360,7 @@ export default function SkillsPage() {
                                 {new Date(v.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </span>
                               {v.active && (
-                                <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-amber/30 bg-flow-amber/10">
+                                <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-violet/30 bg-flow-violet/10">
                                   active
                                 </Badge>
                               )}

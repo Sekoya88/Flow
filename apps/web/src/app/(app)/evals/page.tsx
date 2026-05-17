@@ -284,8 +284,8 @@ export default function EvalsPage() {
         <header className="border-b border-flow-800 bg-flow-950 px-4 py-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-flow-amber" />
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+              <Target className="h-3.5 w-3.5 text-flow-violet" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
                 Evals
               </span>
             </div>
@@ -296,8 +296,8 @@ export default function EvalsPage() {
         </header>
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
           <div className="flex flex-col items-center gap-3 text-center max-w-md">
-            <div className="h-16 w-16 rounded-[6px] bg-flow-amber/10 border border-flow-amber/20 flex items-center justify-center">
-              <Database className="h-7 w-7 text-flow-amber" />
+            <div className="h-16 w-16 rounded-[6px] bg-flow-violet/10 border border-flow-violet/20 flex items-center justify-center">
+              <Database className="h-7 w-7 text-flow-violet" />
             </div>
             <h2 className="text-lg font-semibold">No evaluation datasets yet</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -354,8 +354,8 @@ export default function EvalsPage() {
         <div className="mx-auto flex max-w-full items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-flow-amber" />
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+              <Target className="h-3.5 w-3.5 text-flow-violet" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
                 Evals
               </span>
             </div>
@@ -409,7 +409,7 @@ export default function EvalsPage() {
           <div className="flex-1 overflow-y-auto">
             {loadingSets ? (
               <div className="flex justify-center py-8">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-flow-violet border-t-transparent" />
               </div>
             ) : (
               sets.map((s, i) => {
@@ -421,7 +421,7 @@ export default function EvalsPage() {
                     key={s.id}
                     className={cn(
                       "border-b border-border/30 last:border-0 transition-all duration-200 animate-slide-up",
-                      isSelected ? "bg-flow-amber/5 border-l-2 border-l-flow-amber" : "border-l-2 border-l-transparent hover:border-l-flow-amber/30",
+                      isSelected ? "bg-flow-violet/5 border-l-2 border-l-flow-violet" : "border-l-2 border-l-transparent hover:border-l-flow-violet/30",
                     )}
                     style={{ animationDelay: `${Math.min(i * 40, 600)}ms` }}
                   >
@@ -446,7 +446,7 @@ export default function EvalsPage() {
                     {isExpanded && (
                       <div className="px-3 pb-2 space-y-1.5">
                         {loadingItems && !setItems[s.id] ? (
-                          <div className="flex justify-center py-2"><div className="h-3 w-3 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" /></div>
+                          <div className="flex justify-center py-2"><div className="h-3 w-3 animate-spin rounded-full border-2 border-flow-violet border-t-transparent" /></div>
                         ) : items.length === 0 ? (
                           <p className="text-[10px] text-muted-foreground py-1 pl-5">No items yet.</p>
                         ) : (
@@ -508,7 +508,7 @@ export default function EvalsPage() {
               <div className="flex flex-col items-center justify-center h-full gap-3 px-4 py-8 text-center">
                 <Bot className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-xs text-muted-foreground">No agents yet.</p>
-                <a href="/agents/new" className="text-xs text-flow-amber underline underline-offset-2">
+                <a href="/agents/new" className="text-xs text-flow-violet underline underline-offset-2">
                   Create an agent →
                 </a>
               </div>
@@ -526,7 +526,7 @@ export default function EvalsPage() {
                     className={cn(
                       "w-full text-left rounded-xl border p-3 transition-all",
                       isSelected
-                        ? "border-flow-amber/40 bg-flow-amber/5 shadow-none/10"
+                        ? "border-flow-violet/40 bg-flow-violet/5 shadow-none/10"
                         : "border-flow-800 bg-card/50 hover:border-border/70 hover:bg-muted/20",
                     )}
                   >
@@ -568,7 +568,7 @@ export default function EvalsPage() {
               onClick={autoImprove}
               disabled={running || improving || !selectedSetId || !selectedAgentId}
             >
-              <Sparkles className="h-3.5 w-3.5 text-flow-amber" />
+              <Sparkles className="h-3.5 w-3.5 text-flow-violet" />
               {improving ? "Improving..." : "Auto-Improve"}
             </Button>
             {selectedSet && selectedAgent && (
@@ -638,7 +638,7 @@ export default function EvalsPage() {
               <div className="flex items-center gap-2">
                 <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Live logs</span>
-                {running && <div className="h-2 w-2 rounded-full bg-flow-amber animate-pulse" />}
+                {running && <div className="h-2 w-2 rounded-full bg-flow-violet animate-pulse" />}
               </div>
               <div className="flex-1 bg-[#060606] rounded-xl border border-border/20 p-4 overflow-y-auto font-mono min-h-0">
                 {logs.length === 0 ? (
@@ -716,7 +716,7 @@ export default function EvalsPage() {
                 <div className="max-w-2xl mx-auto w-full space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-flow-amber" />
+                      <Sparkles className="h-5 w-5 text-flow-violet" />
                       Improvement Results
                     </h2>
                     <Button variant="ghost" size="sm" onClick={() => setImproveResult(null)}>Close</Button>
@@ -757,7 +757,7 @@ export default function EvalsPage() {
                         {improveResult.proposal_id && (
                           <div className="mt-4 pt-4 border-t border-border/20 flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">A proposal has been created for this candidate.</p>
-                            <a href="/proposals" className="text-sm text-flow-amber underline underline-offset-2">View Proposal →</a>
+                            <a href="/proposals" className="text-sm text-flow-violet underline underline-offset-2">View Proposal →</a>
                           </div>
                         )}
                       </div>
@@ -773,14 +773,14 @@ export default function EvalsPage() {
                 <div className="max-w-3xl mx-auto w-full space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-flow-amber" />
+                      <TrendingUp className="h-5 w-5 text-flow-violet" />
                       Regression Report
                     </h2>
                     <Button variant="ghost" size="sm" onClick={() => setShowRegression(false)}>Close</Button>
                   </div>
 
                   {loadingRegression ? (
-                    <div className="flex justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" /></div>
+                    <div className="flex justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-flow-violet border-t-transparent" /></div>
                   ) : regressionData ? (
                     <div className="space-y-6">
                       <div className="grid grid-cols-3 gap-4">

@@ -135,7 +135,7 @@ function ScheduleItem({
       className={cn(
         "w-full text-left rounded-xl border px-3 py-2.5 transition-all group",
         selected
-          ? "border-flow-amber/40 bg-flow-amber/5"
+          ? "border-flow-violet/40 bg-flow-violet/5"
           : "border-flow-800 bg-card hover:border-border/70 hover:bg-card/70",
         !s.enabled && "opacity-60",
       )}
@@ -160,7 +160,7 @@ function ScheduleItem({
         <ChevronRight
           className={cn(
             "h-3.5 w-3.5 text-muted-foreground/40 mt-1 shrink-0 transition-transform",
-            selected && "rotate-90 text-flow-amber/60",
+            selected && "rotate-90 text-flow-violet/60",
           )}
         />
       </div>
@@ -267,7 +267,7 @@ function CreateForm({
                 className={cn(
                   "rounded-lg px-3 py-1.5 text-xs border font-medium transition-all",
                   form.cron_expr === q.value
-                    ? "bg-flow-amber/10 border-flow-amber/40 text-flow-amber"
+                    ? "bg-flow-violet/10 border-flow-violet/40 text-flow-violet"
                     : "border-flow-800 text-muted-foreground hover:text-foreground hover:border-border",
                 )}
               >
@@ -619,7 +619,7 @@ export default function SchedulesPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn("h-6 w-6", view === "new" && "bg-flow-amber/10 text-flow-amber")}
+                className={cn("h-6 w-6", view === "new" && "bg-flow-violet/10 text-flow-violet")}
                 onClick={() => setView("new")}
                 title="New schedule"
               >
@@ -632,7 +632,7 @@ export default function SchedulesPage() {
           <div className="flex-1 overflow-auto p-2 space-y-1.5">
             {loading ? (
               <div className="flex items-center justify-center py-8 gap-2 text-xs text-muted-foreground">
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-flow-violet border-t-transparent" />
                 Loading…
               </div>
             ) : schedules.length === 0 ? (
@@ -641,7 +641,7 @@ export default function SchedulesPage() {
                 <br />
                 <button
                   onClick={() => setView("new")}
-                  className="text-flow-amber hover:underline mt-1 block mx-auto"
+                  className="text-flow-violet hover:underline mt-1 block mx-auto"
                 >
                   Create one →
                 </button>

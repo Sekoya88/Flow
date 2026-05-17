@@ -189,7 +189,7 @@ export default function GoldenSetPage() {
             { label: "Min score", value: `${(aggregate.min_score * 100).toFixed(0)}%`, icon: BarChart3 },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="rounded-xl border border-flow-800 bg-card p-4 text-center">
-              <Icon className="h-4 w-4 text-flow-amber mx-auto mb-2" />
+              <Icon className="h-4 w-4 text-flow-violet mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">{label}</p>
               <p className="font-mono text-xl font-bold tabular-nums mt-0.5">{value}</p>
             </div>
@@ -227,7 +227,7 @@ export default function GoldenSetPage() {
 
       {/* Add form */}
       {showAddForm && (
-        <div className="rounded-xl border border-flow-amber/20 bg-flow-amber/5 p-5 space-y-3 animate-slide-up">
+        <div className="rounded-xl border border-flow-violet/20 bg-flow-violet/5 p-5 space-y-3 animate-slide-up">
           <p className="text-sm font-medium text-foreground">New test case</p>
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Input / Question</Label>
@@ -240,7 +240,7 @@ export default function GoldenSetPage() {
               onChange={(e) => setNewExpected(e.target.value)}
               placeholder="The expected answer or key facts that must be present…"
               rows={3}
-              className="w-full resize-none rounded-lg border border-flow-800 bg-card/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-flow-amber/30"
+              className="w-full resize-none rounded-lg border border-flow-800 bg-card/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-flow-violet/30"
             />
           </div>
           <div className="space-y-2">

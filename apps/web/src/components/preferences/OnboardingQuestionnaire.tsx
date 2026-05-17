@@ -219,13 +219,13 @@ export function OnboardingQuestionnaire({
       <Card
         role="dialog"
         aria-modal="true"
-        className="flow-card border-flow-amber/20 shadow-none/10"
+        className="flow-card border-flow-violet/20 shadow-none/10"
       >
         <CardHeader className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-flow-amber" />
-              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-flow-amber/80">
+              <Sparkles className="h-3.5 w-3.5 text-flow-violet" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-flow-violet/80">
                 Step {step + 1} of {QUESTIONS.length}
               </span>
             </div>
@@ -248,7 +248,7 @@ export function OnboardingQuestionnaire({
             aria-valuemax={100}
           >
             <div
-              className="h-full rounded-full bg-flow-amber transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-flow-violet transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -287,8 +287,8 @@ export function OnboardingQuestionnaire({
                   className={cn(
                     'group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200',
                     selected
-                      ? 'border-flow-amber bg-flow-amber/15 text-flow-amber shadow-none/10'
-                      : 'border-flow-800 bg-card/30 text-foreground/70 hover:border-flow-amber/40 hover:bg-flow-amber/[0.04] hover:text-foreground',
+                      ? 'border-flow-violet bg-flow-violet/15 text-flow-violet shadow-none/10'
+                      : 'border-flow-800 bg-card/30 text-foreground/70 hover:border-flow-violet/40 hover:bg-flow-violet/[0.04] hover:text-foreground',
                   )}
                   aria-pressed={selected}
                 >
@@ -320,7 +320,7 @@ export function OnboardingQuestionnaire({
                     ? 'Skip or type your answer…'
                     : 'Type your answer…'
               }
-              className="min-h-[72px] resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-amber/50 focus-visible:ring-flow-amber/30"
+              className="min-h-[72px] resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-violet/50 focus-visible:ring-flow-violet/30"
             />
           </div>
 
@@ -361,7 +361,7 @@ export function OnboardingQuestionnaire({
             type="button"
             onClick={handleNext}
             disabled={submitting}
-            className="gap-1.5 bg-flow-amber text-white shadow-none/20 hover:bg-flow-amber/90"
+            className="gap-1.5 bg-flow-violet text-white shadow-none/20 hover:bg-flow-violet/90"
           >
             {submitting ? (
               <>

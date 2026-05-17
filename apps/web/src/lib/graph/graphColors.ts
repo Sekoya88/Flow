@@ -7,7 +7,7 @@ export const NODE_COLORS: Record<NodeType, string> = {
   system_prompt:  '#a78bfa',
   execution:      '#10b981',
   sub_agent:      '#818cf8',
-  tool_call:      '#f97316',
+  tool_call:      '#a78bfa',
   note:           '#64748b',
   concept:        '#64748b',
   topic:          '#64748b',

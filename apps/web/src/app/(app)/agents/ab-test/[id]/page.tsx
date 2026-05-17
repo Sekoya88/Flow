@@ -141,7 +141,7 @@ export default function ABTestDetailPage() {
                 className={cn(
                   "rounded-[6px] border p-5 space-y-2 transition-all",
                   isWinner
-                    ? "border-flow-amber/40 bg-flow-amber/5 shadow-none/10"
+                    ? "border-flow-violet/40 bg-flow-violet/5 shadow-none/10"
                     : "border-flow-800 bg-card",
                 )}
               >
@@ -158,7 +158,7 @@ export default function ABTestDetailPage() {
                     </div>
                   </div>
                   {isWinner && (
-                    <div className="flex items-center gap-1 text-flow-amber text-xs font-semibold">
+                    <div className="flex items-center gap-1 text-flow-violet text-xs font-semibold">
                       <Trophy className="h-3.5 w-3.5" /> Winner
                     </div>
                   )}
@@ -177,8 +177,8 @@ export default function ABTestDetailPage() {
 
         {/* Winner banner */}
         {test.status === "completed" && (
-          <div className="rounded-xl border border-flow-amber/20 bg-flow-amber/5 px-4 py-3 flex items-center gap-3">
-            <Trophy className="h-5 w-5 text-flow-amber shrink-0" />
+          <div className="rounded-xl border border-flow-violet/20 bg-flow-violet/5 px-4 py-3 flex items-center gap-3">
+            <Trophy className="h-5 w-5 text-flow-violet shrink-0" />
             <p className="text-sm font-medium">
               Agent {aggregate.winner} wins with an average score of{" "}
               <strong>

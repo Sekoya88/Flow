@@ -95,7 +95,7 @@ export function ToolCallLog({ calls, className }: ToolCallLogProps) {
   return (
     <div className={cn("space-y-2 flex flex-col h-full", className)}>
       <div className="flex shrink-0 items-center gap-2">
-        <Zap className="h-3.5 w-3.5 text-flow-amber" aria-hidden />
+        <Zap className="h-3.5 w-3.5 text-flow-violet" aria-hidden />
         <span className="text-xs font-medium text-foreground">Tool calls</span>
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
           {calls.length}

@@ -79,8 +79,8 @@ export default function SkillsHubPage() {
       {/* Header */}
       <header className="space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-flow-amber" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+          <Sparkles className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
             Skills Hub
           </span>
         </div>

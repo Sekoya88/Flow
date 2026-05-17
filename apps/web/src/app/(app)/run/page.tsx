@@ -488,7 +488,7 @@ export default function RunPage() {
                   className={cn(
                     "w-full px-4 py-2.5 text-left transition-colors group",
                     selectedId === exec.id
-                      ? "bg-flow-amber/10 border-r-2 border-flow-amber"
+                      ? "bg-flow-violet/10 border-r-2 border-flow-violet"
                       : "hover:bg-muted/60",
                   )}
                 >
@@ -500,7 +500,7 @@ export default function RunPage() {
                       {exec.user_message}
                     </p>
                     {exec.status === "running" && (
-                      <Zap className="h-3 w-3 shrink-0 text-flow-amber animate-pulse mt-0.5" />
+                      <Zap className="h-3 w-3 shrink-0 text-flow-violet animate-pulse mt-0.5" />
                     )}
                   </div>
                   <div className="mt-1 flex items-center gap-2">
@@ -523,7 +523,7 @@ export default function RunPage() {
           {onboardingDone === false && (
             <button
               onClick={() => router.push("/onboarding/profile")}
-              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-flow-amber/15 text-flow-amber border border-flow-amber/30 hover:bg-flow-amber/25 transition-colors"
+              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-flow-violet/15 text-flow-violet border border-flow-violet/30 hover:bg-flow-violet/25 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
               Finish onboarding
@@ -549,7 +549,7 @@ export default function RunPage() {
               <div className="flex h-full w-full flex-col items-center justify-center px-4">
                 <div className="flex w-full max-w-xl flex-col items-center gap-8 animate-fade-in">
                   <div className="flex flex-col items-center gap-4 text-center">
-                    <FlowMark className="text-flow-amber opacity-80" />
+                    <FlowMark className="text-flow-violet opacity-80" />
                     <div className="space-y-2">
                       <h1 className="text-2xl font-semibold tracking-tight">
                         What do you want to explore?
@@ -567,10 +567,10 @@ export default function RunPage() {
                         onClick={() => { setMessage(q.text); textareaRef.current?.focus(); }}
                         className={cn(
                           "flow-card group flex flex-col gap-3 rounded-[6px] p-5 text-left transition-all duration-300",
-                          "hover:-translate-y-1 hover:border-flow-amber/50 hover:shadow-lg hover:shadow-none/10",
+                          "hover:-translate-y-1 hover:border-flow-violet/50 hover:shadow-lg hover:shadow-none/10",
                         )}
                       >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-flow-amber/10 text-xl">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-flow-violet/10 text-xl">
                           {q.icon}
                         </div>
                         <span className="text-sm font-medium text-foreground/80 transition-colors group-hover:text-foreground leading-relaxed">
@@ -604,7 +604,7 @@ export default function RunPage() {
                       {/* User message */}
                       <div className="flex gap-3 justify-end animate-slide-up">
                         <div className="flex flex-col gap-1.5 max-w-[80%]">
-                          <div className="rounded-[6px] rounded-br-md bg-flow-amber px-5 py-3.5 text-sm leading-relaxed text-white shadow-none/20">
+                          <div className="rounded-[6px] rounded-br-md bg-flow-violet px-5 py-3.5 text-sm leading-relaxed text-white shadow-none/20">
                             <p className="whitespace-pre-wrap">{turn.user_message}</p>
                           </div>
                           {turn.created_at && (
@@ -639,7 +639,7 @@ export default function RunPage() {
                           )}>
                             <Bot className={cn(
                               "h-4 w-4",
-                              isStreamingTurn ? "text-flow-amber animate-pulse" : "text-flow-amber",
+                              isStreamingTurn ? "text-flow-violet animate-pulse" : "text-flow-violet",
                             )} />
                           </div>
                           <div className="flex flex-col gap-1.5 max-w-[80%]">
@@ -659,7 +659,7 @@ export default function RunPage() {
                                     "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
                                     markedItems.has(turn.id)
                                       ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
-                                      : "text-muted-foreground/50 hover:text-flow-amber hover:bg-flow-amber/10",
+                                      : "text-muted-foreground/50 hover:text-flow-violet hover:bg-flow-violet/10",
                                   )}
                                   disabled={markedItems.has(turn.id) || markingId === turn.id}
                                   onClick={() => void handleMarkAsGolden(turn.id, turn.user_message, turn.answer!)}
@@ -740,7 +740,7 @@ export default function RunPage() {
                 className={cn(
                   "w-full resize-none rounded-xl border border-flow-800 bg-card/80 px-4 py-3 pr-12",
                   "text-sm leading-relaxed placeholder:text-muted-foreground/60",
-                  "focus:outline-none focus:ring-2 focus:ring-flow-amber/30 focus:border-flow-amber/50",
+                  "focus:outline-none focus:ring-2 focus:ring-flow-violet/30 focus:border-flow-violet/50",
                   "transition-all min-h-[44px] max-h-[160px]",
                 )}
                 style={{ height: "auto", overflow: "hidden" }}
@@ -757,7 +757,7 @@ export default function RunPage() {
                 className={cn(
                   "absolute right-2 bottom-2 h-8 w-8 rounded-lg transition-all",
                   message.trim() && !running
-                    ? "bg-flow-50 text-flow-950 hover:bg-flow-amber/90 shadow-none/20"
+                    ? "bg-flow-50 text-flow-950 hover:bg-flow-violet/90 shadow-none/20"
                     : "bg-muted text-muted-foreground",
                 )}
               >
@@ -775,7 +775,7 @@ export default function RunPage() {
               className={cn(
                 "rounded-lg p-2 transition-colors shrink-0",
                 showInspector
-                  ? "text-flow-amber bg-flow-amber/10"
+                  ? "text-flow-violet bg-flow-violet/10"
                   : "text-muted-foreground hover:text-foreground",
               )}
               title="Toggle inspector"

@@ -48,7 +48,7 @@ function toFlowEdges(edges: CatalogEdge[]): Edge[] {
     style:
       e.kind === "conditional"
         ? { strokeDasharray: "4 4", stroke: "var(--color-flow-thinking, #a855f7)" }
-        : { stroke: "var(--color-flow-amber, #d97706)" },
+        : { stroke: "var(--color-flow-violet, #d97706)" },
   }));
 }
 
@@ -88,7 +88,7 @@ export function AgentTopologyCanvas({ graphId, nodes: inNodes, edges: inEdges, c
         <MiniMap
           className="!bg-card/90"
           maskColor="rgba(0,0,0,0.12)"
-          nodeColor={() => "var(--color-flow-amber, #d97706)"}
+          nodeColor={() => "var(--color-flow-violet, #d97706)"}
         />
       </ReactFlow>
     </div>

@@ -51,12 +51,12 @@ export function GraphSearchOverlay({
       />
 
       <div
-        className="relative w-full max-w-xl overflow-hidden rounded-[6px] border border-flow-amber/20 bg-card/95 shadow-none/10 animate-slide-up"
+        className="relative w-full max-w-xl overflow-hidden rounded-[6px] border border-flow-violet/20 bg-card/95 shadow-none/10 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <Command className="text-foreground" shouldFilter>
           <div className="flex items-center gap-3 border-b border-flow-800 px-4 py-3">
-            <Search className="h-4 w-4 text-flow-amber" />
+            <Search className="h-4 w-4 text-flow-violet" />
             <Command.Input
               autoFocus
               placeholder="Search nodes by label or summary…"
@@ -80,11 +80,11 @@ export function GraphSearchOverlay({
                   onSelect(node.id)
                   onOpenChange(false)
                 }}
-                className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-amber/10"
+                className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-violet/10"
               >
                 <div
                   className={cn(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-amber/40 group-aria-selected:bg-flow-amber/15 group-aria-selected:text-flow-amber',
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-violet/40 group-aria-selected:bg-flow-violet/15 group-aria-selected:text-flow-violet',
                   )}
                   aria-hidden
                 >
@@ -102,7 +102,7 @@ export function GraphSearchOverlay({
                   </p>
                 </div>
                 <CornerDownLeft
-                  className="h-3 w-3 shrink-0 text-flow-amber/0 transition-colors group-aria-selected:text-flow-amber/70"
+                  className="h-3 w-3 shrink-0 text-flow-violet/0 transition-colors group-aria-selected:text-flow-violet/70"
                   aria-hidden
                 />
               </Command.Item>

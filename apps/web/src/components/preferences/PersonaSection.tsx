@@ -49,7 +49,7 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
     <section className="flow-card rounded-[6px] border border-flow-800 p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-flow-amber" />
+          <Sparkles className="h-3.5 w-3.5 text-flow-violet" />
           <h2 className="font-mono text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
             SOUL.md
           </h2>
@@ -66,7 +66,7 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
               variant="outline"
               className={
                 c.tone === 'brand'
-                  ? 'border-flow-amber/40 bg-flow-amber/10 text-flow-amber'
+                  ? 'border-flow-violet/40 bg-flow-violet/10 text-flow-violet'
                   : 'border-flow-800 text-muted-foreground'
               }
             >

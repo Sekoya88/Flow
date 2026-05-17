@@ -156,7 +156,7 @@ export function AgentCard({ agent, onClick, className }: AgentCardProps) {
         {/* Header: name + template badge */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-flow-amber transition-colors">
+            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-flow-violet transition-colors">
               {agent.name || agent.template}
             </h3>
           </div>

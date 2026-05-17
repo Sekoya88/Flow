@@ -339,14 +339,14 @@ export function AgentDetailDrawer({
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors",
                           enabled
-                            ? "bg-flow-amber/5 border border-flow-amber/10"
+                            ? "bg-flow-violet/5 border border-flow-violet/10"
                             : "border border-transparent hover:bg-muted/30",
                         )}
                       >
                         <Icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            enabled ? "text-flow-amber" : "text-muted-foreground/50",
+                            enabled ? "text-flow-violet" : "text-muted-foreground/50",
                           )}
                         />
                         <div className="min-w-0 flex-1">
@@ -448,7 +448,7 @@ export function AgentDetailDrawer({
                             {v.prompt_hash ? (
                               <span
                                 title={`prompt SHA-256: ${v.prompt_hash}`}
-                                className="rounded border border-flow-amber/30 bg-flow-amber/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-flow-amber/90"
+                                className="rounded border border-flow-violet/30 bg-flow-violet/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-flow-violet/90"
                               >
                                 cache:{v.prompt_hash.slice(0, 8)}
                               </span>

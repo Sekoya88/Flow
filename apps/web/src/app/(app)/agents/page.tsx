@@ -192,10 +192,10 @@ export default function AgentsPage() {
         <div className="flex flex-col items-center gap-6 py-20">
           <div className="rounded-[6px] border border-flow-800 bg-card p-10 flex flex-col items-center gap-5 max-w-sm">
             <div className="relative">
-              <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-flow-amber/10 border border-flow-amber/20">
-                <Bot className="h-8 w-8 text-flow-amber/60" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-flow-violet/10 border border-flow-violet/20">
+                <Bot className="h-8 w-8 text-flow-violet/60" />
               </div>
-              <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-amber border border-background">
+              <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-violet border border-background">
                 <Sparkles className="h-3 w-3 text-white" />
               </div>
             </div>

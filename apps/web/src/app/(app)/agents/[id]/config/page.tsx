@@ -29,7 +29,7 @@ export default function AgentConfigPage() {
           onClick={() => setActiveTab("preferences")}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === "preferences"
-              ? "border-flow-amber text-flow-amber"
+              ? "border-flow-violet text-flow-violet"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >

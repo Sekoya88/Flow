@@ -35,7 +35,7 @@ export function FlowPageHeader({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            {leading ? <span className="shrink-0 text-flow-amber">{leading}</span> : null}
+            {leading ? <span className="shrink-0 text-flow-violet">{leading}</span> : null}
             <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance">{title}</h1>
             {titleSuffix}
           </div>

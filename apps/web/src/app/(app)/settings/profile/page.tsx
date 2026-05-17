@@ -60,8 +60,8 @@ export default function ProfilePage() {
       {/* Header */}
       <header className="space-y-2">
         <div className="flex items-center gap-2">
-          <UserCog className="h-4 w-4 text-flow-amber" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+          <UserCog className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
             Profile
           </span>
         </div>
@@ -97,7 +97,7 @@ export default function ProfilePage() {
       {/* CV import */}
       <section className="flow-card rounded-[6px] border border-flow-800 p-5">
         <div className="mb-4 flex items-center gap-2">
-          <FileUp className="h-3.5 w-3.5 text-flow-amber" />
+          <FileUp className="h-3.5 w-3.5 text-flow-violet" />
           <h2 className="text-sm font-semibold text-foreground">
             Import from Résumé
           </h2>
@@ -111,7 +111,7 @@ export default function ProfilePage() {
       {/* Facets */}
       <section className="flow-card rounded-[6px] border border-flow-800 p-2">
         <div className="mb-2 flex items-center gap-2 px-3 pt-2">
-          <Layers className="h-3.5 w-3.5 text-flow-amber" />
+          <Layers className="h-3.5 w-3.5 text-flow-violet" />
           <h2 className="text-sm font-semibold text-foreground">Facets</h2>
         </div>
         <div className="space-y-1">

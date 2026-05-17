@@ -39,7 +39,7 @@ export function SubagentCard({ invocation }: SubagentCardProps) {
           ? 'border-destructive/30 hover:border-destructive/50'
           : isRunning
             ? 'border-flow-streaming/40 shadow-flow-streaming/10'
-            : 'border-flow-amber/30 hover:border-flow-amber/50',
+            : 'border-flow-violet/30 hover:border-flow-violet/50',
       )}
     >
       <button
@@ -59,8 +59,8 @@ export function SubagentCard({ invocation }: SubagentCardProps) {
             isError
               ? 'border-destructive/40 bg-destructive/15 text-destructive'
               : isRunning
-                ? 'border-flow-streaming/40 bg-flow-streaming/15 text-flow-amber'
-                : 'border-flow-amber/40 bg-flow-amber/15 text-flow-amber',
+                ? 'border-flow-streaming/40 bg-flow-streaming/15 text-flow-violet'
+                : 'border-flow-violet/40 bg-flow-violet/15 text-flow-violet',
           )}
         >
           {isRunning ? (
@@ -110,10 +110,10 @@ export function SubagentCard({ invocation }: SubagentCardProps) {
                 'rounded-lg border px-3 py-2',
                 isError
                   ? 'border-destructive/30 bg-destructive/[0.05]'
-                  : 'border-flow-amber/25 bg-flow-amber/[0.04]',
+                  : 'border-flow-violet/25 bg-flow-violet/[0.04]',
               )}
             >
-              <p className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-flow-amber/80">
+              <p className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-flow-violet/80">
                 <CornerDownRight className="h-2.5 w-2.5" />
                 Subagent response
               </p>

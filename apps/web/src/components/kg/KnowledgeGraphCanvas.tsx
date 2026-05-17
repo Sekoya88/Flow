@@ -33,7 +33,7 @@ export interface KGEdge {
 const TYPE_COLORS: Record<string, string> = {
   concept: "#94a3b8",
   skill: "#5eead4",
-  tool_call: "#fbbf24",
+  tool_call: "#a78bfa",
   trace: "#38bdf8",
   metacog: "#a78bfa",
   prompt: "#818cf8",

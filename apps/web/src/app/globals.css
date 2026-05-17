@@ -55,8 +55,8 @@
   --color-flow-200: var(--flow-200);
   --color-flow-100: var(--flow-100);
   --color-flow-50: var(--flow-50);
-  --color-flow-amber: var(--flow-amber);
-  --color-flow-amber-dim: var(--flow-amber-dim);
+  --color-flow-violet: var(--flow-violet);
+  --color-flow-violet-dim: var(--flow-violet-dim);
   --color-flow-error: var(--flow-error);
 }
 
@@ -73,9 +73,9 @@
   --flow-200: #d4d4cc;
   --flow-100: #e8e8e2;
   --flow-50:  #fafaf9;
-  /* Amber accent */
-  --flow-amber: #d97706;
-  --flow-amber-dim: #92400e;
+  /* Violet accent */
+  --flow-violet: #c4b5fd;
+  --flow-violet-dim: #7c3aed;
   /* Status */
   --flow-error: #dc2626;
 
@@ -97,7 +97,7 @@
   --destructive: var(--flow-error);
   --border: var(--flow-800);
   --input: var(--flow-800);
-  --ring: var(--flow-amber);
+  --ring: var(--flow-violet);
   --chart-1: var(--flow-400);
   --chart-2: var(--flow-500);
   --chart-3: var(--flow-600);
@@ -107,12 +107,12 @@
   /* sidebar */
   --sidebar: var(--flow-900);
   --sidebar-foreground: var(--flow-300);
-  --sidebar-primary: var(--flow-amber);
+  --sidebar-primary: var(--flow-violet);
   --sidebar-primary-foreground: var(--flow-950);
   --sidebar-accent: var(--flow-800);
   --sidebar-accent-foreground: var(--flow-50);
   --sidebar-border: var(--flow-800);
-  --sidebar-ring: var(--flow-amber);
+  --sidebar-ring: var(--flow-violet);
 }
 
 /* Light override — invert the scale for light mode */
@@ -166,9 +166,9 @@
   .flow-section-header {
     @apply mb-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground;
   }
-  .flow-amber-accent {
-    border-left: 2px solid var(--flow-amber);
-    background-color: color-mix(in srgb, var(--flow-amber) 5%, transparent);
+  .flow-violet-accent {
+    border-left: 2px solid var(--flow-violet);
+    background-color: color-mix(in srgb, var(--flow-violet) 5%, transparent);
   }
 }
 
@@ -184,7 +184,7 @@
     font-family: "JetBrains Mono", ui-monospace, monospace;
   }
   ::selection {
-    background-color: color-mix(in srgb, var(--flow-amber) 20%, transparent);
+    background-color: color-mix(in srgb, var(--flow-violet) 20%, transparent);
     color: var(--flow-50);
   }
 

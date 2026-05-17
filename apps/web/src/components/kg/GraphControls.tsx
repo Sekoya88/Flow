@@ -30,13 +30,13 @@ export function GraphControls({
   return (
     <div
       className={cn(
-        'flow-card w-64 rounded-[6px] border border-flow-amber/20 p-4 space-y-4 shadow-none/10 animate-fade-in',
+        'flow-card w-64 rounded-[6px] border border-flow-violet/20 p-4 space-y-4 shadow-none/10 animate-fade-in',
         className,
       )}
     >
       <div className="flex items-center gap-2">
-        <Crosshair className="h-3.5 w-3.5 text-flow-amber" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
+        <Crosshair className="h-3.5 w-3.5 text-flow-violet" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
           Graph controls
         </span>
       </div>
@@ -50,7 +50,7 @@ export function GraphControls({
               'rounded border px-1.5 py-0.5 font-mono text-[10px]',
               depth === 0
                 ? 'border-flow-800 bg-muted/40 text-muted-foreground'
-                : 'border-flow-amber/30 bg-flow-amber/10 text-flow-amber',
+                : 'border-flow-violet/30 bg-flow-violet/10 text-flow-violet',
             )}
           >
             {depth === 0 ? '∞' : `${depth} hop${depth === 1 ? '' : 's'}`}
@@ -81,7 +81,7 @@ export function GraphControls({
           <Globe2
             className={cn(
               'h-3.5 w-3.5',
-              localMode ? 'text-muted-foreground/40' : 'text-flow-amber',
+              localMode ? 'text-muted-foreground/40' : 'text-flow-violet',
             )}
           />
           <Label className="text-xs">{localMode ? 'Local graph' : 'Global graph'}</Label>
@@ -100,7 +100,7 @@ export function GraphControls({
         variant="outline"
         size="sm"
         onClick={onOpenSearch}
-        className="w-full justify-between gap-2 rounded-lg border-flow-800 bg-card text-xs hover:border-flow-amber/40 hover:bg-flow-amber/[0.04]"
+        className="w-full justify-between gap-2 rounded-lg border-flow-800 bg-card text-xs hover:border-flow-violet/40 hover:bg-flow-violet/[0.04]"
       >
         <span className="flex items-center gap-2">
           <Search className="h-3.5 w-3.5" />
