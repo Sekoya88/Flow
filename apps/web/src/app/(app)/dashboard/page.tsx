@@ -28,7 +28,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FlowMarkAnimated } from "@/components/brand/FlowLogo";
+import { FlowMark } from "@/components/brand/FlowLogo";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -181,12 +181,12 @@ export default function DashboardPage() {
   return (
     <div className="w-full space-y-12 animate-fade-in">
       {/* Hero / Header */}
-      <section className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-6 shadow-sm backdrop-blur-md sm:p-8 animate-slide-up">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-flow-brand/15 blur-3xl dark:bg-flow-brand/25" aria-hidden />
+      <section className="relative overflow-hidden rounded-[6px] border border-flow-800 bg-card p-6 sm:p-8 animate-slide-up">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-flow-amber/15 blur-3xl dark:bg-flow-amber/25" aria-hidden />
         <div className="relative z-10 flex flex-col gap-2">
           <Badge
             variant="outline"
-            className="w-fit border-flow-brand/35 bg-flow-brand/10 font-mono text-[10px] uppercase tracking-wider text-flow-brand"
+            className="w-fit border-flow-amber/35 bg-flow-amber/10 font-mono text-[10px] uppercase tracking-wider text-flow-amber"
           >
             Workspace Overview
           </Badge>
@@ -205,11 +205,11 @@ export default function DashboardPage() {
           <Link
             key={key}
             href={href}
-            className="block transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="block transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flow-amber focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <div
               className={cn(
-                "surface-glass relative flex min-h-[120px] flex-col overflow-hidden rounded-2xl p-5 transition-all hover:border-flow-brand/40 hover:shadow-md",
+                "flow-card relative flex min-h-[120px] flex-col overflow-hidden rounded-[6px] p-5 transition-all hover:border-flow-amber/50 hover:shadow-md",
                 key === "active_schedules" && c[key] > 0 && "border-flow-thinking/40 bg-flow-thinking/5",
               )}
               style={{ animationDelay: `${i * 60}ms` }}
@@ -219,7 +219,7 @@ export default function DashboardPage() {
                 style={{
                   background:
                     key === "agents"
-                      ? "var(--color-flow-brand)"
+                      ? "var(--color-flow-amber)"
                       : key === "executions"
                         ? "var(--color-flow-streaming)"
                         : key === "episodic_memories"
@@ -242,8 +242,8 @@ export default function DashboardPage() {
       {/* Feature Bento */}
       <div className="grid gap-4 md:grid-cols-12">
         {/* Quick start */}
-        <div className="surface-glass flex flex-col items-center justify-center gap-6 rounded-2xl p-8 md:col-span-5 text-center animate-slide-up [animation-delay:200ms]">
-          <FlowMarkAnimated className="text-flow-brand" size={48} />
+        <div className="flow-card flex flex-col items-center justify-center gap-6 rounded-[6px] p-8 md:col-span-5 text-center animate-slide-up [animation-delay:200ms]">
+          <FlowMark className="text-flow-amber" size={48} />
           <div className="space-y-2">
             <p className="text-lg font-semibold tracking-tight text-foreground">Ready to run</p>
             <p className="text-sm text-muted-foreground">
@@ -266,9 +266,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent runs */}
-        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-7 animate-slide-up [animation-delay:260ms]">
-          <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-6 py-4">
-            <MessageSquare className="h-4 w-4 text-flow-streaming" />
+        <div className="flow-card flex flex-col overflow-hidden rounded-[6px] md:col-span-7 animate-slide-up [animation-delay:260ms]">
+          <div className="flex items-center gap-2 border-b border-flow-800 bg-muted/20 px-6 py-4">
+            <MessageSquare className="h-4 w-4 text-flow-amber" />
             <h3 className="font-semibold text-foreground">Recent Executions</h3>
           </div>
           <div className="flex-1 overflow-auto p-0">
@@ -285,7 +285,7 @@ export default function DashboardPage() {
                     ) : r.status === "failed" ? (
                       <XCircle className="h-4 w-4 shrink-0 text-destructive" />
                     ) : (
-                      <Clock className="h-4 w-4 shrink-0 animate-pulse text-flow-streaming" />
+                      <Clock className="h-4 w-4 shrink-0 animate-pulse text-flow-amber" />
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -307,14 +307,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Pending proposals */}
-        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-6 animate-slide-up [animation-delay:320ms]">
-          <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-6 py-4">
-            <Sparkles className="h-4 w-4 text-flow-thinking" aria-hidden />
+        <div className="flow-card flex flex-col overflow-hidden rounded-[6px] md:col-span-6 animate-slide-up [animation-delay:320ms]">
+          <div className="flex items-center gap-2 border-b border-flow-800 bg-muted/20 px-6 py-4">
+            <Sparkles className="h-4 w-4 text-flow-amber" aria-hidden />
             <h3 className="font-semibold text-foreground">Curator Proposals</h3>
             {proposals.length > 0 && (
               <Badge
                 variant="outline"
-                className="ml-auto h-5 rounded-full border-flow-thinking/30 bg-flow-thinking/10 px-2 py-0 font-mono text-[10px] text-flow-thinking"
+                className="ml-auto h-5 rounded-full border-flow-thinking/30 bg-flow-thinking/10 px-2 py-0 font-mono text-[10px] text-flow-amber"
               >
                 {proposals.length} pending
               </Badge>
@@ -331,7 +331,7 @@ export default function DashboardPage() {
                 {proposals.slice(0, 4).map((p) => (
                   <li
                     key={p.id}
-                    className="rounded-xl border border-border/50 bg-background/50 p-3 text-xs leading-snug shadow-sm"
+                    className="rounded-xl border border-flow-800 bg-flow-950 p-3 text-xs leading-snug"
                   >
                     <p className="line-clamp-1 font-semibold text-foreground">{p.title}</p>
                     <p className="mt-1 line-clamp-2 text-muted-foreground">{p.body}</p>
@@ -341,7 +341,7 @@ export default function DashboardPage() {
                 {proposals.length > 4 && (
                   <Link
                     href="/proposals"
-                    className="mt-3 block text-center font-mono text-[11px] text-flow-brand transition-colors hover:text-flow-brand/80"
+                    className="mt-3 block text-center font-mono text-[11px] text-flow-amber transition-colors hover:text-flow-amber/80"
                   >
                     +{proposals.length - 4} MORE PROPOSALS
                   </Link>
@@ -354,10 +354,10 @@ export default function DashboardPage() {
       <Separator className="bg-border/60" />
 
         {/* Postgres schema reference */}
-        <div className="surface-glass flex flex-col overflow-hidden rounded-2xl md:col-span-6 animate-slide-up [animation-delay:380ms]">
-          <div className="flex flex-col space-y-1 border-b border-border/60 bg-muted/20 px-6 py-4">
+        <div className="flow-card flex flex-col overflow-hidden rounded-[6px] md:col-span-6 animate-slide-up [animation-delay:380ms]">
+          <div className="flex flex-col space-y-1 border-b border-flow-800 bg-muted/20 px-6 py-4">
             <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-flow-brand" aria-hidden />
+              <Database className="h-4 w-4 text-flow-amber" aria-hidden />
               <h3 className="font-semibold text-foreground">Postgres Data Model</h3>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -372,7 +372,7 @@ export default function DashboardPage() {
                     <span className="text-foreground">{row.table}</span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="grid grid-cols-2 gap-2 border-l-2 border-flow-brand/25 pl-4 font-mono text-[10px] text-muted-foreground">
+                    <ul className="grid grid-cols-2 gap-2 border-l-2 border-flow-amber/25 pl-4 font-mono text-[10px] text-muted-foreground">
                       {row.columns.map((col) => (
                         <li key={col} className="truncate" title={col}>{col}</li>
                       ))}

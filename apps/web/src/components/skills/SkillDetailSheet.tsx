@@ -31,7 +31,7 @@ function UsageSparkline({ data }: { data: UsageDay[] }) {
       <polyline
         points={points}
         fill="none"
-        stroke="hsl(var(--flow-brand))"
+        stroke="var(--flow-amber)"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -87,14 +87,14 @@ export function SkillDetailSheet({
     <Sheet open={skill !== null} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-2xl border-l border-border/60 p-0"
+        className="w-full sm:max-w-2xl border-l border-flow-800 p-0"
       >
         {skill && (
           <div className="flex h-full flex-col">
-            <SheetHeader className="border-b border-border/40 px-6 py-5">
+            <SheetHeader className="border-b border-flow-800 px-6 py-5">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-flow-brand" />
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+                <Sparkles className="h-4 w-4 text-flow-amber" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
                   Skill
                 </span>
                 <Badge variant="outline" className="font-mono text-[10px]">
@@ -152,7 +152,7 @@ export function SkillDetailSheet({
                             <Badge
                               key={`${t}-${i}`}
                               variant="outline"
-                              className="border-flow-brand/40 text-flow-brand"
+                              className="border-flow-amber/40 text-flow-amber"
                             >
                               {t}
                             </Badge>
@@ -161,7 +161,7 @@ export function SkillDetailSheet({
                       </section>
                     )}
                     <section className="grid grid-cols-2 gap-3 pt-2">
-                      <div className="surface-glass rounded-lg border border-border/40 p-3">
+                      <div className="flow-card rounded-lg border border-flow-800 p-3">
                         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
                           Score
                         </div>
@@ -169,7 +169,7 @@ export function SkillDetailSheet({
                           {skill.score.toFixed(2)}
                         </div>
                       </div>
-                      <div className="surface-glass rounded-lg border border-border/40 p-3">
+                      <div className="flow-card rounded-lg border border-flow-800 p-3">
                         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
                           Runs
                         </div>
@@ -179,7 +179,7 @@ export function SkillDetailSheet({
                       </div>
                     </section>
                     {usageData.length >= 2 && (
-                      <section className="surface-glass rounded-lg border border-border/40 p-3">
+                      <section className="flow-card rounded-lg border border-flow-800 p-3">
                         <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
                           Activity (7d)
                         </div>
@@ -215,8 +215,8 @@ export function SkillDetailSheet({
                             key={v.id}
                             className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 transition-colors ${
                               v.id === selectedVid
-                                ? 'border-flow-brand/60 bg-flow-brand/[0.04]'
-                                : 'border-border/40 hover:border-border/60'
+                                ? 'border-flow-amber/60 bg-flow-amber/[0.04]'
+                                : 'border-flow-800 hover:border-flow-800'
                             }`}
                           >
                             <button
@@ -228,14 +228,14 @@ export function SkillDetailSheet({
                                 variant="outline"
                                 className={
                                   v.active
-                                    ? 'border-flow-brand/60 text-flow-brand'
-                                    : 'border-border/40 text-muted-foreground'
+                                    ? 'border-flow-amber/60 text-flow-amber'
+                                    : 'border-flow-800 text-muted-foreground'
                                 }
                               >
                                 v{v.version}
                               </Badge>
                               {v.active && (
-                                <span className="font-mono text-[10px] uppercase tracking-wider text-flow-brand">
+                                <span className="font-mono text-[10px] uppercase tracking-wider text-flow-amber">
                                   active
                                 </span>
                               )}

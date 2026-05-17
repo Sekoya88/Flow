@@ -102,7 +102,7 @@ function nextRunLabel(next_run: string): string {
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center px-8">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 border border-border/40">
+      <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-muted/50 border border-flow-800">
         <Calendar className="h-7 w-7 text-muted-foreground/50" />
       </div>
       <div className="space-y-1.5">
@@ -135,8 +135,8 @@ function ScheduleItem({
       className={cn(
         "w-full text-left rounded-xl border px-3 py-2.5 transition-all group",
         selected
-          ? "border-flow-brand/40 bg-flow-brand/5"
-          : "border-border/40 bg-card/40 hover:border-border/70 hover:bg-card/70",
+          ? "border-flow-amber/40 bg-flow-amber/5"
+          : "border-flow-800 bg-card hover:border-border/70 hover:bg-card/70",
         !s.enabled && "opacity-60",
       )}
     >
@@ -160,7 +160,7 @@ function ScheduleItem({
         <ChevronRight
           className={cn(
             "h-3.5 w-3.5 text-muted-foreground/40 mt-1 shrink-0 transition-transform",
-            selected && "rotate-90 text-flow-brand/60",
+            selected && "rotate-90 text-flow-amber/60",
           )}
         />
       </div>
@@ -225,7 +225,7 @@ function CreateForm({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-border/40 px-6 py-4">
+      <div className="border-b border-flow-800 px-6 py-4">
         <p className="text-sm font-semibold text-foreground">New schedule</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           Pick an agent and a cadence — the rest is automatic.
@@ -267,8 +267,8 @@ function CreateForm({
                 className={cn(
                   "rounded-lg px-3 py-1.5 text-xs border font-medium transition-all",
                   form.cron_expr === q.value
-                    ? "bg-flow-brand/10 border-flow-brand/40 text-flow-brand"
-                    : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border",
+                    ? "bg-flow-amber/10 border-flow-amber/40 text-flow-amber"
+                    : "border-flow-800 text-muted-foreground hover:text-foreground hover:border-border",
                 )}
               >
                 {q.label}
@@ -336,7 +336,7 @@ function CreateForm({
         </div>
       </div>
 
-      <div className="border-t border-border/40 px-6 py-4 flex gap-2">
+      <div className="border-t border-flow-800 px-6 py-4 flex gap-2">
         <Button
           onClick={handleCreate}
           disabled={creating || !form.agent_id}
@@ -367,7 +367,7 @@ function ScheduleDetail({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border/40 px-6 py-4 flex items-start justify-between gap-4">
+      <div className="border-b border-flow-800 px-6 py-4 flex items-start justify-between gap-4">
         <div className="space-y-0.5 min-w-0">
           <p className="text-sm font-semibold text-foreground">{s.agent_name}</p>
           <p className="text-xs text-muted-foreground font-mono">{s.cron_expr}</p>
@@ -385,7 +385,7 @@ function ScheduleDetail({
       <div className="flex-1 overflow-auto px-6 py-5 space-y-6">
         {/* Status strip */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 space-y-1">
+          <div className="rounded-xl border border-flow-800 bg-card px-4 py-3 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Status</p>
             <div className="flex items-center gap-1.5">
               <span
@@ -397,13 +397,13 @@ function ScheduleDetail({
               <span className="text-sm font-semibold">{s.enabled ? "Active" : "Paused"}</span>
             </div>
           </div>
-          <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 space-y-1">
+          <div className="rounded-xl border border-flow-800 bg-card px-4 py-3 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Last run</p>
             <p className="text-sm font-semibold">
               {s.last_run_at ? relativeTime(s.last_run_at) : "—"}
             </p>
           </div>
-          <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 space-y-1">
+          <div className="rounded-xl border border-flow-800 bg-card px-4 py-3 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Created</p>
             <p className="text-sm font-semibold">{relativeTime(s.created_at)}</p>
           </div>
@@ -412,7 +412,7 @@ function ScheduleDetail({
         {/* Cadence */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wide">Cadence</p>
-          <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 space-y-1.5">
+          <div className="rounded-xl border border-flow-800 bg-card px-4 py-3 space-y-1.5">
             <p className="text-sm font-mono font-medium">{s.cron_expr}</p>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Timer className="h-3 w-3 shrink-0" />
@@ -424,7 +424,7 @@ function ScheduleDetail({
         {/* Prompt */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wide">Prompt</p>
-          <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3">
+          <div className="rounded-xl border border-flow-800 bg-card px-4 py-3">
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{s.prompt_template}</p>
           </div>
         </div>
@@ -433,7 +433,7 @@ function ScheduleDetail({
         {s.delivery_type !== "none" && (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wide">Delivery</p>
-            <div className="rounded-xl border border-border/40 bg-card/40 px-4 py-3 flex items-center gap-2">
+            <div className="rounded-xl border border-flow-800 bg-card px-4 py-3 flex items-center gap-2">
               <Webhook className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <p className="text-sm font-mono text-muted-foreground break-all">{s.delivery_target}</p>
             </div>
@@ -587,7 +587,7 @@ export default function SchedulesPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left sidebar: schedule list ──────────────────────── */}
-        <div className="flex w-64 flex-col border-r border-border/40 bg-muted/10">
+        <div className="flex w-64 flex-col border-r border-flow-800 bg-muted/10">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-border/30">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -619,7 +619,7 @@ export default function SchedulesPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn("h-6 w-6", view === "new" && "bg-flow-brand/10 text-flow-brand")}
+                className={cn("h-6 w-6", view === "new" && "bg-flow-amber/10 text-flow-amber")}
                 onClick={() => setView("new")}
                 title="New schedule"
               >
@@ -632,7 +632,7 @@ export default function SchedulesPage() {
           <div className="flex-1 overflow-auto p-2 space-y-1.5">
             {loading ? (
               <div className="flex items-center justify-center py-8 gap-2 text-xs text-muted-foreground">
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-flow-brand border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" />
                 Loading…
               </div>
             ) : schedules.length === 0 ? (
@@ -641,7 +641,7 @@ export default function SchedulesPage() {
                 <br />
                 <button
                   onClick={() => setView("new")}
-                  className="text-flow-brand hover:underline mt-1 block mx-auto"
+                  className="text-flow-amber hover:underline mt-1 block mx-auto"
                 >
                   Create one →
                 </button>

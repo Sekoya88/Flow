@@ -23,13 +23,13 @@ export default function AgentConfigPage() {
       <h1 className="text-2xl font-semibold text-foreground">Agent Config</h1>
 
       {/* Tab navigation */}
-      <div className="flex border-b border-border/60">
+      <div className="flex border-b border-flow-800">
         <button
           type="button"
           onClick={() => setActiveTab("preferences")}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === "preferences"
-              ? "border-flow-brand text-flow-brand"
+              ? "border-flow-amber text-flow-amber"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >

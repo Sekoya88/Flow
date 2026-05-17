@@ -60,11 +60,11 @@ function statusConfig(status: string) {
     case "rejected":
       return {
         label: "Rejected",
-        className: "border-border/60 bg-muted/20 text-muted-foreground",
+        className: "border-flow-800 bg-muted/20 text-muted-foreground",
         icon: XCircle,
       };
     default:
-      return { label: status, className: "border-border/60 bg-muted/20 text-muted-foreground", icon: Sparkles };
+      return { label: status, className: "border-flow-800 bg-muted/20 text-muted-foreground", icon: Sparkles };
   }
 }
 
@@ -146,7 +146,7 @@ export default function ProposalsPage() {
       {/* Detail sheet */}
       <Sheet open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
         <SheetContent side="right" className="flex w-[min(100vw-1rem,28rem)] flex-col gap-0 sm:max-w-md">
-          <SheetHeader className="border-b border-border/60 pb-4 text-left">
+          <SheetHeader className="border-b border-flow-800 pb-4 text-left">
             <SheetTitle className="pr-8">{detail?.title ?? "Proposal"}</SheetTitle>
             <SheetDescription className="text-left">
               {detail ? (
@@ -177,7 +177,7 @@ export default function ProposalsPage() {
             </pre>
           </ScrollArea>
           {detail?.status === "pending" ? (
-            <div className="border-t border-border/60 p-4 flex gap-2">
+            <div className="border-t border-flow-800 p-4 flex gap-2">
               <Button
                 size="sm"
                 disabled={actionId !== null}
@@ -332,7 +332,7 @@ function ProposalCard({
 
   return (
     <Card
-      className="group surface-glass border-border/50 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-brand/40 hover:shadow-md hover:shadow-flow-brand/5"
+      className="group flow-card border-flow-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-amber/50 hover:shadow-md hover:shadow-none/5"
       style={{
         opacity: 0,
         animation: `fadeIn 320ms ease-out forwards`,

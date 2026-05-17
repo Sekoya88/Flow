@@ -30,13 +30,13 @@ export function GraphControls({
   return (
     <div
       className={cn(
-        'surface-glass-heavy w-64 rounded-2xl border border-flow-brand/20 p-4 space-y-4 shadow-xl shadow-flow-brand/10 animate-fade-in',
+        'flow-card w-64 rounded-[6px] border border-flow-amber/20 p-4 space-y-4 shadow-none/10 animate-fade-in',
         className,
       )}
     >
       <div className="flex items-center gap-2">
-        <Crosshair className="h-3.5 w-3.5 text-flow-brand" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+        <Crosshair className="h-3.5 w-3.5 text-flow-amber" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
           Graph controls
         </span>
       </div>
@@ -49,8 +49,8 @@ export function GraphControls({
             className={cn(
               'rounded border px-1.5 py-0.5 font-mono text-[10px]',
               depth === 0
-                ? 'border-border/40 bg-muted/40 text-muted-foreground'
-                : 'border-flow-brand/30 bg-flow-brand/10 text-flow-brand',
+                ? 'border-flow-800 bg-muted/40 text-muted-foreground'
+                : 'border-flow-amber/30 bg-flow-amber/10 text-flow-amber',
             )}
           >
             {depth === 0 ? '∞' : `${depth} hop${depth === 1 ? '' : 's'}`}
@@ -76,12 +76,12 @@ export function GraphControls({
       </div>
 
       {/* Local / Global toggle */}
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-flow-800 bg-card px-3 py-2">
         <div className="flex items-center gap-2">
           <Globe2
             className={cn(
               'h-3.5 w-3.5',
-              localMode ? 'text-muted-foreground/40' : 'text-flow-brand',
+              localMode ? 'text-muted-foreground/40' : 'text-flow-amber',
             )}
           />
           <Label className="text-xs">{localMode ? 'Local graph' : 'Global graph'}</Label>
@@ -100,13 +100,13 @@ export function GraphControls({
         variant="outline"
         size="sm"
         onClick={onOpenSearch}
-        className="w-full justify-between gap-2 rounded-lg border-border/50 bg-card/40 text-xs hover:border-flow-brand/40 hover:bg-flow-brand/[0.04]"
+        className="w-full justify-between gap-2 rounded-lg border-flow-800 bg-card text-xs hover:border-flow-amber/40 hover:bg-flow-amber/[0.04]"
       >
         <span className="flex items-center gap-2">
           <Search className="h-3.5 w-3.5" />
           Search nodes…
         </span>
-        <span className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+        <span className="rounded border border-flow-800 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
           ⌘G
         </span>
       </Button>

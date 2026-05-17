@@ -273,7 +273,7 @@ export default function GraphPage() {
   if (!workspaceId) {
     return (
       <div className="flex h-[calc(100vh-48px)] items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-flow-brand border-t-transparent" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" />
       </div>
     );
   }
@@ -286,27 +286,27 @@ export default function GraphPage() {
       {/* Holographic Container */}
       <div className={cn(
         "relative flex flex-1 overflow-hidden",
-        !fullscreen && "surface-glass-heavy rounded-3xl shadow-2xl border border-border/50"
+        !fullscreen && "flow-card rounded-[6px] border border-flow-800"
       )}>
         {/* Graph canvas */}
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
           <div className="flex flex-col items-center gap-3 animate-fade-in">
             <div className="relative">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-flow-brand border-t-transparent" />
-              <div className="absolute inset-0 animate-ping rounded-full border border-flow-brand/20" />
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-flow-amber border-t-transparent" />
+              <div className="absolute inset-0 animate-ping rounded-full border border-flow-amber/20" />
             </div>
             <span className="text-xs text-muted-foreground">Loading graph…</span>
           </div>
         </div>
       ) : nodes.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-6">
-          <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-sm p-10 flex flex-col items-center gap-5 max-w-sm animate-fade-in">
+          <div className="rounded-[6px] border border-flow-800 bg-card p-10 flex flex-col items-center gap-5 max-w-sm animate-fade-in">
             <div className="relative">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-flow-brand/10 border border-flow-brand/20">
-                <Network className="h-8 w-8 text-flow-brand/50" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-flow-amber/10 border border-flow-amber/20">
+                <Network className="h-8 w-8 text-flow-amber/50" />
               </div>
-              <div className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-brand border-2 border-background">
+              <div className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-amber border-2 border-background">
                 <Sparkles className="h-3 w-3 text-white" />
               </div>
             </div>
@@ -343,10 +343,10 @@ export default function GraphPage() {
       <div className="absolute top-4 left-4 z-20 flex flex-col gap-3 animate-fade-in">
         {/* Stats bar */}
         {nodes.length > 0 && (
-          <div className="rounded-xl border border-border/40 bg-card/85 backdrop-blur-xl p-3 shadow-lg shadow-black/10 space-y-2.5">
+          <div className="rounded-xl border border-flow-800 bg-card p-3 shadow-black/10 space-y-2.5">
             {/* Node/edge counts */}
             <div className="flex items-center gap-3 px-1">
-              <Badge variant="outline" className="h-5 rounded-md px-2 py-0 text-[10px] font-mono tabular-nums border-flow-brand/30 bg-flow-brand/10">
+              <Badge variant="outline" className="h-5 rounded-md px-2 py-0 text-[10px] font-mono tabular-nums border-flow-amber/30 bg-flow-amber/10">
                 {nodes.length} nodes
               </Badge>
               <Badge variant="outline" className="h-5 rounded-md px-2 py-0 text-[10px] font-mono tabular-nums">
@@ -366,7 +366,7 @@ export default function GraphPage() {
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition-all",
                       active
-                        ? "bg-card text-foreground shadow-sm border border-border/60"
+                        ? "bg-card text-foreground border border-flow-800"
                         : "text-muted-foreground/40 hover:text-muted-foreground border border-transparent",
                     )}
                   >
@@ -401,7 +401,7 @@ export default function GraphPage() {
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition-all",
                       active
-                        ? "bg-card text-foreground shadow-sm border border-border/60"
+                        ? "bg-card text-foreground border border-flow-800"
                         : "text-muted-foreground/40 hover:text-muted-foreground border border-transparent",
                     )}
                   >
@@ -441,7 +441,7 @@ export default function GraphPage() {
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 bg-card/85 backdrop-blur-xl border-border/50 shadow-sm"
+            className="h-8 w-8 bg-card border-flow-800"
             onClick={() => void syncEntities()}
             disabled={syncing}
             title="Sync skills into graph"
@@ -451,7 +451,7 @@ export default function GraphPage() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-[11px] bg-card/85 backdrop-blur-xl border-border/50 shadow-sm"
+            className="h-8 text-[11px] bg-card border-flow-800"
             onClick={() => setPanelOpen(!panelOpen)}
           >
             {panelOpen ? "Hide panel" : "Query & Import"}
@@ -459,7 +459,7 @@ export default function GraphPage() {
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 bg-card/85 backdrop-blur-xl border-border/50 shadow-sm"
+            className="h-8 w-8 bg-card border-flow-800"
             onClick={() => setFullscreen(!fullscreen)}
             title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
@@ -474,7 +474,7 @@ export default function GraphPage() {
 
       {/* Query/Import panel */}
       {panelOpen && workspaceId && (
-        <div className="absolute top-0 right-0 h-full z-30 shadow-2xl animate-slide-up border-l border-border/40 bg-background/50 backdrop-blur-2xl">
+        <div className="absolute top-0 right-0 h-full z-30 animate-slide-up border-l border-flow-800 bg-flow-950">
           <GraphQueryPanel
             workspaceId={workspaceId}
             onHighlight={(ids) => setHighlightedIds(new Set(ids))}
@@ -556,7 +556,7 @@ function NodeDetailPanel({
       )}
       style={{ maxWidth: 340, minWidth: 280 }}
     >
-      <div className="rounded-2xl border border-border/50 bg-card/95 backdrop-blur-2xl shadow-2xl shadow-black/30 overflow-hidden">
+      <div className="rounded-[6px] border border-flow-800 bg-card/95 shadow-black/30 overflow-hidden">
         {/* Header */}
         <div
           className="flex items-start justify-between gap-3 p-4 pb-3"
@@ -595,7 +595,7 @@ function NodeDetailPanel({
 
           {/* Content preview */}
           {contentMd && (
-            <div className="rounded-lg bg-muted/40 border border-border/40 p-2.5">
+            <div className="rounded-lg bg-muted/40 border border-flow-800 p-2.5">
               <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wide mb-1">Content</p>
               <p className="text-xs text-foreground/80 leading-relaxed line-clamp-5 font-mono whitespace-pre-wrap">
                 {contentMd.slice(0, 500)}{contentMd.length > 500 ? "…" : ""}
@@ -719,8 +719,8 @@ function NodeDetailPanel({
                 </p>
               )}
               {skill?.content_md && (
-                <div className="rounded-lg bg-muted/30 border border-border/40 p-2.5 max-h-44 overflow-y-auto">
-                  <p className="text-[10px] font-mono text-flow-brand/80 uppercase tracking-wide mb-1.5">
+                <div className="rounded-lg bg-muted/30 border border-flow-800 p-2.5 max-h-44 overflow-y-auto">
+                  <p className="text-[10px] font-mono text-flow-amber/80 uppercase tracking-wide mb-1.5">
                     SKILL.md
                   </p>
                   <pre className="text-[11px] text-foreground/85 leading-relaxed font-mono whitespace-pre-wrap">
@@ -779,7 +779,7 @@ function NodeDetailPanel({
               {skill && skill.score > 0 && (
                 <div className="h-1 w-full overflow-hidden rounded-full bg-muted/40">
                   <div
-                    className="h-full rounded-full bg-flow-brand transition-all duration-500"
+                    className="h-full rounded-full bg-flow-amber transition-all duration-500"
                     style={{ width: `${Math.min(100, skill.score * 100)}%` }}
                   />
                 </div>
@@ -787,7 +787,7 @@ function NodeDetailPanel({
               {node.ref_id && onNavigate && (
                 <button
                   onClick={() => onNavigate(`/agents`)}
-                  className="mt-2 block w-full rounded-lg border border-flow-brand/30 bg-flow-brand/10 px-3 py-1.5 text-center text-xs text-flow-brand hover:bg-flow-brand/15 transition-colors"
+                  className="mt-2 block w-full rounded-lg border border-flow-amber/30 bg-flow-amber/10 px-3 py-1.5 text-center text-xs text-flow-amber hover:bg-flow-amber/15 transition-colors"
                 >
                   Manage agents using this skill ↗
                 </button>

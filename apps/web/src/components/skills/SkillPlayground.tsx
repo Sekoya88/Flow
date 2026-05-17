@@ -111,7 +111,7 @@ export function SkillPlayground({ skillId, triggers }: SkillPlaygroundProps) {
             <Badge
               key={`${t}-${i}`}
               variant="outline"
-              className="cursor-pointer border-flow-brand/40 text-flow-brand hover:bg-flow-brand/10"
+              className="cursor-pointer border-flow-amber/40 text-flow-amber hover:bg-flow-amber/10"
               onClick={() => setPrompt(t)}
             >
               {t}
@@ -153,7 +153,7 @@ export function SkillPlayground({ skillId, triggers }: SkillPlaygroundProps) {
         {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
 
-      <pre className="surface-glass min-h-[180px] max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg border border-border/40 p-4 font-mono text-[12.5px] leading-relaxed text-foreground">
+      <pre className="flow-card min-h-[180px] max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg border border-flow-800 p-4 font-mono text-[12.5px] leading-relaxed text-foreground">
         {output || (
           <span className="text-muted-foreground/50">
             (output streams here…)

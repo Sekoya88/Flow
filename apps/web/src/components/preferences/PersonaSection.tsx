@@ -46,10 +46,10 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
   const isStale = Boolean(persona?.derived_from?.stale_since)
 
   return (
-    <section className="surface-glass rounded-2xl border border-border/50 p-5 shadow-sm">
+    <section className="flow-card rounded-[6px] border border-flow-800 p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-flow-brand" />
+          <Sparkles className="h-3.5 w-3.5 text-flow-amber" />
           <h2 className="font-mono text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
             SOUL.md
           </h2>
@@ -66,8 +66,8 @@ export function PersonaSection({ workspaceId }: PersonaSectionProps) {
               variant="outline"
               className={
                 c.tone === 'brand'
-                  ? 'border-flow-brand/40 bg-flow-brand/10 text-flow-brand'
-                  : 'border-border/40 text-muted-foreground'
+                  ? 'border-flow-amber/40 bg-flow-amber/10 text-flow-amber'
+                  : 'border-flow-800 text-muted-foreground'
               }
             >
               {c.label}

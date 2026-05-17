@@ -43,9 +43,9 @@ export function ConfigDiffView({
   }
 
   return (
-    <div className={cn("rounded-xl border border-border/60 bg-card/80 overflow-hidden", className)}>
+    <div className={cn("rounded-xl border border-flow-800 bg-card/80 overflow-hidden", className)}>
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-flow-800 px-4 py-2.5 text-xs">
         <Badge variant="outline" className="font-mono text-[9px] rounded px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-400">
           {oldLabel}
         </Badge>

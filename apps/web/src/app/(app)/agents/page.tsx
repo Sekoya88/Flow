@@ -153,7 +153,7 @@ export default function AgentsPage() {
             </Link>
             <Link
               href="/agents/new"
-              className={cn(buttonVariants({ size: "default" }), "gap-1.5 shadow-sm")}
+              className={cn(buttonVariants({ size: "default" }), "gap-1.5")}
             >
               <Plus className="h-4 w-4" aria-hidden />
               New agent
@@ -184,18 +184,18 @@ export default function AgentsPage() {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-44 rounded-2xl" />
+            <Skeleton key={i} className="h-44 rounded-[6px]" />
           ))}
         </div>
       ) : agents.length === 0 ? (
         /* Empty state */
         <div className="flex flex-col items-center gap-6 py-20">
-          <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-sm p-10 flex flex-col items-center gap-5 max-w-sm">
+          <div className="rounded-[6px] border border-flow-800 bg-card p-10 flex flex-col items-center gap-5 max-w-sm">
             <div className="relative">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-flow-brand/10 border border-flow-brand/20">
-                <Bot className="h-8 w-8 text-flow-brand/60" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-flow-amber/10 border border-flow-amber/20">
+                <Bot className="h-8 w-8 text-flow-amber/60" />
               </div>
-              <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-brand border border-background">
+              <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-flow-amber border border-background">
                 <Sparkles className="h-3 w-3 text-white" />
               </div>
             </div>

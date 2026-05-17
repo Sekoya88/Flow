@@ -45,24 +45,24 @@ export function GraphSearchOverlay({
       className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] animate-fade-in"
     >
       <div
-        className="absolute inset-0 bg-background/70 backdrop-blur-md"
+        className="absolute inset-0 bg-background/70"
         onClick={() => onOpenChange(false)}
         aria-hidden
       />
 
       <div
-        className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-flow-brand/20 bg-card/95 shadow-2xl shadow-flow-brand/10 backdrop-blur-xl animate-slide-up"
+        className="relative w-full max-w-xl overflow-hidden rounded-[6px] border border-flow-amber/20 bg-card/95 shadow-none/10 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <Command className="text-foreground" shouldFilter>
-          <div className="flex items-center gap-3 border-b border-border/40 px-4 py-3">
-            <Search className="h-4 w-4 text-flow-brand" />
+          <div className="flex items-center gap-3 border-b border-flow-800 px-4 py-3">
+            <Search className="h-4 w-4 text-flow-amber" />
             <Command.Input
               autoFocus
               placeholder="Search nodes by label or summary…"
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
             />
-            <span className="hidden items-center gap-1 rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:flex">
+            <span className="hidden items-center gap-1 rounded border border-flow-800 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:flex">
               ⌘G
             </span>
           </div>
@@ -80,11 +80,11 @@ export function GraphSearchOverlay({
                   onSelect(node.id)
                   onOpenChange(false)
                 }}
-                className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-brand/10"
+                className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-amber/10"
               >
                 <div
                   className={cn(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-brand/40 group-aria-selected:bg-flow-brand/15 group-aria-selected:text-flow-brand',
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-amber/40 group-aria-selected:bg-flow-amber/15 group-aria-selected:text-flow-amber',
                   )}
                   aria-hidden
                 >
@@ -95,21 +95,21 @@ export function GraphSearchOverlay({
                     {node.label}
                   </p>
                   <p className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
-                    <span className="rounded border border-border/40 bg-muted/30 px-1 py-0 font-mono text-[9px] uppercase tracking-wider">
+                    <span className="rounded border border-flow-800 bg-muted/30 px-1 py-0 font-mono text-[9px] uppercase tracking-wider">
                       {node.node_type}
                     </span>
                     {node.summary && <span className="truncate">{node.summary}</span>}
                   </p>
                 </div>
                 <CornerDownLeft
-                  className="h-3 w-3 shrink-0 text-flow-brand/0 transition-colors group-aria-selected:text-flow-brand/70"
+                  className="h-3 w-3 shrink-0 text-flow-amber/0 transition-colors group-aria-selected:text-flow-amber/70"
                   aria-hidden
                 />
               </Command.Item>
             ))}
           </Command.List>
 
-          <div className="flex items-center justify-between border-t border-border/40 bg-muted/20 px-4 py-2">
+          <div className="flex items-center justify-between border-t border-flow-800 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/70">
               <span>↑ ↓ navigate</span>
               <span>⏎ select</span>

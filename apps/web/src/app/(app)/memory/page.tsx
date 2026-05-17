@@ -154,8 +154,8 @@ export default function MemoryPage() {
       {/* Brand header */}
       <header className="space-y-2">
         <div className="flex items-center gap-2">
-          <Brain className="h-4 w-4 text-flow-brand" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+          <Brain className="h-4 w-4 text-flow-amber" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
             Memory
           </span>
         </div>
@@ -169,14 +169,14 @@ export default function MemoryPage() {
       </header>
 
       {/* Agent picker */}
-      <section className="surface-glass flex flex-col gap-4 rounded-2xl border border-border/50 p-5 sm:flex-row sm:items-end sm:justify-between">
+      <section className="flow-card flex flex-col gap-4 rounded-[6px] border border-flow-800 p-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <Label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
-            <Sparkles className="h-3 w-3 text-flow-brand" />
+            <Sparkles className="h-3 w-3 text-flow-amber" />
             Agent
           </Label>
           <Select value={agentId ?? undefined} onValueChange={(v) => v != null && setAgentId(v)}>
-            <SelectTrigger className="w-full bg-card/60 sm:w-[280px]">
+            <SelectTrigger className="w-full bg-card sm:w-[280px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -237,7 +237,7 @@ export default function MemoryPage() {
 
         <TabsContent value="semantic" className="mt-5 space-y-6">
           {/* Add */}
-          <div className="surface-glass space-y-3 rounded-2xl border border-border/50 p-5">
+          <div className="flow-card space-y-3 rounded-[6px] border border-flow-800 p-5">
             <Label htmlFor="mem-in" className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
               Add semantic memory
             </Label>
@@ -247,7 +247,7 @@ export default function MemoryPage() {
               onChange={(e) => setDraft(e.target.value)}
               rows={3}
               placeholder="Paste a fact or preference to embed for this agent…"
-              className="resize-none rounded-xl border-border/60 bg-card/60 text-sm focus-visible:border-flow-brand/50 focus-visible:ring-flow-brand/30"
+              className="resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-amber/50 focus-visible:ring-flow-amber/30"
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-mono text-muted-foreground/60">
@@ -257,7 +257,7 @@ export default function MemoryPage() {
                 type="button"
                 disabled={saving || !draft.trim()}
                 onClick={() => void saveSemantic()}
-                className="gap-1.5 bg-flow-brand text-white hover:bg-flow-brand/90"
+                className="gap-1.5 bg-flow-50 text-flow-950 hover:bg-flow-amber/90"
               >
                 {saving ? (
                   <>
@@ -321,10 +321,10 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
   return (
     <article
       className={cn(
-        "surface-glass group rounded-xl border p-4 text-sm leading-relaxed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "flow-card group rounded-xl border p-4 text-sm leading-relaxed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         tier === "semantic"
-          ? "border-flow-brand/25 hover:border-flow-brand/50 hover:shadow-flow-brand/10"
-          : "border-border/50 hover:border-flow-brand/30",
+          ? "border-flow-amber/25 hover:border-flow-amber/50 hover:shadow-none/10"
+          : "border-flow-800 hover:border-flow-amber/30",
       )}
     >
       <p className="text-foreground/90">{entry.content}</p>
@@ -343,7 +343,7 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
             {new Date(entry.created_at).toLocaleString()}
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-flow-brand/70">
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-flow-amber/70">
           {tier}
         </span>
       </div>

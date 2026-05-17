@@ -60,8 +60,8 @@ export default function ProfilePage() {
       {/* Header */}
       <header className="space-y-2">
         <div className="flex items-center gap-2">
-          <UserCog className="h-4 w-4 text-flow-brand" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+          <UserCog className="h-4 w-4 text-flow-amber" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
             Profile
           </span>
         </div>
@@ -77,7 +77,7 @@ export default function ProfilePage() {
       {candidates.length > 0 && (
         <button
           onClick={scrollToCandidates}
-          className="surface-glass flex w-full items-center gap-3 rounded-2xl border border-amber-500/30 px-4 py-3 text-left transition-colors hover:border-amber-500/60 hover:bg-amber-500/[0.04]"
+          className="flow-card flex w-full items-center gap-3 rounded-[6px] border border-amber-500/30 px-4 py-3 text-left transition-colors hover:border-amber-500/60 hover:bg-amber-500/[0.04]"
         >
           <AlertTriangle className="h-4 w-4 text-amber-400" />
           <div className="flex-1">
@@ -95,9 +95,9 @@ export default function ProfilePage() {
       <PersonaSection workspaceId={workspaceId} />
 
       {/* CV import */}
-      <section className="surface-glass rounded-2xl border border-border/50 p-5 shadow-sm">
+      <section className="flow-card rounded-[6px] border border-flow-800 p-5">
         <div className="mb-4 flex items-center gap-2">
-          <FileUp className="h-3.5 w-3.5 text-flow-brand" />
+          <FileUp className="h-3.5 w-3.5 text-flow-amber" />
           <h2 className="text-sm font-semibold text-foreground">
             Import from Résumé
           </h2>
@@ -109,9 +109,9 @@ export default function ProfilePage() {
       </section>
 
       {/* Facets */}
-      <section className="surface-glass rounded-2xl border border-border/50 p-2 shadow-sm">
+      <section className="flow-card rounded-[6px] border border-flow-800 p-2">
         <div className="mb-2 flex items-center gap-2 px-3 pt-2">
-          <Layers className="h-3.5 w-3.5 text-flow-brand" />
+          <Layers className="h-3.5 w-3.5 text-flow-amber" />
           <h2 className="text-sm font-semibold text-foreground">Facets</h2>
         </div>
         <div className="space-y-1">

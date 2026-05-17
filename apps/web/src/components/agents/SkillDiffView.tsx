@@ -99,9 +99,9 @@ export function SkillDiffView({
   }, [diff]);
 
   return (
-    <div className={cn("rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm overflow-hidden", className)}>
+    <div className={cn("rounded-[6px] border border-flow-800 bg-card/80 overflow-hidden", className)}>
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border/40 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-flow-800 px-5 py-3">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] font-mono rounded px-1.5 py-0 border-rose-500/30 bg-rose-500/10 text-rose-400">
             {oldLabel}

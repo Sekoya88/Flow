@@ -330,7 +330,7 @@ export function KnowledgeGraphCanvas({
   );
 
   return (
-    <div ref={containerRef} className={cn("relative h-full w-full overflow-hidden rounded-2xl", className)}>
+    <div ref={containerRef} className={cn("relative h-full w-full overflow-hidden rounded-[6px]", className)}>
       {graphData.nodes.length > 0 && (
         <ForceGraph2D
           ref={fgRef}
@@ -364,7 +364,7 @@ export function KnowledgeGraphCanvas({
 
       {/* Hover card — polished */}
       {hoveredNode && (
-        <div className="absolute top-4 left-4 max-w-80 rounded-2xl border border-border/50 bg-card/95 backdrop-blur-2xl p-5 pointer-events-none z-10 shadow-2xl shadow-black/20 animate-fade-in">
+        <div className="absolute top-4 left-4 max-w-80 rounded-[6px] border border-flow-800 bg-card/95 p-5 pointer-events-none z-10 shadow-black/20 animate-fade-in">
           <div className="flex items-center gap-3 mb-3">
             <span
               className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-card"

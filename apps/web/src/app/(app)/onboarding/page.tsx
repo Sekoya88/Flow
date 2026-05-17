@@ -112,7 +112,7 @@ export default function OnboardingPage() {
                 "w-full flex items-start gap-4 rounded-xl border px-4 py-4 text-left transition-colors",
                 useCase === uc.id
                   ? "border-primary/60 bg-primary/5"
-                  : "border-border/60 bg-background hover:bg-muted/20",
+                  : "border-flow-800 bg-background hover:bg-muted/20",
               )}
             >
               <span className={cn("mt-0.5 shrink-0", useCase === uc.id ? "text-primary" : "text-muted-foreground")}>
@@ -169,7 +169,7 @@ export default function OnboardingPage() {
                 "w-full rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors",
                 uploading
                   ? "border-primary/40 bg-primary/5 cursor-not-allowed"
-                  : "border-border/60 hover:border-primary/40 hover:bg-muted/10 cursor-pointer",
+                  : "border-flow-800 hover:border-primary/40 hover:bg-muted/10 cursor-pointer",
               )}
             >
               {uploading ? (

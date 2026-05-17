@@ -79,8 +79,8 @@ export default function SkillsHubPage() {
       {/* Header */}
       <header className="space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-flow-brand" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+          <Sparkles className="h-4 w-4 text-flow-amber" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
             Skills Hub
           </span>
         </div>
@@ -106,7 +106,7 @@ export default function SkillsHubPage() {
       </header>
 
       {/* Controls */}
-      <section className="surface-glass flex flex-wrap items-center gap-3 rounded-2xl border border-border/40 p-3">
+      <section className="flow-card flex flex-wrap items-center gap-3 rounded-[6px] border border-flow-800 p-3">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
           <Input
@@ -151,7 +151,7 @@ export default function SkillsHubPage() {
       {error && <div className="text-sm text-destructive">{error}</div>}
 
       {!loading && visible.length === 0 && (
-        <div className="surface-glass rounded-2xl border border-border/40 p-10 text-center text-sm text-muted-foreground">
+        <div className="flow-card rounded-[6px] border border-flow-800 p-10 text-center text-sm text-muted-foreground">
           No skills match the current filters.
         </div>
       )}

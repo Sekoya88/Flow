@@ -237,12 +237,12 @@ export function AgentDetailDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md border-l border-border/60 p-0"
+        className="w-full sm:max-w-md border-l border-flow-800 p-0"
       >
         <ScrollArea className="h-full">
           <div className="flex flex-col">
             {/* Header with gradient */}
-            <div className="relative overflow-hidden border-b border-border/40 px-6 pb-6 pt-6">
+            <div className="relative overflow-hidden border-b border-flow-800 px-6 pb-6 pt-6">
               {/* Ambient glow */}
               <div
                 className={cn(
@@ -256,7 +256,7 @@ export function AgentDetailDrawer({
                   <div
                     className={cn(
                       "flex h-10 w-10 items-center justify-center rounded-xl",
-                      "border border-border/60 bg-card/80 backdrop-blur-sm",
+                      "border border-flow-800 bg-card/80",
                     )}
                   >
                     <Bot className="h-5 w-5 text-muted-foreground" />
@@ -299,7 +299,7 @@ export function AgentDetailDrawer({
                 ].map((stat) => (
                   <div
                     key={stat.label}
-                    className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5 text-center"
+                    className="rounded-xl border border-flow-800 bg-muted/20 px-3 py-2.5 text-center"
                   >
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       {stat.label}
@@ -314,7 +314,7 @@ export function AgentDetailDrawer({
 
             {/* Tabs */}
             <Tabs defaultValue="tools" className="flex-1">
-              <TabsList className="w-full justify-start border-b border-border/40 px-6" variant="line">
+              <TabsList className="w-full justify-start border-b border-flow-800 px-6" variant="line">
                 <TabsTrigger value="tools">Tools</TabsTrigger>
                 <TabsTrigger value="intelligence">Intelligence</TabsTrigger>
                 <TabsTrigger value="versions" onClick={() => { if (versions.length === 0) void loadVersions(); }}>Versions</TabsTrigger>
@@ -339,14 +339,14 @@ export function AgentDetailDrawer({
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors",
                           enabled
-                            ? "bg-flow-brand/5 border border-flow-brand/10"
+                            ? "bg-flow-amber/5 border border-flow-amber/10"
                             : "border border-transparent hover:bg-muted/30",
                         )}
                       >
                         <Icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            enabled ? "text-flow-brand" : "text-muted-foreground/50",
+                            enabled ? "text-flow-amber" : "text-muted-foreground/50",
                           )}
                         />
                         <div className="min-w-0 flex-1">
@@ -441,21 +441,21 @@ export function AgentDetailDrawer({
                       {versions.map((v, i) => (
                         <div
                           key={v.id}
-                          className="rounded-lg border border-border/40 px-3 py-2.5 space-y-1.5"
+                          className="rounded-lg border border-flow-800 px-3 py-2.5 space-y-1.5"
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-foreground">{v.version_label}</span>
                             {v.prompt_hash ? (
                               <span
                                 title={`prompt SHA-256: ${v.prompt_hash}`}
-                                className="rounded border border-flow-brand/30 bg-flow-brand/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-flow-brand/90"
+                                className="rounded border border-flow-amber/30 bg-flow-amber/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-flow-amber/90"
                               >
                                 cache:{v.prompt_hash.slice(0, 8)}
                               </span>
                             ) : (
                               <span
                                 title="No prompt hash recorded yet — run the agent once to populate"
-                                className="rounded border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60"
+                                className="rounded border border-flow-800 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60"
                               >
                                 cache:—
                               </span>
@@ -522,7 +522,7 @@ export function AgentDetailDrawer({
                     <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                       Raw config
                     </Label>
-                    <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-border/40 bg-muted/20 p-3 font-mono text-[11px] text-muted-foreground">
+                    <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-flow-800 bg-muted/20 p-3 font-mono text-[11px] text-muted-foreground">
                       {JSON.stringify(agent.config, null, 2)}
                     </pre>
                   </div>
@@ -557,7 +557,7 @@ export function AgentDetailDrawer({
                 {skillsLoading ? (
                   <div className="space-y-2">
                     {[1, 2].map((i) => (
-                      <div key={i} className="rounded-xl border border-border/40 p-3 space-y-1.5 animate-pulse">
+                      <div key={i} className="rounded-xl border border-flow-800 p-3 space-y-1.5 animate-pulse">
                         <div className="h-2.5 w-1/2 rounded bg-muted/60" />
                         <div className="h-2 w-3/4 rounded bg-muted/40" />
                       </div>
@@ -576,7 +576,7 @@ export function AgentDetailDrawer({
                     {skills.map((skill) => (
                       <div
                         key={skill.id}
-                        className="rounded-xl border border-border/40 bg-card/50 p-3 space-y-1.5"
+                        className="rounded-xl border border-flow-800 bg-card/50 p-3 space-y-1.5"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -622,7 +622,7 @@ export function AgentDetailDrawer({
             </Tabs>
 
             {/* Footer actions */}
-            <div className="border-t border-border/40 p-4 flex gap-2">
+            <div className="border-t border-flow-800 p-4 flex gap-2">
               <Button
                 className="flex-1 gap-1.5"
                 onClick={() => {

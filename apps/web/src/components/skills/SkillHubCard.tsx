@@ -16,7 +16,7 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
 
   return (
     <article
-      className="surface-glass group flex h-full cursor-pointer flex-col gap-3 rounded-2xl border border-border/40 p-4 shadow-sm transition-colors hover:border-flow-brand/50"
+      className="flow-card group flex h-full cursor-pointer flex-col gap-3 rounded-[6px] border border-flow-800 p-4 transition-colors hover:border-flow-amber/50"
       onClick={() => onOpen(skill)}
     >
       <header className="flex items-start justify-between gap-2">
@@ -46,7 +46,7 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
             <Badge
               key={`${t}-${i}`}
               variant="outline"
-              className="max-w-full truncate border-border/40 text-[10px] text-muted-foreground"
+              className="max-w-full truncate border-flow-800 text-[10px] text-muted-foreground"
             >
               {t}
             </Badge>
@@ -72,7 +72,7 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
           type="button"
           size="sm"
           variant="outline"
-          className="border-flow-brand/40 text-flow-brand opacity-80 transition-opacity group-hover:opacity-100"
+          className="border-flow-amber/40 text-flow-amber opacity-80 transition-opacity group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation()
             onTry(skill)

@@ -76,23 +76,23 @@ export function CommandPalette() {
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-background/70 backdrop-blur-md"
+        className="absolute inset-0 bg-flow-950/80"
         onClick={() => setOpen(false)}
         aria-hidden
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-flow-brand/20 bg-card/95 shadow-2xl shadow-flow-brand/10 backdrop-blur-xl animate-slide-up">
+      <div className="relative w-full max-w-xl overflow-hidden rounded-[6px] border border-flow-800 bg-flow-900 animate-slide-up">
         <Command className="text-foreground" shouldFilter>
           {/* Header */}
-          <div className="flex items-center gap-3 border-b border-border/40 px-4 py-3">
-            <FlowMark size={18} className="shrink-0 text-flow-brand opacity-80" />
+          <div className="flex items-center gap-3 border-b border-flow-800 px-4 py-3">
+            <FlowMark size={18} className="shrink-0 text-flow-amber opacity-80" />
             <Command.Input
               autoFocus
               placeholder="Jump to…  (try 'graph', 'memory', 'profile')"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+              className="flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-flow-600"
             />
-            <span className="hidden items-center gap-1 rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:flex">
+            <span className="hidden items-center gap-1 rounded border border-flow-800 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:flex">
               <CommandIcon className="h-2.5 w-2.5" />K
             </span>
           </div>
@@ -116,10 +116,10 @@ export function CommandPalette() {
                       key={item.id}
                       value={`${item.label} ${item.hint ?? ""} ${item.keywords}`}
                       onSelect={() => navigate(item.href)}
-                      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-brand/10"
+                      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm transition-colors aria-selected:bg-flow-amber/10"
                     >
                       <div
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-brand/40 group-aria-selected:bg-flow-brand/15 group-aria-selected:text-flow-brand"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-flow-800 bg-card/50 text-muted-foreground transition-colors group-aria-selected:border-flow-amber/40 group-aria-selected:bg-flow-amber/15 group-aria-selected:text-flow-amber"
                         aria-hidden
                       >
                         <item.icon className="h-3.5 w-3.5" />
@@ -135,7 +135,7 @@ export function CommandPalette() {
                         )}
                       </div>
                       <CornerDownLeft
-                        className="h-3 w-3 shrink-0 text-flow-brand/0 transition-colors group-aria-selected:text-flow-brand/70"
+                        className="h-3 w-3 shrink-0 text-flow-amber/0 transition-colors group-aria-selected:text-flow-amber/70"
                         aria-hidden
                       />
                     </Command.Item>
@@ -146,7 +146,7 @@ export function CommandPalette() {
           </Command.List>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border/40 bg-muted/20 px-4 py-2">
+          <div className="flex items-center justify-between border-t border-flow-800 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/70">
               <span>↑ ↓ navigate</span>
               <span>⏎ open</span>

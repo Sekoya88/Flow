@@ -139,15 +139,15 @@ export default function ABTestDetailPage() {
               <div
                 key={label}
                 className={cn(
-                  "rounded-2xl border p-5 space-y-2 transition-all",
+                  "rounded-[6px] border p-5 space-y-2 transition-all",
                   isWinner
-                    ? "border-flow-brand/40 bg-flow-brand/5 shadow-sm shadow-flow-brand/10"
-                    : "border-border/50 bg-card/60",
+                    ? "border-flow-amber/40 bg-flow-amber/5 shadow-none/10"
+                    : "border-flow-800 bg-card",
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/60 border border-border/40">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/60 border border-flow-800">
                       <Bot className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div>
@@ -158,7 +158,7 @@ export default function ABTestDetailPage() {
                     </div>
                   </div>
                   {isWinner && (
-                    <div className="flex items-center gap-1 text-flow-brand text-xs font-semibold">
+                    <div className="flex items-center gap-1 text-flow-amber text-xs font-semibold">
                       <Trophy className="h-3.5 w-3.5" /> Winner
                     </div>
                   )}
@@ -177,8 +177,8 @@ export default function ABTestDetailPage() {
 
         {/* Winner banner */}
         {test.status === "completed" && (
-          <div className="rounded-xl border border-flow-brand/20 bg-flow-brand/5 px-4 py-3 flex items-center gap-3">
-            <Trophy className="h-5 w-5 text-flow-brand shrink-0" />
+          <div className="rounded-xl border border-flow-amber/20 bg-flow-amber/5 px-4 py-3 flex items-center gap-3">
+            <Trophy className="h-5 w-5 text-flow-amber shrink-0" />
             <p className="text-sm font-medium">
               Agent {aggregate.winner} wins with an average score of{" "}
               <strong>
@@ -194,9 +194,9 @@ export default function ABTestDetailPage() {
         {paired.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold">Per-item results</h2>
-            <div className="rounded-xl border border-border/50 overflow-hidden">
+            <div className="rounded-xl border border-flow-800 overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/40 bg-muted/30">
+              <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-flow-800 bg-muted/30">
                 <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Input</div>
                 <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-l border-border/30">
                   Agent A — {test.agent_a.name}

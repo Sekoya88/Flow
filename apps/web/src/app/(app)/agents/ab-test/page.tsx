@@ -38,7 +38,7 @@ function statusBadge(status: string) {
       className={cn(
         "rounded-md px-2 py-0 text-[10px] font-mono",
         status === "completed" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-        status === "running" && "border-flow-streaming/30 bg-flow-streaming/10 text-flow-streaming",
+        status === "running" && "border-flow-streaming/30 bg-flow-streaming/10 text-flow-amber",
         status === "pending" && "border-amber-500/30 bg-amber-500/10 text-amber-400",
       )}
     >
@@ -125,7 +125,7 @@ export default function ABTestPage() {
 
       {/* Create form */}
       {showForm && (
-        <div className="rounded-2xl border border-flow-brand/20 bg-flow-brand/5 p-6 space-y-5 animate-slide-up">
+        <div className="rounded-[6px] border border-flow-amber/20 bg-flow-amber/5 p-6 space-y-5 animate-slide-up">
           <p className="text-sm font-semibold text-foreground">New A/B Test</p>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
             <div className="space-y-2">
@@ -193,7 +193,7 @@ export default function ABTestPage() {
               key={test.id}
               onClick={() => router.push(`/agents/ab-test/${test.id}`)}
               className={cn(
-                "w-full flex items-center gap-4 rounded-xl border border-border/60 bg-card/60 px-4 py-3.5",
+                "w-full flex items-center gap-4 rounded-xl border border-flow-800 bg-card px-4 py-3.5",
                 "text-left transition-all hover:border-border hover:bg-card/80 hover:-translate-y-0.5 hover:shadow-md",
               )}
             >

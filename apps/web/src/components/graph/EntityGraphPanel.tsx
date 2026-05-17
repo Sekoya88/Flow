@@ -68,7 +68,7 @@ export function EntityGraphPanel({
   return (
     <div
       className="fixed inset-y-0 right-0 w-80 bg-slate-900 border-l border-slate-700
-                 flex flex-col shadow-2xl z-40"
+                 flex flex-col z-40"
     >
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700">
         <div

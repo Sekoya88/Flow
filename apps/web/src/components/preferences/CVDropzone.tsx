@@ -102,17 +102,17 @@ export function CVDropzone({ workspaceId, onImported }: CVDropzoneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          'surface-glass relative rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300',
+          'flow-card relative rounded-[6px] border-2 border-dashed p-8 text-center transition-all duration-300',
           dragOver
-            ? 'border-flow-brand/70 bg-flow-brand/[0.05] shadow-md shadow-flow-brand/10 scale-[1.01]'
-            : 'border-border/50 hover:border-flow-brand/40 hover:bg-flow-brand/[0.02]',
+            ? 'border-flow-amber/70 bg-flow-amber/[0.05] shadow-none/10 scale-[1.01]'
+            : 'border-flow-800 hover:border-flow-amber/40 hover:bg-flow-amber/[0.02]',
           uploading && 'pointer-events-none opacity-60',
         )}
       >
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-flow-brand/10 transition-transform duration-300">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[6px] bg-flow-amber/10 transition-transform duration-300">
           <FileUp
             className={cn(
-              'h-7 w-7 text-flow-brand transition-transform duration-300',
+              'h-7 w-7 text-flow-amber transition-transform duration-300',
               dragOver && 'scale-110',
             )}
           />
@@ -129,7 +129,7 @@ export function CVDropzone({ workspaceId, onImported }: CVDropzoneProps) {
           size="sm"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="mt-4 rounded-full border-border/60 bg-card/60 px-4 text-xs font-medium hover:border-flow-brand/50 hover:bg-flow-brand/10"
+          className="mt-4 rounded-full border-flow-800 bg-card px-4 text-xs font-medium hover:border-flow-amber/50 hover:bg-flow-amber/10"
         >
           Choose file
         </Button>
@@ -144,8 +144,8 @@ export function CVDropzone({ workspaceId, onImported }: CVDropzoneProps) {
       </div>
 
       {uploading && (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground animate-fade-in">
-          <Loader2 className="h-4 w-4 animate-spin text-flow-brand" />
+        <div className="flex items-center gap-2 rounded-xl border border-flow-800 bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground animate-fade-in">
+          <Loader2 className="h-4 w-4 animate-spin text-flow-amber" />
           <span>Uploading...</span>
           <span className="font-mono text-[11px] text-muted-foreground/60">
             extracting preferences

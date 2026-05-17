@@ -76,7 +76,7 @@ function SourceDetailDrawer({
   return (
     <Sheet open={source !== null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="flex w-[min(100vw-1rem,32rem)] flex-col gap-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border/60 pb-4 text-left">
+        <SheetHeader className="border-b border-flow-800 pb-4 text-left">
           <SheetTitle className="pr-8 line-clamp-2">{source?.title ?? "Source"}</SheetTitle>
           <SheetDescription>
             {source ? (
@@ -115,7 +115,7 @@ function SourceDetailDrawer({
               {chunks.map((c) => (
                 <div
                   key={c.id}
-                  className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2.5"
+                  className="rounded-lg border border-flow-800 bg-muted/10 px-3 py-2.5"
                 >
                   <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
                     Chunk {c.index + 1}
@@ -284,8 +284,8 @@ export default function KnowledgePage() {
 
       <header className="space-y-2 animate-fade-in">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-flow-brand" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-brand/80">
+          <BookOpen className="h-4 w-4 text-flow-amber" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-amber/80">
             Knowledge
           </span>
         </div>
@@ -323,7 +323,7 @@ export default function KnowledgePage() {
         </Alert>
       ) : null}
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Upload file</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -374,7 +374,7 @@ export default function KnowledgePage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Add from URL</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -424,7 +424,7 @@ export default function KnowledgePage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Add from text</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -454,7 +454,7 @@ export default function KnowledgePage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Sources</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -488,8 +488,8 @@ export default function KnowledgePage() {
                   <button
                     type="button"
                     className={cn(
-                      "group w-full flex flex-col gap-2 rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-brand/40 hover:bg-flow-brand/[0.04] hover:shadow-md hover:shadow-flow-brand/5 sm:flex-row sm:items-center sm:justify-between",
-                      selectedSource?.id === s.id && "border-flow-brand/50 bg-flow-brand/[0.06]",
+                      "group w-full flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-amber/50 hover:bg-flow-amber/[0.04] hover:shadow-md hover:shadow-none/5 sm:flex-row sm:items-center sm:justify-between",
+                      selectedSource?.id === s.id && "border-flow-amber/50 bg-flow-amber/[0.06]",
                     )}
                     style={{
                       opacity: 0,

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { RunInspector } from "@/components/flow/RunInspector";
 import { TokenStream } from "@/components/flow/TokenStream";
-import { FlowMarkAnimated } from "@/components/brand/FlowLogo";
+import { FlowMark } from "@/components/brand/FlowLogo";
 import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
@@ -451,8 +451,8 @@ export default function RunPage() {
   return (
     <div className="flex h-[calc(100vh-48px)]">
       {/* Left sidebar — history */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border/40 bg-muted/20">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-flow-800 bg-muted/20">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-flow-800">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">History</span>
           <button
             onClick={startNewChat}
@@ -488,7 +488,7 @@ export default function RunPage() {
                   className={cn(
                     "w-full px-4 py-2.5 text-left transition-colors group",
                     selectedId === exec.id
-                      ? "bg-flow-brand/10 border-r-2 border-flow-brand"
+                      ? "bg-flow-amber/10 border-r-2 border-flow-amber"
                       : "hover:bg-muted/60",
                   )}
                 >
@@ -500,7 +500,7 @@ export default function RunPage() {
                       {exec.user_message}
                     </p>
                     {exec.status === "running" && (
-                      <Zap className="h-3 w-3 shrink-0 text-flow-streaming animate-pulse mt-0.5" />
+                      <Zap className="h-3 w-3 shrink-0 text-flow-amber animate-pulse mt-0.5" />
                     )}
                   </div>
                   <div className="mt-1 flex items-center gap-2">
@@ -519,11 +519,11 @@ export default function RunPage() {
         </div>
 
         {/* Sidebar footer — profile / onboarding access */}
-        <div className="border-t border-border/40 px-3 py-3 space-y-2">
+        <div className="border-t border-flow-800 px-3 py-3 space-y-2">
           {onboardingDone === false && (
             <button
               onClick={() => router.push("/onboarding/profile")}
-              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-flow-brand/15 text-flow-brand border border-flow-brand/30 hover:bg-flow-brand/25 transition-colors"
+              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-flow-amber/15 text-flow-amber border border-flow-amber/30 hover:bg-flow-amber/25 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
               Finish onboarding
@@ -549,7 +549,7 @@ export default function RunPage() {
               <div className="flex h-full w-full flex-col items-center justify-center px-4">
                 <div className="flex w-full max-w-xl flex-col items-center gap-8 animate-fade-in">
                   <div className="flex flex-col items-center gap-4 text-center">
-                    <FlowMarkAnimated className="text-flow-brand opacity-80" />
+                    <FlowMark className="text-flow-amber opacity-80" />
                     <div className="space-y-2">
                       <h1 className="text-2xl font-semibold tracking-tight">
                         What do you want to explore?
@@ -566,11 +566,11 @@ export default function RunPage() {
                         key={q.text}
                         onClick={() => { setMessage(q.text); textareaRef.current?.focus(); }}
                         className={cn(
-                          "surface-glass group flex flex-col gap-3 rounded-2xl p-5 text-left transition-all duration-300",
-                          "hover:-translate-y-1 hover:border-flow-brand/40 hover:shadow-lg hover:shadow-flow-brand/10",
+                          "flow-card group flex flex-col gap-3 rounded-[6px] p-5 text-left transition-all duration-300",
+                          "hover:-translate-y-1 hover:border-flow-amber/50 hover:shadow-lg hover:shadow-none/10",
                         )}
                       >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-flow-brand/10 text-xl">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-flow-amber/10 text-xl">
                           {q.icon}
                         </div>
                         <span className="text-sm font-medium text-foreground/80 transition-colors group-hover:text-foreground leading-relaxed">
@@ -604,7 +604,7 @@ export default function RunPage() {
                       {/* User message */}
                       <div className="flex gap-3 justify-end animate-slide-up">
                         <div className="flex flex-col gap-1.5 max-w-[80%]">
-                          <div className="rounded-2xl rounded-br-md bg-flow-brand px-5 py-3.5 text-sm leading-relaxed text-white shadow-md shadow-flow-brand/20">
+                          <div className="rounded-[6px] rounded-br-md bg-flow-amber px-5 py-3.5 text-sm leading-relaxed text-white shadow-none/20">
                             <p className="whitespace-pre-wrap">{turn.user_message}</p>
                           </div>
                           {turn.created_at && (
@@ -634,16 +634,16 @@ export default function RunPage() {
                       {(displayAnswer || isStreamingTurn) && (
                         <div className="flex gap-3 animate-slide-up">
                           <div className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card",
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-flow-800 bg-card",
                             isStreamingTurn && "border-flow-streaming/30 shadow-[0_0_12px_rgba(var(--color-flow-streaming),0.25)]",
                           )}>
                             <Bot className={cn(
                               "h-4 w-4",
-                              isStreamingTurn ? "text-flow-streaming animate-pulse" : "text-flow-brand",
+                              isStreamingTurn ? "text-flow-amber animate-pulse" : "text-flow-amber",
                             )} />
                           </div>
                           <div className="flex flex-col gap-1.5 max-w-[80%]">
-                            <div className="surface-glass rounded-2xl rounded-bl-md px-5 py-3.5 shadow-sm text-sm leading-relaxed text-foreground">
+                            <div className="flow-card rounded-[6px] rounded-bl-md px-5 py-3.5 text-sm leading-relaxed text-foreground">
                               {isStreamingTurn && !displayAnswer ? (
                                 <TokenStream placeholder="Thinking…" />
                               ) : (
@@ -659,7 +659,7 @@ export default function RunPage() {
                                     "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
                                     markedItems.has(turn.id)
                                       ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
-                                      : "text-muted-foreground/50 hover:text-flow-brand hover:bg-flow-brand/10",
+                                      : "text-muted-foreground/50 hover:text-flow-amber hover:bg-flow-amber/10",
                                   )}
                                   disabled={markedItems.has(turn.id) || markingId === turn.id}
                                   onClick={() => void handleMarkAsGolden(turn.id, turn.user_message, turn.answer!)}
@@ -690,7 +690,7 @@ export default function RunPage() {
           {/* Inspector sidebar */}
           <div
             className={cn(
-              "absolute right-0 top-0 h-full w-full sm:w-[400px] border-l border-border/40 bg-background/95 backdrop-blur-md lg:static lg:bg-transparent lg:w-[400px] xl:w-[450px]",
+              "absolute right-0 top-0 h-full w-full sm:w-[400px] border-l border-flow-800 bg-flow-950 lg:static lg:bg-transparent lg:w-[400px] xl:w-[450px]",
               "transition-transform duration-300 z-50 p-3",
               showInspector && (isRunningSelected || (selectedExec && (toolCalls.length > 0 || citations.length > 0)))
                 ? "translate-x-0"
@@ -700,13 +700,13 @@ export default function RunPage() {
             <RunInspector
               toolCalls={toolCalls}
               citations={citations}
-              className="h-full w-full shadow-none border-0 lg:surface-glass-heavy lg:rounded-2xl lg:shadow-xl"
+              className="h-full w-full shadow-none border-0 lg:flow-card lg:rounded-[6px] lg:shadow-xl"
             />
           </div>
         </div>
 
         {/* Bottom input bar */}
-        <div className="border-t border-border/40 bg-background/80 backdrop-blur-md px-4 py-3">
+        <div className="border-t border-flow-800 bg-flow-950 px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-end gap-3">
             {/* Agent selector */}
             {agents.length > 0 && (
@@ -714,7 +714,7 @@ export default function RunPage() {
                 value={agentId ?? undefined}
                 onValueChange={(v) => { if (v) setAgentId(v); }}
               >
-                <SelectTrigger className="h-9 w-auto min-w-[160px] max-w-[200px] shrink-0 gap-1.5 rounded-xl border-border/60 bg-muted/40 text-xs">
+                <SelectTrigger className="h-9 w-auto min-w-[160px] max-w-[200px] shrink-0 gap-1.5 rounded-xl border-flow-800 bg-muted/40 text-xs">
                   <Bot className="h-3.5 w-3.5 text-muted-foreground" />
                   <SelectValue placeholder="Agent" />
                 </SelectTrigger>
@@ -738,9 +738,9 @@ export default function RunPage() {
                 placeholder={selectedExec?.answer ? "Ask a follow-up…" : "Ask anything…"}
                 rows={1}
                 className={cn(
-                  "w-full resize-none rounded-xl border border-border/60 bg-card/80 px-4 py-3 pr-12",
+                  "w-full resize-none rounded-xl border border-flow-800 bg-card/80 px-4 py-3 pr-12",
                   "text-sm leading-relaxed placeholder:text-muted-foreground/60",
-                  "focus:outline-none focus:ring-2 focus:ring-flow-brand/30 focus:border-flow-brand/50",
+                  "focus:outline-none focus:ring-2 focus:ring-flow-amber/30 focus:border-flow-amber/50",
                   "transition-all min-h-[44px] max-h-[160px]",
                 )}
                 style={{ height: "auto", overflow: "hidden" }}
@@ -757,7 +757,7 @@ export default function RunPage() {
                 className={cn(
                   "absolute right-2 bottom-2 h-8 w-8 rounded-lg transition-all",
                   message.trim() && !running
-                    ? "bg-flow-brand text-white hover:bg-flow-brand/90 shadow-md shadow-flow-brand/20"
+                    ? "bg-flow-50 text-flow-950 hover:bg-flow-amber/90 shadow-none/20"
                     : "bg-muted text-muted-foreground",
                 )}
               >
@@ -775,7 +775,7 @@ export default function RunPage() {
               className={cn(
                 "rounded-lg p-2 transition-colors shrink-0",
                 showInspector
-                  ? "text-flow-brand bg-flow-brand/10"
+                  ? "text-flow-amber bg-flow-amber/10"
                   : "text-muted-foreground hover:text-foreground",
               )}
               title="Toggle inspector"

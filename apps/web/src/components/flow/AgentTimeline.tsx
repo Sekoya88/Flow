@@ -86,7 +86,7 @@ export function AgentTimeline({ executions, activeId, className }: AgentTimeline
                 size={18}
                 className={cn(
                   "opacity-70 transition-opacity",
-                  isActive && "opacity-100 text-flow-streaming",
+                  isActive && "opacity-100 text-flow-amber",
                 )}
               />
             </div>

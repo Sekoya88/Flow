@@ -27,11 +27,11 @@ const TOOL_COLORS: Record<string, string> = {
 
 function ToolCallRow({ call }: { call: ToolCall }) {
   const [open, setOpen] = useState(false);
-  const color = TOOL_COLORS[call.tool] ?? "border-border/50 bg-muted/20 text-muted-foreground";
+  const color = TOOL_COLORS[call.tool] ?? "border-flow-800 bg-muted/20 text-muted-foreground";
 
   return (
     <div 
-      className="overflow-hidden rounded-lg border border-border/40"
+      className="overflow-hidden rounded-lg border border-flow-800"
     >
       <button
         type="button"
@@ -56,7 +56,7 @@ function ToolCallRow({ call }: { call: ToolCall }) {
       </button>
 
       {open && (
-        <div className="space-y-2 border-t border-border/40 px-3 py-2">
+        <div className="space-y-2 border-t border-flow-800 px-3 py-2">
           <div>
             <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Input</p>
             <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-muted/30 p-2 text-[11px] text-foreground/80">
@@ -95,7 +95,7 @@ export function ToolCallLog({ calls, className }: ToolCallLogProps) {
   return (
     <div className={cn("space-y-2 flex flex-col h-full", className)}>
       <div className="flex shrink-0 items-center gap-2">
-        <Zap className="h-3.5 w-3.5 text-flow-brand" aria-hidden />
+        <Zap className="h-3.5 w-3.5 text-flow-amber" aria-hidden />
         <span className="text-xs font-medium text-foreground">Tool calls</span>
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
           {calls.length}
