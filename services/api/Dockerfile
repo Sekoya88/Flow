@@ -5,7 +5,7 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY flow ./flow
 COPY scripts ./scripts
-RUN uv sync --frozen --no-dev
+RUN UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
