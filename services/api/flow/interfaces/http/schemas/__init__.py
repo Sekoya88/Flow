@@ -25,7 +25,7 @@ from flow.interfaces.http.schemas.agents import (
     VibeIn,
 )
 from flow.interfaces.http.schemas.analytics import AnalyticsBatchIn, AnalyticsEventIn, AnalyticsEventOut
-from flow.interfaces.http.schemas.auth import LoginIn, RegisterIn, TokenOut
+from flow.interfaces.http.schemas.auth import ChangePasswordIn, LoginIn, RegisterIn, TokenOut
 from flow.interfaces.http.schemas.executions import (
     ApproveOut,
     ExecutionDetailOut,
@@ -120,7 +120,7 @@ from flow.interfaces.http.schemas.skills import (
 
 __all__ = [
     # auth
-    "RegisterIn", "LoginIn", "TokenOut",
+    "RegisterIn", "LoginIn", "TokenOut", "ChangePasswordIn",
     # agents
     "AgentCreateIn", "AgentToolsPatchIn", "AgentPatchIn", "VibeIn", "ExecuteIn",
     "AgentCreateOut", "AgentOut", "AgentListOut", "AgentPatchOut", "VibeAgentOut",

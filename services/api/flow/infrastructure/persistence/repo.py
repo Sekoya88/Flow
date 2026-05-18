@@ -55,6 +55,33 @@ class FlowRepository:
             role,
         )
 
+    async def list_workspace_members(self, workspace_id: UUID) -> list[asyncpg.Record]:
+        return await self._pool.fetch(
+            """
+            SELECT u.id, u.email, wm.role
+            FROM workspace_members wm
+            JOIN users u ON u.id = wm.user_id
+            WHERE wm.workspace_id = $1
+            ORDER BY u.email
+            """,
+            workspace_id,
+        )
+
+    async def remove_workspace_member(self, workspace_id: UUID, user_id: UUID) -> None:
+        await self._pool.execute(
+            "DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+            workspace_id,
+            user_id,
+        )
+
+    async def is_workspace_admin(self, workspace_id: UUID, user_id: UUID) -> bool:
+        row = await self._pool.fetchrow(
+            "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+            workspace_id,
+            user_id,
+        )
+        return row is not None and row["role"] == "admin"
+
     async def list_workspaces_for_user(self, user_id: UUID) -> list[asyncpg.Record]:
         return await self._pool.fetch(
             """
