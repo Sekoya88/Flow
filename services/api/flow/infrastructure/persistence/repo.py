@@ -237,7 +237,8 @@ class FlowRepository:
     async def get_execution_for_user(self, execution_id: UUID, user_id: UUID) -> asyncpg.Record | None:
         return await self._pool.fetchrow(
             """
-            SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id, e.user_message, e.created_at,
+            SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id,
+                   e.user_message, e.error, e.created_at, e.completed_at,
                    a.name AS agent_name, a.template AS agent_template,
                    (SELECT ee.payload->>'answer'
                     FROM execution_events ee

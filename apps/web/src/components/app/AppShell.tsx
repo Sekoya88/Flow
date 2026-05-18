@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Terminal,
   Wand2,
   Workflow,
   CheckCircle,
@@ -53,6 +54,7 @@ const primaryNav = [
   { href: "/proposals", label: "Proposals", icon: Sparkles },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/evals", label: "Evals", icon: CheckCircle },
+  { href: "/logs", label: "Logs", icon: Terminal },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 
