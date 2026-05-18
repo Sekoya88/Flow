@@ -115,28 +115,45 @@
   --sidebar-ring: var(--flow-violet);
 }
 
-/* Light override — invert the scale for light mode */
+/* Light override — invert the neutral scale so every hardcoded bg-flow-900,
+   text-flow-50, border-flow-800 etc. auto-adapts without touching components */
 :root[data-theme="light"],
 .light {
-  --background: var(--flow-50);
-  --foreground: var(--flow-950);
-  --card: #ffffff;
-  --card-foreground: var(--flow-950);
-  --popover: #ffffff;
-  --popover-foreground: var(--flow-950);
-  --primary: var(--flow-950);
-  --primary-foreground: var(--flow-50);
-  --secondary: var(--flow-100);
-  --secondary-foreground: var(--flow-900);
-  --muted: var(--flow-100);
-  --muted-foreground: var(--flow-500);
-  --accent: var(--flow-100);
-  --accent-foreground: var(--flow-950);
-  --border: var(--flow-200);
-  --input: var(--flow-200);
-  --sidebar: var(--flow-100);
-  --sidebar-foreground: var(--flow-700);
-  --sidebar-border: var(--flow-200);
+  /* Invert warm neutral scale (950 ↔ 50, 900 ↔ 100, 800 ↔ 200, …) */
+  --flow-950: #fafaf9;
+  --flow-900: #f5f5f3;
+  --flow-800: #e8e8e2;
+  --flow-700: #d4d4cc;
+  --flow-600: #b5b5ac;
+  --flow-500: #8c8c84;
+  --flow-400: #6b6b64;
+  --flow-300: #52524d;
+  --flow-200: #3d3d39;
+  --flow-100: #2a2a27;
+  --flow-50:  #0a0a09;
+
+  /* Violet: use dim variant for sufficient contrast on white */
+  --flow-violet:     #7c3aed;
+  --flow-violet-dim: #5b21b6;
+
+  /* Fine-tune semantic tokens that need specific values beyond scale inversion */
+  --card:               #ffffff;
+  --card-foreground:    #0a0a09;
+  --popover:            #ffffff;
+  --popover-foreground: #0a0a09;
+  --ring:               var(--flow-violet);
+  --sidebar-primary:    var(--flow-violet);
+  --sidebar-ring:       var(--flow-violet);
+}
+
+/* Scrollbar: inverted scale makes --flow-700 (#d4d4cc) too light to see on white */
+:root[data-theme="light"] ::-webkit-scrollbar-thumb,
+.light ::-webkit-scrollbar-thumb {
+  background: var(--flow-500);
+}
+:root[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+.light ::-webkit-scrollbar-thumb:hover {
+  background: var(--flow-400);
 }
 
 @layer utilities {
@@ -184,8 +201,8 @@
     font-family: "JetBrains Mono", ui-monospace, monospace;
   }
   ::selection {
-    background-color: color-mix(in srgb, var(--flow-violet) 20%, transparent);
-    color: var(--flow-50);
+    background-color: color-mix(in srgb, var(--flow-violet) 25%, transparent);
+    color: var(--foreground);
   }
 
   ::-webkit-scrollbar {
