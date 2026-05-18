@@ -39,6 +39,7 @@ type ProposalRow = {
   status: string;
   created_at: string;
   execution_id?: string;
+  auto_approved?: boolean;
 };
 
 type Props = { proposals: ProposalRow[] };
@@ -347,13 +348,24 @@ function ProposalCard({
               {new Date(p.created_at).toLocaleString()}
             </CardDescription>
           </div>
-          <Badge
-            variant="outline"
-            className={cn("w-fit shrink-0 gap-1 text-xs font-medium capitalize", cfg.className)}
-          >
-            <StatusIcon className="h-3 w-3" aria-hidden />
-            {cfg.label}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {p.auto_approved && (
+              <Badge
+                variant="outline"
+                className="w-fit shrink-0 gap-1 text-xs font-medium border-flow-violet/40 bg-flow-violet/10 text-flow-violet"
+              >
+                <Sparkles className="h-3 w-3" aria-hidden />
+                Auto-approved
+              </Badge>
+            )}
+            <Badge
+              variant="outline"
+              className={cn("w-fit shrink-0 gap-1 text-xs font-medium capitalize", cfg.className)}
+            >
+              <StatusIcon className="h-3 w-3" aria-hidden />
+              {cfg.label}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pb-4">

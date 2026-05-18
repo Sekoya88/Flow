@@ -38,7 +38,7 @@ class AgentToolsPatchIn(BaseModel):
 
 
 class AgentPatchIn(BaseModel):
-    """Partial agent update: display name, system prompt, and/or tool toggles."""
+    """Partial agent update: display name, system prompt, tool toggles, and autonomous mode."""
 
     name: str | None = Field(None, min_length=1, max_length=200)
     system_prompt: str | None = Field(default=None, min_length=1)
@@ -49,6 +49,8 @@ class AgentPatchIn(BaseModel):
     fetch_webpage: bool | None = None
     arxiv_search: bool | None = None
     hf_papers: bool | None = None
+    auto_improve_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    auto_improve_rollback_delta: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class AnalyticsEventIn(BaseModel):

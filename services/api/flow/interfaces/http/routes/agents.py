@@ -255,11 +255,31 @@ async def patch_agent(
             )
         except Exception:
             logger.warning("genome.snapshot_failed", exc_info=True)
+    # Autonomous mode fields stored as dedicated columns on agents table
+    auto_keys = ("auto_improve_threshold", "auto_improve_rollback_delta")
+    auto_data = {k: data[k] for k in auto_keys if k in data}
+    if auto_data:
+        set_clauses = ", ".join(f"{k} = ${i+3}" for i, k in enumerate(auto_data))
+        values = list(auto_data.values())
+        await repo._pool.execute(
+            f"UPDATE agents SET {set_clauses} WHERE id = $1 AND workspace_id = $2",
+            agent_id, workspace_id, *values,
+        )
     fresh = await repo.get_agent(agent_id, workspace_id)
     assert fresh is not None
     raw_cfg = fresh["config"]
     cfg = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
-    return {"id": str(agent_id), "name": fresh["name"], "config": cfg}
+    auto_row = await repo._pool.fetchrow(
+        "SELECT auto_improve_threshold, auto_improve_rollback_delta FROM agents WHERE id = $1",
+        agent_id,
+    )
+    return {
+        "id": str(agent_id),
+        "name": fresh["name"],
+        "config": cfg,
+        "auto_improve_threshold": auto_row["auto_improve_threshold"] if auto_row else None,
+        "auto_improve_rollback_delta": auto_row["auto_improve_rollback_delta"] if auto_row else 0.15,
+    }
 
 
 @router.get("/agents/{agent_id}/stats")

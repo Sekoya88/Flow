@@ -221,6 +221,38 @@ async def get_active_genome(
     return _row_to_genome(row) if row else None
 
 
+async def rollback_genome(
+    pool: asyncpg.Pool,
+    agent_id: UUID,
+    workspace_id: UUID,
+) -> UUID | None:
+    """
+    Promote the most recently archived genome back to ACTIVE.
+    Used by the safety eval tick to undo an auto-promoted genome that regressed.
+    Returns the restored version UUID, or None if nothing to roll back to.
+    """
+    async with pool.acquire() as conn:
+        prev = await conn.fetchrow(
+            "SELECT id FROM agent_versions "
+            "WHERE agent_id = $1 AND status = 'archived' "
+            "ORDER BY created_at DESC LIMIT 1",
+            agent_id,
+        )
+        if prev is None:
+            logger.warning(
+                "genome.rollback.no_archived",
+                extra={"agent_id": str(agent_id)},
+            )
+            return None
+
+    await activate_genome(pool, prev["id"], agent_id, workspace_id)
+    logger.info(
+        "genome.rollback.completed",
+        extra={"agent_id": str(agent_id), "restored_version_id": str(prev["id"])},
+    )
+    return prev["id"]
+
+
 async def _maybe_snapshot_eval_pass(
     pool: asyncpg.Pool,
     agent_id: UUID,

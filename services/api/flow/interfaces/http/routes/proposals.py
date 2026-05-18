@@ -38,6 +38,7 @@ async def list_proposals(
                 "body": r["body"],
                 "status": r["status"],
                 "created_at": r["created_at"].isoformat(),
+                "auto_approved": bool(r["auto_approved"]) if r.get("auto_approved") is not None else False,
                 **(
                     {"execution_id": str(r["execution_id"])}
                     if r.get("execution_id") is not None

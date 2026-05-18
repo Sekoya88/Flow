@@ -10,7 +10,7 @@ import arq
 
 from flow.application.execution_runner import run_deer_execution
 from flow.application.scheduler import scheduler_tick
-from flow.application.golden_evaluator import auto_eval_tick, skill_decay_tick
+from flow.application.golden_evaluator import auto_eval_tick, auto_safety_eval_tick, skill_decay_tick
 from flow.application.persona_freshness import persona_freshness_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
@@ -109,7 +109,8 @@ class WorkerSettings:
         arq.cron(scheduler_tick, minute=set(range(60)), run_at_startup=False),
         arq.cron(auto_eval_tick, hour=3, minute=0, run_at_startup=False),
         arq.cron(skill_decay_tick, hour=4, minute=0, run_at_startup=False),
-    arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
+        arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
+        arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
     ]
     on_startup = startup
     on_shutdown = shutdown

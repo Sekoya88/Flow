@@ -684,7 +684,7 @@ class FlowRepository:
         return row["id"]
 
     async def list_proposals(self, workspace_id: UUID, status: str | None = None) -> list[asyncpg.Record]:
-        cols = "id, title, body, status, created_at, execution_id"
+        cols = "id, title, body, status, created_at, execution_id, auto_approved"
         if status:
             q = (
                 f"SELECT {cols} FROM proposals "

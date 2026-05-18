@@ -382,3 +382,182 @@ async def skill_decay_tick(ctx: dict) -> None:
         except Exception:
             pass
     structlog.get_logger().info("cron.skill_decay_tick.done", pruned=decayed)
+
+
+async def auto_safety_eval_tick(ctx: dict) -> None:
+    """Cron job (04:30 UTC daily): re-evaluate auto-promoted genomes and roll back if they regressed.
+
+    Targets any agent_version that was auto_promoted_at within the last 36 hours
+    and has not yet had its safety_eval_passed flag set.
+    """
+    import datetime
+    pool = ctx["pool"]
+    settings = ctx.get("settings")
+    log = structlog.get_logger()
+
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+
+    # Find genomes that were auto-promoted and haven't been safety-checked yet
+    pending = await pool.fetch(
+        """
+        SELECT av.id AS version_id, av.agent_id, a.workspace_id,
+               a.auto_improve_rollback_delta
+        FROM agent_versions av
+        JOIN agents a ON a.id = av.agent_id
+        WHERE av.auto_promoted_at >= $1
+          AND av.auto_promoted_at IS NOT NULL
+          AND av.safety_eval_passed IS NULL
+          AND av.status = 'active'
+        """,
+        cutoff,
+    )
+
+    if not pending:
+        log.info("cron.safety_eval_tick.nothing_pending")
+        return
+
+    openai_api_key = getattr(settings, "openai_api_key", None) if settings else None
+    client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else AsyncOpenAI()
+
+    rolled_back = 0
+    passed = 0
+
+    for row in pending:
+        agent_id = row["agent_id"]
+        workspace_id = row["workspace_id"]
+        version_id = row["version_id"]
+        rollback_delta = row["auto_improve_rollback_delta"] or 0.15
+
+        try:
+            # Find the golden set most recently used with this agent
+            gs_row = await pool.fetchrow(
+                """
+                SELECT DISTINCT golden_set_id FROM golden_results
+                WHERE agent_id = $1
+                ORDER BY golden_set_id LIMIT 1
+                """,
+                agent_id,
+            )
+            if gs_row is None:
+                # No golden set — can't safety-check; mark passed to avoid retry loop
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                continue
+
+            golden_set_id = gs_row["golden_set_id"]
+
+            # Get baseline score before this promotion (most recent ARCHIVED version score)
+            baseline_row = await pool.fetchrow(
+                """
+                SELECT avg_score FROM agent_versions
+                WHERE agent_id = $1 AND status = 'archived'
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                agent_id,
+            )
+            baseline_score = baseline_row["avg_score"] if baseline_row and baseline_row["avg_score"] else None
+
+            # Run a fresh evaluation of current genome on the golden set
+            items = await pool.fetch(
+                "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1",
+                golden_set_id,
+            )
+            if not items:
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                continue
+
+            active_genome = await get_active_genome(pool, agent_id)
+            if active_genome is None:
+                continue
+
+            scores = []
+            for item in items:
+                try:
+                    actual = await run_agent_on_item(
+                        input_text=item["input_text"],
+                        system_prompt=active_genome.system_prompt,
+                        llm_config={
+                            "provider": active_genome.llm_config.provider,
+                            "model": active_genome.llm_config.model,
+                            "temperature": active_genome.llm_config.temperature,
+                        },
+                        openai_api_key=openai_api_key,
+                    )
+                    result = await judge_single(
+                        item["input_text"],
+                        item["expected_output"],
+                        actual,
+                        item["scoring_criteria"],
+                        client=client,
+                    )
+                    scores.append(result["score"])
+                except Exception:
+                    pass
+
+            if not scores:
+                continue
+
+            new_avg = sum(scores) / len(scores)
+
+            # Roll back if score dropped more than rollback_delta from baseline
+            if baseline_score is not None and new_avg < baseline_score - rollback_delta:
+                log.warning(
+                    "cron.safety_eval_tick.rollback",
+                    agent_id=str(agent_id),
+                    new_score=new_avg,
+                    baseline_score=baseline_score,
+                    delta=baseline_score - new_avg,
+                )
+                from flow.application.genome_service import rollback_genome
+                from uuid import uuid4 as _uuid4
+
+                # Find workspace owner for audit proposal
+                ws_user = await pool.fetchrow(
+                    "SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND role = 'admin' LIMIT 1",
+                    workspace_id,
+                )
+                fallback_user = ws_user["user_id"] if ws_user else None
+
+                await rollback_genome(pool, agent_id, workspace_id)
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = FALSE WHERE id = $1",
+                    version_id,
+                )
+
+                if fallback_user:
+                    alert_id = _uuid4()
+                    await pool.execute(
+                        """
+                        INSERT INTO proposals (id, workspace_id, user_id, title, body, status)
+                        VALUES ($1, $2, $3, $4, $5, 'pending')
+                        """,
+                        alert_id, workspace_id, fallback_user,
+                        "Safety rollback: auto-promoted genome regressed",
+                        f"Auto-promoted genome {version_id} scored {new_avg:.2f} vs baseline {baseline_score:.2f} "
+                        f"(delta -{baseline_score - new_avg:.2f} > threshold {rollback_delta:.2f}). "
+                        "Previous genome restored. Review and retrain.",
+                    )
+                rolled_back += 1
+            else:
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                log.info(
+                    "cron.safety_eval_tick.passed",
+                    agent_id=str(agent_id),
+                    new_score=new_avg,
+                )
+
+        except Exception:
+            log.warning("cron.safety_eval_tick.agent_failed", agent_id=str(agent_id), exc_info=True)
+
+    log.info("cron.safety_eval_tick.done", passed=passed, rolled_back=rolled_back)
