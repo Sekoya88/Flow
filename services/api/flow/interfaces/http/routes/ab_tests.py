@@ -1,6 +1,7 @@
 """A/B testing: compare two agents head-to-head on a shared golden set."""
 from __future__ import annotations
 
+import json
 import os
 from typing import Annotated
 from uuid import UUID
@@ -180,7 +181,8 @@ async def _get_agent_config(pool, agent_id: UUID) -> dict:
     # Fallback: read from agents.config JSON blob
     row = await pool.fetchrow("SELECT config FROM agents WHERE id = $1", agent_id)
     if row and row["config"]:
-        cfg = dict(row["config"])
+        raw = row["config"]
+        cfg = json.loads(raw) if isinstance(raw, str) else dict(raw)
         return {
             "system_prompt": cfg.get("system_prompt", ""),
             "llm_config": cfg.get("llm_config") or cfg.get("model") or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
@@ -196,6 +198,7 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
         from openai import AsyncOpenAI
 
         openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        anthropic_key = os.environ.get("FLOW_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
         client = AsyncOpenAI(api_key=openai_key) if openai_key else AsyncOpenAI()
 
         items = await pool.fetch(
@@ -231,6 +234,7 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
                         system_prompt=cfg["system_prompt"],
                         llm_config=cfg["llm_config"],
                         openai_api_key=openai_key,
+                        anthropic_api_key=anthropic_key,
                     )
 
                 judgment = await judge_single(

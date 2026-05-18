@@ -104,7 +104,7 @@ async def run_agent_on_item(
         llm_config,
         fallback_api_keys={
             "openai": openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY"),
-            "anthropic": anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY"),
+            "anthropic": anthropic_api_key or os.environ.get("FLOW_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"),
         },
     )
     if llm is None:
