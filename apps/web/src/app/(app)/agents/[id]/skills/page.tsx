@@ -145,6 +145,16 @@ export default function SkillsPage() {
     }
   }, [load]);
 
+  const handleActivateVersion = useCallback(async (versionId: string, skillName: string) => {
+    try {
+      await apiFetch(`/api/v1/skills/${versionId}/activate`, { method: "POST" });
+      void load();
+      void loadVersions(skillName);
+    } catch (e) {
+      logger.warn("activate version failed", { error: String(e) });
+    }
+  }, [load, loadVersions]);
+
   if (editing || creating) {
     return (
       <div className="mx-auto w-full max-w-4xl space-y-4 px-4 pb-10 animate-fade-in">
@@ -351,7 +361,7 @@ export default function SkillsPage() {
                               key={v.id}
                               className={cn(
                                 "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs",
-                                v.active ? "bg-flow-violet/5 border border-flow-violet/10" : "border border-transparent",
+                                v.active ? "bg-flow-violet/5 border border-flow-violet/10" : "border border-transparent hover:bg-muted/20",
                               )}
                             >
                               <span className="font-mono tabular-nums font-medium w-8">v{v.version}</span>
@@ -359,10 +369,18 @@ export default function SkillsPage() {
                               <span className="text-muted-foreground">
                                 {new Date(v.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </span>
-                              {v.active && (
+                              {v.active ? (
                                 <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-violet/30 bg-flow-violet/10">
                                   active
                                 </Badge>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="ml-auto font-mono text-[8px] uppercase tracking-wide text-muted-foreground hover:text-flow-violet transition-colors px-1.5 py-0.5 rounded border border-transparent hover:border-flow-violet/30"
+                                  onClick={() => void handleActivateVersion(v.id, skill.name)}
+                                >
+                                  Activate
+                                </button>
                               )}
                             </div>
                           ))}

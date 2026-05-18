@@ -197,6 +197,22 @@ async def run_deer_execution(
 
         await repo.complete_execution(execution_id, "completed", None)
 
+        # Auto-trigger curator on low-confidence runs (skip scheduled deliveries)
+        if confidence < 0.7 and not schedule_id:
+            try:
+                from flow.application.curator import maybe_spawn_proposal
+                await maybe_spawn_proposal(
+                    repo=repo,
+                    workspace_id=workspace_id,
+                    agent_id=agent_id,
+                    user_id=user_id,
+                    execution_id=execution_id,
+                    score=confidence,
+                    openai_api_key=settings.openai_api_key,
+                )
+            except Exception:
+                pass
+
         # Webhook delivery for scheduled runs
         if schedule_id:
             _delivery = await _get_schedule_delivery(pool, schedule_id)

@@ -9,7 +9,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from flow.application.persona_service import regenerate_persona
+from flow.application.persona_service import regenerate_persona, synthesize_from_questionnaire
 from flow.config import Settings, get_settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_pool, get_repo, get_settings_dep
@@ -24,6 +24,16 @@ class PersonaSaveIn(BaseModel):
 
 class PersonaRegenerateIn(BaseModel):
     workspace_id: UUID
+
+
+class QuestionnaireAnswer(BaseModel):
+    question: str
+    answer: str
+
+
+class PersonaQuestionnaireIn(BaseModel):
+    workspace_id: UUID
+    answers: list[QuestionnaireAnswer]
 
 
 def _row_to_out(row: dict | None) -> dict | None:
@@ -97,6 +107,40 @@ async def save_my_persona(
         body.workspace_id,
         user_id,
         body.content_md,
+        json.dumps(derived),
+    )
+    assert row is not None
+    return {"persona": _row_to_out(dict(row))}
+
+
+@router.post("/me/questionnaire")
+async def questionnaire_persona(
+    body: PersonaQuestionnaireIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> dict:
+    await _assert_workspace_access(repo, user_id, body.workspace_id)
+    from flow.application.persona_service import _build_persona_llm
+    llm = _build_persona_llm(settings)
+    answers = [{"question": a.question, "answer": a.answer} for a in body.answers]
+    content = await synthesize_from_questionnaire(llm, answers)
+    derived = {"questionnaire": True, "llm": llm is not None, "manual": False}
+    row = await pool.fetchrow(
+        """
+        INSERT INTO user_personas (workspace_id, user_id, content_md, version, derived_from)
+        VALUES ($1, $2, $3, 1, $4::jsonb)
+        ON CONFLICT (workspace_id, user_id) DO UPDATE
+        SET content_md = EXCLUDED.content_md,
+            version = user_personas.version + 1,
+            derived_from = EXCLUDED.derived_from,
+            updated_at = now()
+        RETURNING id, workspace_id, user_id, content_md, version, derived_from, created_at, updated_at
+        """,
+        body.workspace_id,
+        user_id,
+        content,
         json.dumps(derived),
     )
     assert row is not None

@@ -141,6 +141,72 @@ def _build_persona_llm(settings: Any) -> Any | None:
     return None
 
 
+_QUESTIONNAIRE_PROMPT = """\
+You are writing a SOUL.md — a durable identity sheet for an AI assistant.
+It will be injected as the FIRST block of the assistant's system prompt for
+every conversation with this user. Keep it personal, warm, and stable across
+contexts. Target ~200 words maximum.
+
+Use this structure (markdown headings exactly as below):
+
+# Identity
+One paragraph: who is this user, what they do, what they care about.
+
+## Voice & style
+Bullets — how should the assistant speak with them (tone, depth, format).
+
+## What to avoid
+Bullets — patterns or styles they don't want.
+
+## Current focus
+Bullets — what they're working on right now.
+
+## Technical posture
+Bullets — preferred stack or domain conventions, if mentioned.
+
+Constraints:
+- DO NOT invent facts. Use only what's in the answers below.
+- If a section has no data, write a single bullet "(unspecified)".
+- Output ONLY the markdown. No preamble.
+
+User's questionnaire answers:
+{qa_text}
+"""
+
+
+async def synthesize_from_questionnaire(
+    llm: Any | None,
+    answers: list[dict[str, str]],
+) -> str:
+    """Build a SOUL.md from explicit questionnaire Q&A pairs."""
+    qa_text = "\n".join(
+        f"Q: {a.get('question', '').strip()}\nA: {a.get('answer', '').strip()}"
+        for a in answers
+        if a.get("answer", "").strip()
+    )
+    if not qa_text:
+        return _format_template([], None)
+    if llm is None:
+        lines = ["# Identity", ""]
+        for a in answers:
+            q = a.get("question", "").strip()
+            v = a.get("answer", "").strip()
+            if v:
+                lines.append(f"- **{q}**: {v}")
+        lines += ["", "## Voice & style", "- (unspecified)", "", "## What to avoid", "- (unspecified)", "", "## Current focus", "- (unspecified)", "", "## Technical posture", "- (unspecified)"]
+        return "\n".join(lines)
+    prompt = _QUESTIONNAIRE_PROMPT.format(qa_text=qa_text)
+    try:
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        text = getattr(response, "content", "") or ""
+        if isinstance(text, list):
+            text = "\n".join(str(b.get("text", "")) if isinstance(b, dict) else str(b) for b in text)
+        text = str(text).strip()
+        return text or _format_template([], None)
+    except Exception:
+        return _format_template([], None)
+
+
 async def regenerate_persona(
     pool: Any,
     workspace_id: UUID,
