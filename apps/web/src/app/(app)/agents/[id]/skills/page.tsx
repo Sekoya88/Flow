@@ -65,6 +65,8 @@ export default function SkillsPage() {
   const [diffSkill, setDiffSkill] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionRow[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const [improving, setImproving] = useState<string | null>(null);
+  const [improveMessage, setImproveMessage] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +144,44 @@ export default function SkillsPage() {
       void load();
     } catch (e) {
       logger.warn("deactivate failed", { error: String(e) });
+    }
+  }, [load]);
+
+  const handleImprove = useCallback(async (skillId: string) => {
+    setImproving(skillId);
+    try {
+      const result = await apiFetch<{
+        improved: boolean;
+        proposal_id?: string;
+        candidate_skill_id?: string;
+        confidence?: number;
+        changelog?: string[];
+        failure_analysis?: string;
+        reason?: string;
+      }>(`/api/v1/skills/${skillId}/improve`, { method: "POST" });
+
+      if (result.improved) {
+        const pct = result.confidence !== undefined ? ` (${Math.round(result.confidence * 100)}% confidence)` : "";
+        const changes = result.changelog?.length ? ` — ${result.changelog[0]}` : "";
+        setImproveMessage((prev) => ({
+          ...prev,
+          [skillId]: `Improvement proposal created${pct}${changes}. Review it in Proposals.`,
+        }));
+      } else {
+        setImproveMessage((prev) => ({
+          ...prev,
+          [skillId]: result.reason ?? "No improvement found.",
+        }));
+      }
+      void load();
+    } catch (e) {
+      setImproveMessage((prev) => ({
+        ...prev,
+        [skillId]: "Failed to generate improvement proposal.",
+      }));
+      logger.warn("skill improve failed", { error: String(e) });
+    } finally {
+      setImproving(null);
     }
   }, [load]);
 
@@ -389,7 +429,7 @@ export default function SkillsPage() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-1 flex-wrap">
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={() => setEditing(skill)}>
                         <FileCode2 className="h-3 w-3" />
                         Edit
@@ -408,6 +448,20 @@ export default function SkillsPage() {
                         </Button>
                       )}
                       <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs h-7 text-flow-violet border-flow-violet/30 hover:bg-flow-violet/10"
+                        disabled={improving === skill.id}
+                        onClick={() => void handleImprove(skill.id)}
+                      >
+                        {improving === skill.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3" />
+                        )}
+                        Improve
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         className="gap-1.5 text-xs h-7 text-destructive hover:text-destructive ml-auto"
@@ -416,6 +470,9 @@ export default function SkillsPage() {
                         Deactivate
                       </Button>
                     </div>
+                    {improveMessage[skill.id] && (
+                      <p className="text-[11px] text-flow-violet/80 mt-1">{improveMessage[skill.id]}</p>
+                    )}
                   </div>
                 )}
               </div>

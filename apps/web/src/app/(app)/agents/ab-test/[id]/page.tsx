@@ -165,7 +165,7 @@ export default function ABTestDetailPage() {
                 </div>
                 <div className="flex items-end gap-1">
                   <span className="text-3xl font-bold tabular-nums">
-                    {avg.toFixed(1)}
+                    {(avg * 10).toFixed(1)}
                   </span>
                   <span className="text-sm text-muted-foreground pb-0.5">/ 10</span>
                 </div>
@@ -182,10 +182,10 @@ export default function ABTestDetailPage() {
             <p className="text-sm font-medium">
               Agent {aggregate.winner} wins with an average score of{" "}
               <strong>
-                {aggregate.winner === "A" ? aggregate.agent_a_avg.toFixed(1) : aggregate.agent_b_avg.toFixed(1)}
+                {(aggregate.winner === "A" ? aggregate.agent_a_avg * 10 : aggregate.agent_b_avg * 10).toFixed(1)}
               </strong>
               /10 vs{" "}
-              {(aggregate.winner === "A" ? aggregate.agent_b_avg : aggregate.agent_a_avg).toFixed(1)}/10
+              {((aggregate.winner === "A" ? aggregate.agent_b_avg : aggregate.agent_a_avg) * 10).toFixed(1)}/10
             </p>
           </div>
         )}
@@ -246,20 +246,21 @@ function ResultCell({ result }: { result: ItemResult | null }) {
       </div>
     );
   }
+  const score10 = result.score !== null ? result.score * 10 : null;
   const scoreColor =
-    result.score === null
+    score10 === null
       ? "text-muted-foreground"
-      : result.score >= 7
+      : score10 >= 7
         ? "text-emerald-500"
-        : result.score >= 4
+        : score10 >= 4
           ? "text-amber-500"
           : "text-destructive";
 
   return (
     <div className="px-4 py-3 border-l border-border/30 space-y-1">
-      {result.score !== null && (
+      {score10 !== null && (
         <span className={cn("text-xs font-bold tabular-nums", scoreColor)}>
-          {result.score}/10
+          {score10.toFixed(1)}/10
         </span>
       )}
       <p className="text-[11px] text-foreground/80 line-clamp-3">{result.actual_output || "—"}</p>

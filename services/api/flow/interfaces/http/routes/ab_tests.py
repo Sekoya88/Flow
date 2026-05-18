@@ -1,12 +1,14 @@
-"""A/B testing: compare two agents on a shared golden set."""
+"""A/B testing: compare two agents head-to-head on a shared golden set."""
 from __future__ import annotations
 
+import os
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
-from flow.application.golden_evaluator import judge_single
+from flow.application.genome_service import get_active_genome
+from flow.application.golden_evaluator import judge_single, run_agent_on_item
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.interfaces.http.schemas import ABTestCreateIn
@@ -163,22 +165,57 @@ async def get_ab_test(
 
 # ── Background task ───────────────────────────────────────────────────
 
+async def _get_agent_config(pool, agent_id: UUID) -> dict:
+    """Return system_prompt + llm_config for an agent via its active genome."""
+    genome = await get_active_genome(pool, agent_id)
+    if genome:
+        return {
+            "system_prompt": genome.system_prompt or "",
+            "llm_config": {
+                "provider": genome.llm_config.provider,
+                "model": genome.llm_config.model,
+                "temperature": genome.llm_config.temperature,
+            },
+        }
+    # Fallback: read from agents.config JSON blob
+    row = await pool.fetchrow("SELECT config FROM agents WHERE id = $1", agent_id)
+    if row and row["config"]:
+        cfg = dict(row["config"])
+        return {
+            "system_prompt": cfg.get("system_prompt", ""),
+            "llm_config": cfg.get("llm_config") or cfg.get("model") or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
+        }
+    return {"system_prompt": "", "llm_config": {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}}
+
+
 async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUID, agent_b_id: UUID):
-    """Judge existing golden_results for both agents on all items in the set."""
+    """Run both agents on golden items and judge head-to-head."""
     await pool.execute("UPDATE ab_tests SET status='running' WHERE id=$1", test_id)
 
     try:
+        from openai import AsyncOpenAI
+
+        openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        client = AsyncOpenAI(api_key=openai_key) if openai_key else AsyncOpenAI()
+
         items = await pool.fetch(
             "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id=$1 ORDER BY created_at",
             golden_set_id,
         )
 
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI()
+        # Fetch agent configs once upfront
+        cfg_a = await _get_agent_config(pool, agent_a_id)
+        cfg_b = await _get_agent_config(pool, agent_b_id)
+        agent_cfgs = {"A": cfg_a, "B": cfg_b}
+        agent_ids = {"A": agent_a_id, "B": agent_b_id}
 
         for item in items:
-            for label, agent_id in (("A", agent_a_id), ("B", agent_b_id)):
-                result_row = await pool.fetchrow(
+            for label in ("A", "B"):
+                agent_id = agent_ids[label]
+                cfg = agent_cfgs[label]
+
+                # Use the most recent golden_result if available (fast path), else run the agent
+                cached = await pool.fetchrow(
                     """
                     SELECT actual_output FROM golden_results
                     WHERE item_id=$1 AND agent_id=$2 AND actual_output IS NOT NULL
@@ -186,13 +223,20 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
                     """,
                     item["id"], agent_id,
                 )
-                if not result_row:
-                    continue
+                if cached:
+                    actual_output = cached["actual_output"]
+                else:
+                    actual_output = await run_agent_on_item(
+                        input_text=item["input_text"],
+                        system_prompt=cfg["system_prompt"],
+                        llm_config=cfg["llm_config"],
+                        openai_api_key=openai_key,
+                    )
 
                 judgment = await judge_single(
                     item["input_text"],
                     item["expected_output"],
-                    result_row["actual_output"],
+                    actual_output,
                     item["scoring_criteria"],
                     client=client,
                 )
@@ -202,7 +246,7 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
                     VALUES ($1,$2,$3,$4,$5,$6)
                     """,
                     test_id, item["id"], label,
-                    judgment["score"], result_row["actual_output"], judgment["rationale"],
+                    judgment["score"], actual_output, judgment["rationale"],
                 )
 
         await pool.execute("UPDATE ab_tests SET status='completed' WHERE id=$1", test_id)
