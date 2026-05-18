@@ -6,24 +6,20 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from flow.application.genome_service import snapshot_genome
 from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import SnapshotCreateIn
 
 router = APIRouter(prefix="/api/v1/agents/{agent_id}/versions", tags=["agent-versions"])
-
-
-class SnapshotRequest(BaseModel):
-    version_label: str
 
 
 @router.post("")
 async def create_version(
     agent_id: UUID,
-    body: SnapshotRequest,
+    body: SnapshotCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:

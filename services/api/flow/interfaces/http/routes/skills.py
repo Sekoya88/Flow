@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
 from flow.application.skill_parser import parse_skill_md
 from flow.application.skill_playground import run_skill_test
@@ -15,39 +14,29 @@ from flow.config import Settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.rate_limit import skill_test_rate_limit
+from flow.interfaces.http.schemas import (
+    DeactivateOut,
+    SkillActivateOut,
+    SkillCatalogOut,
+    SkillCreateIn,
+    SkillCreateOut,
+    SkillHistoryOut,
+    SkillImproveOut,
+    SkillListOut,
+    SkillTestIn,
+    SkillUsageOut,
+)
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"])
 
 
-class SkillCreateIn(BaseModel):
-    workspace_id: UUID
-    agent_id: UUID
-    name: str = Field(min_length=1, max_length=200)
-    content_md: str = Field(min_length=1, max_length=10000)
-
-
-class SkillOut(BaseModel):
-    id: str
-    name: str
-    version: int
-    content_md: str
-    description: str = ""
-    allowed_tools: list[str] = []
-    triggers: list[str] = []
-    metadata: dict = {}
-    active: bool = True
-    score: float = 1.0
-    use_count: int = 0
-    created_at: str = ""
-
-
-@router.get("")
+@router.get("", response_model=SkillListOut)
 async def list_skills(
     workspace_id: UUID,
     agent_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> SkillListOut:
     rows = await repo.list_active_skills(agent_id, workspace_id)
     skills = []
     for r in rows:
@@ -69,12 +58,12 @@ async def list_skills(
     return {"skills": skills}
 
 
-@router.post("")
+@router.post("", response_model=SkillCreateOut)
 async def create_skill(
     body: SkillCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> SkillCreateOut:
     sid = await repo.upsert_agent_skill(
         agent_id=body.agent_id,
         workspace_id=body.workspace_id,
@@ -84,13 +73,13 @@ async def create_skill(
     return {"id": str(sid)}
 
 
-@router.get("/history")
+@router.get("/history", response_model=SkillHistoryOut)
 async def skill_history(
     agent_id: UUID,
     name: str,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> SkillHistoryOut:
     rows = await repo.get_skill_history(agent_id, name)
     return {
         "versions": [
@@ -106,12 +95,12 @@ async def skill_history(
     }
 
 
-@router.delete("/{skill_id}")
+@router.delete("/{skill_id}", response_model=DeactivateOut)
 async def deactivate_skill(
     skill_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> DeactivateOut:
     await repo._pool.execute(
         "UPDATE agent_skills SET active = false WHERE id = $1", skill_id
     )
@@ -119,10 +108,6 @@ async def deactivate_skill(
 
 
 # ── Skills Hub ───────────────────────────────────────────────────────────────
-
-
-class SkillTestIn(BaseModel):
-    prompt: str = Field(min_length=1, max_length=4000)
 
 
 def _catalog_row_to_out(row) -> dict:
@@ -143,14 +128,14 @@ def _catalog_row_to_out(row) -> dict:
     }
 
 
-@router.get("/catalog")
+@router.get("/catalog", response_model=SkillCatalogOut)
 async def list_skills_catalog(
     workspace_id: Annotated[UUID, Query()],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
     agent_id: Annotated[UUID | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
-) -> dict:
+) -> SkillCatalogOut:
     """Cross-agent catalog of active skills for the Skills Hub."""
     ws_rows = await repo.list_workspaces_for_user(user_id)
     allowed = {r["id"] for r in ws_rows}
@@ -160,12 +145,12 @@ async def list_skills_catalog(
     return {"skills": [_catalog_row_to_out(r) for r in rows]}
 
 
-@router.post("/{skill_id}/activate")
+@router.post("/{skill_id}/activate", response_model=SkillActivateOut)
 async def activate_skill_version(
     skill_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> SkillActivateOut:
     """Make this historical version the active one; deactivate siblings."""
     row = await repo.activate_skill_version(skill_id)
     if row is None:
@@ -220,12 +205,12 @@ async def test_skill(
 # ── Skill self-improvement loop ───────────────────────────────────────────────
 
 
-@router.post("/{skill_id}/improve")
+@router.post("/{skill_id}/improve", response_model=SkillImproveOut)
 async def improve_skill(
     skill_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> SkillImproveOut:
     """Run the skill rewriter: fetch linked golden items, rewrite the skill body,
     create an inactive candidate version, and post a proposal for human review."""
     from flow.application.skill_rewriter import rewrite_skill, SkillRewriteResult
@@ -326,13 +311,13 @@ async def improve_skill(
     }
 
 
-@router.get("/{skill_id}/usage")
+@router.get("/{skill_id}/usage", response_model=SkillUsageOut)
 async def skill_usage(
     skill_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
     window: Annotated[int, Query(ge=1, le=90)] = 7,
-) -> dict:
+) -> SkillUsageOut:
     """Return daily match counts for the last N days (for sparkline chart)."""
     skill = await repo.get_skill_by_id(skill_id)
     if skill is None:

@@ -7,17 +7,12 @@ from typing import Any, Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from flow.interfaces.http.deps import get_current_user_id, get_pool
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.interfaces.http.schemas import PositionUpdateIn
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
-
-
-class PositionUpdate(BaseModel):
-    x: float
-    y: float
 
 
 def _serialize_node(r: Any) -> dict[str, Any]:
@@ -174,7 +169,7 @@ async def get_entity_graph(
 @router.patch("/node/{node_id}/position")
 async def update_node_position(
     node_id: uuid.UUID,
-    body: PositionUpdate,
+    body: PositionUpdateIn,
     workspace_id: uuid.UUID = Query(...),
     user_id: uuid.UUID = Depends(get_current_user_id),
     pool: asyncpg.Pool = Depends(get_pool),

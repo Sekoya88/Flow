@@ -13,7 +13,7 @@ from flow.application.kg_query_graph import QueryConfig, build_kg_query_graph
 from flow.infrastructure.kg.graph_engine import KGGraphEngine
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
-from flow.interfaces.http.schemas_kg import (
+from flow.interfaces.http.schemas import (
     KGEdgeOut,
     KGGraphOut,
     KGIngestObsidianIn,

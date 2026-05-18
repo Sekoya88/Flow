@@ -5,10 +5,10 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import ScheduleCreateIn, ScheduleToggleIn
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
 
@@ -56,21 +56,6 @@ def _next_run_for(cron_expr: str) -> str:
         nxt = now + datetime.timedelta(minutes=1)
     return nxt.isoformat() + "Z"
 
-
-class ScheduleCreateIn(BaseModel):
-    workspace_id: UUID
-    agent_id: UUID
-    cron_expr: str = Field(default="0 8 * * *", max_length=100)
-    prompt_template: str = Field(
-        default="Summarize the latest AI research papers from today.",
-        max_length=4000,
-    )
-    delivery_type: str = Field(default="none")
-    delivery_target: str | None = None
-
-
-class ScheduleToggleIn(BaseModel):
-    enabled: bool
 
 
 @router.get("/cron-jobs")

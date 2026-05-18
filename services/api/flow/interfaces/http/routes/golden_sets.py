@@ -6,11 +6,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
 
 from flow.application.golden_evaluator import evaluate_golden_set
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import GoldenSetCreateIn, GoldenSetEvaluateIn, GoldenSetItemCreateIn
 
 # ── Sample datasets (imported lazily to avoid circular deps) ──────────
 
@@ -296,24 +296,6 @@ _SAMPLE_SETS = [
 router = APIRouter(prefix="/api/v1/golden-sets", tags=["golden-sets"])
 
 
-# ── Schemas ──────────────────────────────────────────────────────────
-
-class CreateSetBody(BaseModel):
-    name: str
-    description: str = ""
-
-
-class CreateItemBody(BaseModel):
-    input_text: str
-    expected_output: str
-    scoring_criteria: str = ""
-
-
-class EvaluateBody(BaseModel):
-    agent_id: UUID
-    agent_version_label: str = ""
-
-
 # ── Helpers ──────────────────────────────────────────────────────────
 
 async def _get_workspace(repo: FlowRepository, user_id: UUID) -> UUID:
@@ -368,7 +350,7 @@ async def seed_sample_datasets(
 
 @router.post("")
 async def create_golden_set(
-    body: CreateSetBody,
+    body: GoldenSetCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
@@ -441,7 +423,7 @@ async def get_golden_set(
 @router.post("/{set_id}/items")
 async def add_golden_item(
     set_id: UUID,
-    body: CreateItemBody,
+    body: GoldenSetItemCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
@@ -584,7 +566,7 @@ async def get_eval_history(
 @router.post("/{set_id}/evaluate")
 async def trigger_evaluate(
     set_id: UUID,
-    body: EvaluateBody,
+    body: GoldenSetEvaluateIn,
     background_tasks: BackgroundTasks,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],

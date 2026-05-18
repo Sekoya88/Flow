@@ -4,20 +4,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from flow.config import Settings, get_settings
 from flow.infrastructure.llm import embeddings as emb_svc
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import DeletedOut, MemoryCreateIn, MemoryCreateOut, TieredMemoriesOut
 
 router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
-
-
-class MemoryCreateIn(BaseModel):
-    workspace_id: UUID
-    agent_id: UUID
-    content: str = Field(min_length=1, max_length=16000)
 
 
 async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowRepository) -> None:
@@ -27,13 +21,13 @@ async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowReposit
         raise HTTPException(status_code=403, detail="workspace not allowed")
 
 
-@router.post("")
+@router.post("", response_model=MemoryCreateOut)
 async def create_memory(
     body: MemoryCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> dict:
+) -> MemoryCreateOut:
     await _assert_workspace(user_id, body.workspace_id, repo)
     agent = await repo.get_agent(body.agent_id, body.workspace_id)
     if not agent:
@@ -45,13 +39,13 @@ async def create_memory(
     return {"id": str(mid)}
 
 
-@router.get("/tiered")
+@router.get("/tiered", response_model=TieredMemoriesOut)
 async def get_tiered_memories(
     workspace_id: UUID,
     agent_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> TieredMemoriesOut:
     """Return episodic + semantic memories for the MemoryDrawer."""
     await _assert_workspace(user_id, workspace_id, repo)
     agent = await repo.get_agent(agent_id, workspace_id)
@@ -82,13 +76,13 @@ async def get_tiered_memories(
     }
 
 
-@router.delete("/episodic/{memory_id}")
+@router.delete("/episodic/{memory_id}", response_model=DeletedOut)
 async def delete_episodic_memory(
     memory_id: UUID,
     workspace_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
+) -> DeletedOut:
     await _assert_workspace(user_id, workspace_id, repo)
     deleted = await repo.delete_episodic_memory(memory_id, workspace_id)
     if not deleted:

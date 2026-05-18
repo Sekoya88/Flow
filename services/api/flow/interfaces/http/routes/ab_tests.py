@@ -5,26 +5,18 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
 
 from flow.application.golden_evaluator import judge_single
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import ABTestCreateIn
 
 router = APIRouter(prefix="/api/v1/ab-tests", tags=["ab-tests"])
 
 
-class CreateABTestBody(BaseModel):
-    golden_set_id: UUID
-    agent_a_id: UUID
-    agent_a_version: str = ""
-    agent_b_id: UUID
-    agent_b_version: str = ""
-
-
 @router.post("")
 async def create_ab_test(
-    body: CreateABTestBody,
+    body: ABTestCreateIn,
     background_tasks: BackgroundTasks,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
