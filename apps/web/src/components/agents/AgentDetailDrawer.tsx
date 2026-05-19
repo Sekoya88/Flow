@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Search,
   Sparkles,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import {
@@ -100,6 +101,7 @@ interface AgentDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onToolToggle?: (agentId: string, tool: string, enabled: boolean) => Promise<void>;
+  onDelete?: (agentId: string) => Promise<void>;
   workspaceId?: string | null;
 }
 
@@ -119,11 +121,13 @@ export function AgentDetailDrawer({
   open,
   onOpenChange,
   onToolToggle,
+  onDelete,
   workspaceId,
 }: AgentDetailDrawerProps) {
   const router = useRouter();
   const [localTools, setLocalTools] = useState<Record<string, boolean>>({});
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ── Skills state ──
   const [skills, setSkills] = useState<SkillRow[]>([]);
@@ -633,6 +637,27 @@ export function AgentDetailDrawer({
                 <MessageSquare className="h-3.5 w-3.5" />
                 Run this agent
               </Button>
+              {onDelete && agent && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled={deleteLoading}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60 transition-colors"
+                  aria-label="Delete agent"
+                  onClick={async () => {
+                    if (!confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return;
+                    setDeleteLoading(true);
+                    try {
+                      await onDelete(agent.id);
+                      onOpenChange(false);
+                    } finally {
+                      setDeleteLoading(false);
+                    }
+                  }}
+                >
+                  {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              )}
             </div>
           </div>
         </ScrollArea>

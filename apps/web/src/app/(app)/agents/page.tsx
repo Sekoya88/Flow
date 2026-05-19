@@ -110,6 +110,11 @@ export default function AgentsPage() {
     setDrawerOpen(true);
   }, []);
 
+  const handleDelete = useCallback(async (agentId: string) => {
+    await apiFetch(`/api/v1/agents/${agentId}`, { method: "DELETE" });
+    setAgents((prev) => prev.filter((a) => a.id !== agentId));
+  }, []);
+
   if (err) {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -246,6 +251,7 @@ export default function AgentsPage() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         onToolToggle={handleToolToggle}
+        onDelete={handleDelete}
         workspaceId={wsId}
       />
     </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BookOpen, BookOpenCheck, FileUp, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, BookOpen, BookOpenCheck, FileUp, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -152,6 +152,7 @@ export default function KnowledgePage() {
   const [urlInput, setUrlInput] = useState("");
   const [crawling, setCrawling] = useState(false);
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSources = useCallback(async (id: string) => {
     setLoadingSources(true);
@@ -230,6 +231,21 @@ export default function KnowledgePage() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function deleteSource(sourceId: string, title: string) {
+    if (!wsId) return;
+    if (!confirm(`Delete source "${title}"? This cannot be undone.`)) return;
+    setDeletingId(sourceId);
+    try {
+      await apiFetch(`/api/v1/knowledge/${sourceId}?workspace_id=${wsId}`, { method: "DELETE" });
+      setSources((prev) => prev.filter((s) => s.id !== sourceId));
+      if (selectedSource?.id === sourceId) setSelectedSource(null);
+    } catch (e) {
+      alert(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -484,18 +500,21 @@ export default function KnowledgePage() {
               <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
               <ul className="space-y-2 text-sm">
               {sources.map((s, i) => (
-                <li key={s.id}>
+                <li
+                  key={s.id}
+                  className="flex items-center gap-2"
+                  style={{
+                    opacity: 0,
+                    animation: `fadeIn 280ms ease-out forwards`,
+                    animationDelay: `${i * 40}ms`,
+                  }}
+                >
                   <button
                     type="button"
                     className={cn(
-                      "group w-full flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-violet/50 hover:bg-flow-violet/[0.04] hover:shadow-md hover:shadow-none/5 sm:flex-row sm:items-center sm:justify-between",
+                      "group flex-1 flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-violet/50 hover:bg-flow-violet/[0.04] hover:shadow-md sm:flex-row sm:items-center sm:justify-between",
                       selectedSource?.id === s.id && "border-flow-violet/50 bg-flow-violet/[0.06]",
                     )}
-                    style={{
-                      opacity: 0,
-                      animation: `fadeIn 280ms ease-out forwards`,
-                      animationDelay: `${i * 40}ms`,
-                    }}
                     onClick={() => setSelectedSource(s)}
                     aria-label={`View chunks for ${s.title}`}
                   >
@@ -511,6 +530,19 @@ export default function KnowledgePage() {
                     <Badge variant={statusVariant(s.ingest_status)} className="w-fit shrink-0 capitalize">
                       {s.ingest_status ?? "indexed"}
                     </Badge>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingId === s.id}
+                    onClick={() => void deleteSource(s.id, s.title)}
+                    aria-label={`Delete ${s.title}`}
+                    className="flex-shrink-0 rounded-lg p-2 text-flow-600 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                  >
+                    {deletingId === s.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                   </button>
                 </li>
               ))}

@@ -370,3 +370,29 @@ async def agent_stats(
         "confidence_trend": confidence_trend,
         "last_run_at": last_run.isoformat() if last_run else None,
     }
+
+
+@router.delete("/agents/{agent_id}", status_code=204)
+async def delete_agent(
+    agent_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> None:
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    allowed_ws = {r["id"] for r in ws_rows}
+    agent = None
+    workspace_id: UUID | None = None
+    for ws in allowed_ws:
+        agent = await repo.get_agent(agent_id, ws)
+        if agent:
+            workspace_id = ws
+            break
+    if not agent or workspace_id is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    # ab_tests FK has NO ACTION — delete referencing rows first
+    await repo._pool.execute(
+        "DELETE FROM ab_tests WHERE agent_a_id = $1 OR agent_b_id = $1", agent_id
+    )
+    await repo._pool.execute(
+        "DELETE FROM agents WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id
+    )

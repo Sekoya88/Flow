@@ -12,6 +12,10 @@ from flow.interfaces.http.deps import get_current_user_id, get_repo
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
 
+class RenameWorkspaceIn(BaseModel):
+    name: str
+
+
 class AddMemberIn(BaseModel):
     email: EmailStr
     role: str = "editor"  # admin | editor | viewer
@@ -28,6 +32,58 @@ async def _assert_admin(user_id: UUID, workspace_id: UUID, repo: FlowRepository)
     await _assert_workspace(user_id, workspace_id, repo)
     if not await repo.is_workspace_admin(workspace_id, user_id):
         raise HTTPException(status_code=403, detail="admin role required")
+
+
+@router.patch("/{workspace_id}")
+async def rename_workspace(
+    workspace_id: UUID,
+    body: RenameWorkspaceIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    await _assert_admin(user_id, workspace_id, repo)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name cannot be empty")
+    await repo._pool.execute(
+        "UPDATE workspaces SET name = $1 WHERE id = $2",
+        name, workspace_id,
+    )
+    return {"id": str(workspace_id), "name": name}
+
+
+@router.get("/{workspace_id}/stats")
+async def workspace_stats(
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    await _assert_workspace(user_id, workspace_id, repo)
+    pool = repo._pool
+    agent_count = await pool.fetchval(
+        "SELECT COUNT(*) FROM agents WHERE workspace_id = $1", workspace_id
+    )
+    skill_count = await pool.fetchval(
+        "SELECT COUNT(DISTINCT agent_id) FROM agent_skills WHERE workspace_id = $1 AND active = TRUE",
+        workspace_id,
+    )
+    execution_count = await pool.fetchval(
+        "SELECT COUNT(*) FROM executions WHERE workspace_id = $1", workspace_id
+    )
+    member_count = await pool.fetchval(
+        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1", workspace_id
+    )
+    ws_row = await pool.fetchrow(
+        "SELECT name FROM workspaces WHERE id = $1", workspace_id
+    )
+    return {
+        "id": str(workspace_id),
+        "name": ws_row["name"] if ws_row else "",
+        "agent_count": int(agent_count or 0),
+        "skill_count": int(skill_count or 0),
+        "execution_count": int(execution_count or 0),
+        "member_count": int(member_count or 0),
+    }
 
 
 @router.get("/{workspace_id}/executions")

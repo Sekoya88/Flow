@@ -171,3 +171,19 @@ async def list_knowledge(
             for r in rows
         ]
     }
+
+
+@router.delete("/{source_id}", status_code=204)
+async def delete_knowledge_source(
+    source_id: UUID,
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> None:
+    await _assert_workspace(user_id, workspace_id, repo)
+    deleted = await repo._pool.execute(
+        "DELETE FROM knowledge_sources WHERE id = $1 AND workspace_id = $2",
+        source_id, workspace_id,
+    )
+    if deleted == "DELETE 0":
+        raise HTTPException(status_code=404, detail="source not found")
