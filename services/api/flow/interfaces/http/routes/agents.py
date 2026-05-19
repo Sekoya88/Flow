@@ -389,10 +389,12 @@ async def delete_agent(
             break
     if not agent or workspace_id is None:
         raise HTTPException(status_code=404, detail="agent not found")
-    # ab_tests FK has NO ACTION — delete referencing rows first
-    await repo._pool.execute(
-        "DELETE FROM ab_tests WHERE agent_a_id = $1 OR agent_b_id = $1", agent_id
-    )
-    await repo._pool.execute(
-        "DELETE FROM agents WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id
-    )
+    async with repo._pool.acquire() as conn:
+        async with conn.transaction():
+            # ab_tests FK has NO ACTION — must delete before agent
+            await conn.execute(
+                "DELETE FROM ab_tests WHERE agent_a_id = $1 OR agent_b_id = $1", agent_id
+            )
+            await conn.execute(
+                "DELETE FROM agents WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id
+            )

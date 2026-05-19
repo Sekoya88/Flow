@@ -64,7 +64,7 @@ async def workspace_stats(
         "SELECT COUNT(*) FROM agents WHERE workspace_id = $1", workspace_id
     )
     skill_count = await pool.fetchval(
-        "SELECT COUNT(DISTINCT agent_id) FROM agent_skills WHERE workspace_id = $1 AND active = TRUE",
+        "SELECT COUNT(*) FROM agent_skills WHERE workspace_id = $1 AND active = TRUE",
         workspace_id,
     )
     execution_count = await pool.fetchval(
@@ -154,10 +154,9 @@ async def remove_member(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> None:
     await _assert_admin(user_id, workspace_id, repo)
-    if target_user_id == user_id:
-        # Prevent self-removal — check if they're the only admin first
-        members = await repo.list_workspace_members(workspace_id)
-        admins = [m for m in members if m["role"] == "admin"]
-        if len(admins) <= 1:
-            raise HTTPException(status_code=403, detail="cannot remove the last admin")
+    members = await repo.list_workspace_members(workspace_id)
+    admins = [m for m in members if m["role"] == "admin"]
+    target = next((m for m in members if str(m["id"]) == str(target_user_id)), None)
+    if target and target["role"] == "admin" and len(admins) <= 1:
+        raise HTTPException(status_code=403, detail="cannot remove the last admin")
     await repo.remove_workspace_member(workspace_id, target_user_id)

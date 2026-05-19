@@ -239,7 +239,7 @@ export default function KnowledgePage() {
     if (!confirm(`Delete source "${title}"? This cannot be undone.`)) return;
     setDeletingId(sourceId);
     try {
-      await apiFetch(`/api/v1/knowledge/${sourceId}?workspace_id=${wsId}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/knowledge/${sourceId}`, { method: "DELETE" });
       setSources((prev) => prev.filter((s) => s.id !== sourceId));
       if (selectedSource?.id === sourceId) setSelectedSource(null);
     } catch (e) {
