@@ -1,4 +1,5 @@
 """FastAPI entry — lifespan wires DB, LangGraph checkpointer, execution stream hub."""
+
 from __future__ import annotations
 
 import time
@@ -80,6 +81,7 @@ async def lifespan(app: FastAPI):
     app.state.checkpointer = checkpointer
 
     from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+
     memory_store_pool = build_memory_store_pool(settings.database_url)
     await memory_store_pool.open()
     memory_store = create_memory_store(memory_store_pool)

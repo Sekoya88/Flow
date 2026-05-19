@@ -1,4 +1,5 @@
 """A/B testing: compare two agents head-to-head on a shared golden set."""
+
 from __future__ import annotations
 
 import json
@@ -33,7 +34,8 @@ async def create_ab_test(
     # Verify golden set belongs to workspace
     gs = await repo._pool.fetchrow(
         "SELECT id FROM golden_sets WHERE id=$1 AND workspace_id=$2",
-        body.golden_set_id, ws_id,
+        body.golden_set_id,
+        ws_id,
     )
     if not gs:
         raise HTTPException(status_code=404, detail="golden set not found")
@@ -43,9 +45,12 @@ async def create_ab_test(
         INSERT INTO ab_tests (workspace_id, golden_set_id, agent_a_id, agent_a_version, agent_b_id, agent_b_version, status)
         VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING id
         """,
-        ws_id, body.golden_set_id,
-        body.agent_a_id, body.agent_a_version or None,
-        body.agent_b_id, body.agent_b_version or None,
+        ws_id,
+        body.golden_set_id,
+        body.agent_a_id,
+        body.agent_a_version or None,
+        body.agent_b_id,
+        body.agent_b_version or None,
     )
 
     async def _run():
@@ -117,7 +122,8 @@ async def get_ab_test(
         JOIN golden_sets gs ON gs.id = t.golden_set_id
         WHERE t.id=$1 AND t.workspace_id=$2
         """,
-        test_id, ws_id,
+        test_id,
+        ws_id,
     )
     if not test:
         raise HTTPException(status_code=404, detail="ab test not found")
@@ -165,6 +171,7 @@ async def get_ab_test(
 
 
 # ── Background task ───────────────────────────────────────────────────
+
 
 async def _get_agent_config(pool, agent_id: UUID) -> dict:
     """Return system_prompt + llm_config for an agent via its active genome."""
@@ -224,7 +231,8 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
                     WHERE item_id=$1 AND agent_id=$2 AND actual_output IS NOT NULL
                     ORDER BY created_at DESC LIMIT 1
                     """,
-                    item["id"], agent_id,
+                    item["id"],
+                    agent_id,
                 )
                 if cached:
                     actual_output = cached["actual_output"]
@@ -249,8 +257,12 @@ async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUI
                     INSERT INTO ab_test_results (test_id, golden_item_id, agent_label, score, actual_output, grading_rationale)
                     VALUES ($1,$2,$3,$4,$5,$6)
                     """,
-                    test_id, item["id"], label,
-                    judgment["score"], actual_output, judgment["rationale"],
+                    test_id,
+                    item["id"],
+                    label,
+                    judgment["score"],
+                    actual_output,
+                    judgment["rationale"],
                 )
 
         await pool.execute("UPDATE ab_tests SET status='completed' WHERE id=$1", test_id)

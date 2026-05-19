@@ -1,4 +1,5 @@
 """File-handling tools: file_read, pdf_extract."""
+
 from __future__ import annotations
 
 
@@ -50,9 +51,7 @@ async def run_pdf_extract(path: str) -> dict:
     full_text = "\n".join(text_blocks)
     # Detect section headings: lines that are short, title-cased or ALL-CAPS
     sections = [
-        ln.strip()
-        for ln in full_text.splitlines()
-        if ln.strip() and len(ln.strip()) < 120 and (ln.strip().istitle() or ln.strip().isupper())
+        ln.strip() for ln in full_text.splitlines() if ln.strip() and len(ln.strip()) < 120 and (ln.strip().istitle() or ln.strip().isupper())
     ][:50]
 
     return {

@@ -77,10 +77,7 @@ def _parse_prefs(content: str) -> list[dict[str, str]]:
     return [
         {"class": item["class"], "value": item["value"]}
         for item in data
-        if isinstance(item, dict)
-        and item.get("class") in _VALID_CLASSES
-        and item.get("value")
-        and isinstance(item["value"], str)
+        if isinstance(item, dict) and item.get("class") in _VALID_CLASSES and item.get("value") and isinstance(item["value"], str)
     ]
 
 

@@ -8,6 +8,7 @@ Design matches prompt_rewriter.py:
   2. Changelog + confidence output for proposal review.
   3. JSON response format for deterministic parsing.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SkillRewriteResult:
     """Output of the skill rewriter."""
+
     original_content_md: str
     improved_content_md: str
     changelog: list[str]
@@ -74,13 +76,14 @@ def _split_frontmatter(content_md: str) -> tuple[str, str]:
     close = rest.find("---")
     if close == -1:
         return "", content_md
-    front = content_md[:after_open + close + 3]
-    body = content_md[after_open + close + 3:].lstrip("\n")
+    front = content_md[: after_open + close + 3]
+    body = content_md[after_open + close + 3 :].lstrip("\n")
     return front, body
 
 
 def _bump_version_in_frontmatter(frontmatter: str) -> str:
     """Increment version string inside YAML frontmatter."""
+
     def _inc(m: re.Match) -> str:
         parts = m.group(1).split(".")
         try:
@@ -119,7 +122,7 @@ async def rewrite_skill(
 
     sorted_failures = sorted(failed_items, key=lambda x: x.score)[:max_failures]
     failures_text = "\n\n".join(
-        f"--- FAILURE {i+1} (score: {f.score:.2f}) ---\n"
+        f"--- FAILURE {i + 1} (score: {f.score:.2f}) ---\n"
         f"Input: {f.input_text[:500]}\n"
         f"Expected: {f.expected_output[:500]}\n"
         f"Actual: {f.actual_output[:500]}\n"

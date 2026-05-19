@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class KGIngestObsidianIn(BaseModel):
     workspace_id: UUID
     base_url: str
@@ -26,6 +27,7 @@ class KGQueryIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class KGNodeOut(BaseModel):
     id: str

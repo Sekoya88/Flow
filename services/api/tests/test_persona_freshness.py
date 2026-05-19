@@ -1,4 +1,5 @@
 """Tests for persona_freshness.mark_stale_personas."""
+
 from __future__ import annotations
 
 import json

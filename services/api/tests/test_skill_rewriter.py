@@ -1,4 +1,5 @@
 """Tests for skill_rewriter.py — frontmatter preservation, version bump, LLM fallback."""
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ Write a structured research report.
 
 # ── Unit: frontmatter helpers ────────────────────────────────────────────────
 
+
 def test_split_frontmatter_returns_front_and_body():
     front, body = _split_frontmatter(_SKILL_MD)
     assert "version: '1.2'" in front
@@ -59,6 +61,7 @@ def test_bump_version_handles_integer_version():
 
 # ── rewrite_skill: happy path ────────────────────────────────────────────────
 
+
 def _fake_llm_response(content: str) -> MagicMock:
     resp = MagicMock()
     resp.choices[0].message.content = content
@@ -68,17 +71,17 @@ def _fake_llm_response(content: str) -> MagicMock:
 @pytest.mark.asyncio
 async def test_rewrite_skill_returns_improved_content():
     new_body = "## Instructions\nWrite a well-structured, comprehensive report."
-    llm_payload = json.dumps({
-        "failure_analysis": "Reports lacked depth.",
-        "changelog": ["Added depth guidance"],
-        "improved_body_md": new_body,
-        "confidence": 0.85,
-    })
+    llm_payload = json.dumps(
+        {
+            "failure_analysis": "Reports lacked depth.",
+            "changelog": ["Added depth guidance"],
+            "improved_body_md": new_body,
+            "confidence": 0.85,
+        }
+    )
 
     mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=_fake_llm_response(llm_payload)
-    )
+    mock_client.chat.completions.create = AsyncMock(return_value=_fake_llm_response(llm_payload))
 
     failed = [FailedItem("What is X?", "X is Y.", "X.", 0.3, "Too short")]
     result = await rewrite_skill(_SKILL_MD, failed, client=mock_client)
@@ -87,23 +90,23 @@ async def test_rewrite_skill_returns_improved_content():
     assert result.confidence == 0.85
     assert "Added depth guidance" in result.changelog
     assert "research-report" in result.improved_content_md  # frontmatter preserved
-    assert "version: '1.3'" in result.improved_content_md   # version bumped
+    assert "version: '1.3'" in result.improved_content_md  # version bumped
     assert new_body.strip() in result.improved_content_md
 
 
 @pytest.mark.asyncio
 async def test_rewrite_skill_preserves_frontmatter_intact():
     new_body = "New body content."
-    llm_payload = json.dumps({
-        "failure_analysis": "Something failed.",
-        "changelog": ["Fix"],
-        "improved_body_md": new_body,
-        "confidence": 0.7,
-    })
-    mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=_fake_llm_response(llm_payload)
+    llm_payload = json.dumps(
+        {
+            "failure_analysis": "Something failed.",
+            "changelog": ["Fix"],
+            "improved_body_md": new_body,
+            "confidence": 0.7,
+        }
     )
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=_fake_llm_response(llm_payload))
 
     failed = [FailedItem("Q", "A", "wrong", 0.2, "bad")]
     result = await rewrite_skill(_SKILL_MD, failed, client=mock_client)
@@ -116,9 +119,7 @@ async def test_rewrite_skill_preserves_frontmatter_intact():
 @pytest.mark.asyncio
 async def test_rewrite_skill_json_parse_error_returns_no_change():
     mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=_fake_llm_response("not json at all")
-    )
+    mock_client.chat.completions.create = AsyncMock(return_value=_fake_llm_response("not json at all"))
 
     failed = [FailedItem("Q", "A", "wrong", 0.1, "bad")]
     result = await rewrite_skill(_SKILL_MD, failed, client=mock_client)
@@ -143,16 +144,16 @@ async def test_rewrite_skill_llm_exception_returns_no_change():
 @pytest.mark.asyncio
 async def test_rewrite_skill_limits_failures_to_max():
     new_body = "Better body."
-    llm_payload = json.dumps({
-        "failure_analysis": "analysis",
-        "changelog": ["c"],
-        "improved_body_md": new_body,
-        "confidence": 0.8,
-    })
-    mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=_fake_llm_response(llm_payload)
+    llm_payload = json.dumps(
+        {
+            "failure_analysis": "analysis",
+            "changelog": ["c"],
+            "improved_body_md": new_body,
+            "confidence": 0.8,
+        }
     )
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=_fake_llm_response(llm_payload))
 
     # Send 10 failures but max_failures=3
     failed = [FailedItem(f"Q{i}", "A", "wrong", 0.1 * i, "bad") for i in range(10)]

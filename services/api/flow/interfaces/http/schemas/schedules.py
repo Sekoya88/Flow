@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class ScheduleCreateIn(BaseModel):
     workspace_id: UUID
     agent_id: UUID
@@ -24,6 +25,7 @@ class ScheduleToggleIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class ScheduleOut(BaseModel):
     id: UUID

@@ -2,6 +2,7 @@
 
 The actual node logic lives in nodes.py; template topology in spec.py.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

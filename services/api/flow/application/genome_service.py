@@ -52,21 +52,22 @@ async def snapshot_genome(
     async with pool.acquire() as conn:
         agent_row = await conn.fetchrow(
             "SELECT config, template FROM agents WHERE id = $1 AND workspace_id = $2",
-            agent_id, workspace_id,
+            agent_id,
+            workspace_id,
         )
         if agent_row is None:
             raise ValueError(f"Agent {agent_id} not found in workspace {workspace_id}")
 
         skill_rows = await conn.fetch(
-            "SELECT id, name FROM agent_skills "
-            "WHERE agent_id = $1 AND workspace_id = $2 AND active = true "
-            "ORDER BY score DESC",
-            agent_id, workspace_id,
+            "SELECT id, name FROM agent_skills WHERE agent_id = $1 AND workspace_id = $2 AND active = true ORDER BY score DESC",
+            agent_id,
+            workspace_id,
         )
 
         raw_config = agent_row["config"]
         if isinstance(raw_config, str):
             import json as _json
+
             config = _json.loads(raw_config)
         elif raw_config:
             config = dict(raw_config)
@@ -103,8 +104,7 @@ async def snapshot_genome(
 
     logger.info(
         "genome.snapshot",
-        extra={"agent_id": str(agent_id), "version_label": label,
-               "trigger": trigger.value, "status": status.value},
+        extra={"agent_id": str(agent_id), "version_label": label, "trigger": trigger.value, "status": status.value},
     )
     return version_id
 
@@ -128,12 +128,13 @@ async def activate_genome(
                 "UPDATE agent_versions SET status = 'archived' "
                 "WHERE agent_id = $1 AND status = 'active' "
                 "AND EXISTS (SELECT 1 FROM agents WHERE id = $1 AND workspace_id = $2)",
-                agent_id, workspace_id,
+                agent_id,
+                workspace_id,
             )
             row = await conn.fetchrow(
-                "UPDATE agent_versions SET status = 'active' "
-                "WHERE id = $1 AND agent_id = $2 RETURNING config_snapshot, template",
-                version_id, agent_id,
+                "UPDATE agent_versions SET status = 'active' WHERE id = $1 AND agent_id = $2 RETURNING config_snapshot, template",
+                version_id,
+                agent_id,
             )
             if row is None:
                 raise ValueError(f"Version {version_id} not found")
@@ -153,19 +154,18 @@ async def activate_genome(
 
     try:
         row = await pool.fetchrow(
-            "SELECT id, version_label, config_snapshot, status FROM agent_versions "
-            "WHERE id = $1",
+            "SELECT id, version_label, config_snapshot, status FROM agent_versions WHERE id = $1",
             version_id,
         )
         # Find the most-recently archived version (was active before this activation)
         prev_row = await pool.fetchrow(
-            "SELECT id FROM agent_versions "
-            "WHERE agent_id = $1 AND status = 'archived' AND id != $2 "
-            "ORDER BY created_at DESC LIMIT 1",
-            agent_id, version_id,
+            "SELECT id FROM agent_versions WHERE agent_id = $1 AND status = 'archived' AND id != $2 ORDER BY created_at DESC LIMIT 1",
+            agent_id,
+            version_id,
         )
         if row is not None:
             import json as _json
+
             config = row["config_snapshot"]
             if isinstance(config, str):
                 config = _json.loads(config)
@@ -201,7 +201,8 @@ async def load_genome(
     """Reconstruct an AgentGenome from a persisted agent_versions row."""
     row = await pool.fetchrow(
         "SELECT * FROM agent_versions WHERE id = $1 AND agent_id = $2",
-        version_id, agent_id,
+        version_id,
+        agent_id,
     )
     if row is None:
         raise ValueError(f"Version {version_id} not found for agent {agent_id}")
@@ -214,8 +215,7 @@ async def get_active_genome(
 ) -> AgentGenome | None:
     """Get the current ACTIVE version for an agent, or None if none exists."""
     row = await pool.fetchrow(
-        "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'active' "
-        "ORDER BY created_at DESC LIMIT 1",
+        "SELECT * FROM agent_versions WHERE agent_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1",
         agent_id,
     )
     return _row_to_genome(row) if row else None
@@ -233,9 +233,7 @@ async def rollback_genome(
     """
     async with pool.acquire() as conn:
         prev = await conn.fetchrow(
-            "SELECT id FROM agent_versions "
-            "WHERE agent_id = $1 AND status = 'archived' "
-            "ORDER BY created_at DESC LIMIT 1",
+            "SELECT id FROM agent_versions WHERE agent_id = $1 AND status = 'archived' ORDER BY created_at DESC LIMIT 1",
             agent_id,
         )
         if prev is None:
@@ -271,8 +269,7 @@ async def _maybe_snapshot_eval_pass(
         if avg_score <= active.avg_score + _SCORE_EPSILON:
             logger.debug(
                 "genome.eval_pass.no_improvement",
-                extra={"agent_id": str(agent_id),
-                       "new_score": avg_score, "current_score": active.avg_score},
+                extra={"agent_id": str(agent_id), "new_score": avg_score, "current_score": active.avg_score},
             )
             return None
 
@@ -307,10 +304,7 @@ async def _create_genome_proposal(
 
     effective_user_id = user_id
     if effective_user_id is None:
-        raise ValueError(
-            f"Cannot create genome proposal for workspace {workspace_id}: "
-            "no user_id provided and workspace has no owner"
-        )
+        raise ValueError(f"Cannot create genome proposal for workspace {workspace_id}: no user_id provided and workspace has no owner")
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -319,18 +313,22 @@ async def _create_genome_proposal(
                 INSERT INTO proposals (id, workspace_id, user_id, title, body, status)
                 VALUES ($1, $2, $3, $4, $5, 'pending')
                 """,
-                proposal_id, workspace_id, effective_user_id, title, body,
+                proposal_id,
+                workspace_id,
+                effective_user_id,
+                title,
+                body,
             )
 
             await conn.execute(
                 "UPDATE agent_versions SET proposal_id = $1 WHERE id = $2",
-                proposal_id, candidate_version_id,
+                proposal_id,
+                candidate_version_id,
             )
 
     logger.info(
         "genome.proposal.created",
-        extra={"proposal_id": str(proposal_id),
-               "candidate_version_id": str(candidate_version_id)},
+        extra={"proposal_id": str(proposal_id), "candidate_version_id": str(candidate_version_id)},
     )
     return proposal_id
 
@@ -339,10 +337,10 @@ async def _create_genome_proposal(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _row_to_genome(row: asyncpg.Record) -> AgentGenome:
     """Convert a raw agent_versions DB row to an AgentGenome dataclass."""
     import json
-
 
     config = row["config_snapshot"]
     if isinstance(config, str):
@@ -352,21 +350,23 @@ def _row_to_genome(row: asyncpg.Record) -> AgentGenome:
     genome_meta = config.get("_genome") or {}
     llm_raw = config.get("llm_config") or config.get("model") or {}
 
-    return AgentGenome.from_row({
-        "id": row["id"],
-        "agent_id": row["agent_id"],
-        "version_label": row["version_label"],
-        "template": row.get("template") or config.get("template", "deer_flow"),
-        "system_prompt": config.get("system_prompt", ""),
-        "llm_config": llm_raw,
-        "tools": config.get("tools", {}),
-        "active_skill_ids": [str(r) for r in (genome_meta.get("active_skill_ids") or [])],
-        "active_skill_names": genome_meta.get("active_skill_names", []),
-        "status": row.get("status", "active"),
-        "trigger": row.get("trigger", "manual"),
-        "created_by": row.get("created_by"),
-        "created_at": row.get("created_at"),
-        "avg_score": row.get("avg_score"),
-        "pass_rate": row.get("pass_rate"),
-        "proposal_id": row.get("proposal_id"),
-    })
+    return AgentGenome.from_row(
+        {
+            "id": row["id"],
+            "agent_id": row["agent_id"],
+            "version_label": row["version_label"],
+            "template": row.get("template") or config.get("template", "deer_flow"),
+            "system_prompt": config.get("system_prompt", ""),
+            "llm_config": llm_raw,
+            "tools": config.get("tools", {}),
+            "active_skill_ids": [str(r) for r in (genome_meta.get("active_skill_ids") or [])],
+            "active_skill_names": genome_meta.get("active_skill_names", []),
+            "status": row.get("status", "active"),
+            "trigger": row.get("trigger", "manual"),
+            "created_by": row.get("created_by"),
+            "created_at": row.get("created_at"),
+            "avg_score": row.get("avg_score"),
+            "pass_rate": row.get("pass_rate"),
+            "proposal_id": row.get("proposal_id"),
+        }
+    )

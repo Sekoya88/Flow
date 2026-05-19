@@ -1,4 +1,5 @@
 """Observability logs: rich execution history with event summaries + LangSmith status."""
+
 from __future__ import annotations
 
 import os
@@ -18,11 +19,7 @@ router = APIRouter(prefix="/api/v1/logs", tags=["logs"])
 async def observability_status() -> dict:
     """Return LangSmith connection status and config for the frontend banner."""
     settings = get_settings()
-    api_key = (
-        (settings.langsmith_api_key or "").strip()
-        or os.getenv("LANGSMITH_API_KEY", "").strip()
-        or os.getenv("LANGCHAIN_API_KEY", "").strip()
-    )
+    api_key = (settings.langsmith_api_key or "").strip() or os.getenv("LANGSMITH_API_KEY", "").strip() or os.getenv("LANGCHAIN_API_KEY", "").strip()
     enabled = bool(api_key) and settings.langsmith_tracing
     project = settings.langsmith_project or "flow-local"
     trace_url = f"https://smith.langchain.com/o/projects?filter=eq(name%2C%22{project}%22)" if enabled else None
@@ -121,6 +118,7 @@ async def get_log_detail(
     row = await repo.get_execution_for_user(execution_id, user_id)
     if not row:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="execution not found")
 
     events = await repo.list_events(execution_id)

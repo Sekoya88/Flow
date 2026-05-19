@@ -14,6 +14,7 @@ Manual mode (default, threshold=NULL):
   eval failure → root-cause analysis → prompt rewrite → candidate genome
   → proposal to promote → human approval → activate
 """
+
 from __future__ import annotations
 
 import logging
@@ -54,6 +55,7 @@ async def maybe_spawn_proposal(
     title = "Flow curator: improve recent run"
     if openai_api_key:
         from flow.infrastructure.llm.providers import get_chat_model
+
         llm = get_chat_model(
             {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
             fallback_api_keys={"openai": openai_api_key},
@@ -66,9 +68,7 @@ async def maybe_spawn_proposal(
                         "(prompt tweak, new knowledge to upload, or a skill). Max 120 words."
                     )
                 ),
-                HumanMessage(
-                    content=f"execution_id={execution_id} score={score}. Write the proposal body."
-                ),
+                HumanMessage(content=f"execution_id={execution_id} score={score}. Write the proposal body."),
             ]
         )
         body = str(out.content)
@@ -77,9 +77,7 @@ async def maybe_spawn_proposal(
             "Low execution score without LLM. Consider adding OPENAI_API_KEY, "
             "uploading knowledge sources, or tightening the user goal in the first message."
         )
-    return await repo.create_proposal(
-        workspace_id, user_id, title, body, execution_id=execution_id
-    )
+    return await repo.create_proposal(workspace_id, user_id, title, body, execution_id=execution_id)
 
 
 async def _get_agent_auto_threshold(pool, agent_id: UUID) -> tuple[float | None, float]:
@@ -125,8 +123,11 @@ async def _auto_activate_candidate(
         INSERT INTO proposals (id, workspace_id, user_id, title, body, status, auto_approved)
         VALUES ($1, $2, $3, $4, $5, 'approved', TRUE)
         """,
-        audit_id, workspace_id, user_id,
-        f"[Auto-approved] {title}", body,
+        audit_id,
+        workspace_id,
+        user_id,
+        f"[Auto-approved] {title}",
+        body,
     )
     logger.info(
         "curator.auto_activated",
@@ -160,6 +161,7 @@ async def check_regression_and_propose(
     Returns a dict with rewrite info, or None if no action taken.
     """
     from flow.infrastructure.persistence.repo import FlowRepository
+
     repo = FlowRepository(pool)
 
     auto_threshold, _rollback_delta = await _get_agent_auto_threshold(pool, agent_id)
@@ -169,10 +171,7 @@ async def check_regression_and_propose(
     # 1. Basic regression alert (manual mode only — no alert spam in auto mode)
     if new_avg_score < 0.7 and auto_threshold is None:
         title = "Regression Alert: Golden Set Score Drop"
-        body = (
-            f"The agent scored {new_avg_score:.2f} on golden set {golden_set_id}. "
-            "This is below the 0.7 threshold. Please review the failed items."
-        )
+        body = f"The agent scored {new_avg_score:.2f} on golden set {golden_set_id}. This is below the 0.7 threshold. Please review the failed items."
         await repo.create_proposal(workspace_id, user_id, title, body)
 
     # 2. Autonomous Prompt Rewrite (the self-improvement loop)
@@ -222,18 +221,12 @@ async def check_regression_and_propose(
                 title = f"Auto-improvement: {len(failed_items)} failures fixed (confidence: {confidence:.0%})"
                 body = (
                     f"**Failure Analysis:** {analysis}\n\n"
-                    f"**Changes Applied:**\n" +
-                    "\n".join(f"- {c}" for c in changelog) +
-                    f"\n\n**Candidate Version:** `{candidate_id}`\n"
+                    f"**Changes Applied:**\n" + "\n".join(f"- {c}" for c in changelog) + f"\n\n**Candidate Version:** `{candidate_id}`\n"
                     f"**Confidence:** {confidence:.0%}"
                 )
 
                 # Autonomous mode: skip proposal, activate directly
-                if (
-                    auto_threshold is not None
-                    and confidence >= 0.5
-                    and confidence >= auto_threshold
-                ):
+                if auto_threshold is not None and confidence >= 0.5 and confidence >= auto_threshold:
                     await _auto_activate_candidate(
                         pool=pool,
                         candidate_id=candidate_id,
@@ -248,6 +241,7 @@ async def check_regression_and_propose(
                     from uuid import UUID as _UUID
 
                     from flow.application.genome_service import _create_genome_proposal
+
                     await _create_genome_proposal(
                         pool=pool,
                         workspace_id=workspace_id,
@@ -275,6 +269,7 @@ async def check_regression_and_propose(
     # 3. Fallback: LLM-generated textual suggestion for the worst failure
     if failed_items and openai_api_key:
         from flow.infrastructure.llm.providers import get_chat_model
+
         llm = get_chat_model(
             {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2},
             fallback_api_keys={"openai": openai_api_key},
@@ -292,9 +287,7 @@ async def check_regression_and_propose(
                             "Keep it concise. Start directly with the proposed fix."
                         )
                     ),
-                    HumanMessage(
-                        content=f"Question: {worst['input_text']}\nScore: {worst['score']}\nRationale: {worst['rationale']}"
-                    ),
+                    HumanMessage(content=f"Question: {worst['input_text']}\nScore: {worst['score']}\nRationale: {worst['rationale']}"),
                 ]
             )
 

@@ -47,7 +47,8 @@ async def rename_workspace(
         raise HTTPException(status_code=400, detail="name cannot be empty")
     await repo._pool.execute(
         "UPDATE workspaces SET name = $1 WHERE id = $2",
-        name, workspace_id,
+        name,
+        workspace_id,
     )
     return {"id": str(workspace_id), "name": name}
 
@@ -60,22 +61,14 @@ async def workspace_stats(
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
     pool = repo._pool
-    agent_count = await pool.fetchval(
-        "SELECT COUNT(*) FROM agents WHERE workspace_id = $1", workspace_id
-    )
+    agent_count = await pool.fetchval("SELECT COUNT(*) FROM agents WHERE workspace_id = $1", workspace_id)
     skill_count = await pool.fetchval(
         "SELECT COUNT(*) FROM agent_skills WHERE workspace_id = $1 AND active = TRUE",
         workspace_id,
     )
-    execution_count = await pool.fetchval(
-        "SELECT COUNT(*) FROM executions WHERE workspace_id = $1", workspace_id
-    )
-    member_count = await pool.fetchval(
-        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1", workspace_id
-    )
-    ws_row = await pool.fetchrow(
-        "SELECT name FROM workspaces WHERE id = $1", workspace_id
-    )
+    execution_count = await pool.fetchval("SELECT COUNT(*) FROM executions WHERE workspace_id = $1", workspace_id)
+    member_count = await pool.fetchval("SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1", workspace_id)
+    ws_row = await pool.fetchrow("SELECT name FROM workspaces WHERE id = $1", workspace_id)
     return {
         "id": str(workspace_id),
         "name": ws_row["name"] if ws_row else "",
@@ -121,12 +114,7 @@ async def list_members(
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
     members = await repo.list_workspace_members(workspace_id)
-    return {
-        "members": [
-            {"user_id": str(m["id"]), "email": m["email"], "role": m["role"]}
-            for m in members
-        ]
-    }
+    return {"members": [{"user_id": str(m["id"]), "email": m["email"], "role": m["role"]} for m in members]}
 
 
 @router.post("/{workspace_id}/members", status_code=status.HTTP_201_CREATED)

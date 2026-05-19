@@ -40,6 +40,7 @@ def _format_memory_block(facts: list, patterns: list) -> str:
 def _format_profile_block(rows: list) -> str | None:
     """Build [User Preferences] system message from active/provisional rows."""
     from collections import defaultdict
+
     by_class: dict[str, list] = defaultdict(list)
 
     for row in rows:
@@ -93,14 +94,12 @@ class FlowMemoryMiddleware(AgentMiddleware):
             return state
 
         self._stashed_question = next(
-            (getattr(m, "content", "") for m in messages
-             if not isinstance(m, (AIMessage, SystemMessage))),
+            (getattr(m, "content", "") for m in messages if not isinstance(m, (AIMessage, SystemMessage))),
             "",
         )
 
         query = next(
-            (getattr(m, "content", "") for m in reversed(messages)
-             if not isinstance(m, (AIMessage, SystemMessage))),
+            (getattr(m, "content", "") for m in reversed(messages) if not isinstance(m, (AIMessage, SystemMessage))),
             "",
         )[:200]
 
@@ -110,10 +109,9 @@ class FlowMemoryMiddleware(AgentMiddleware):
         if self._pool:
             try:
                 from flow.infrastructure.persistence.repo import FlowRepository
+
                 repo = FlowRepository(self._pool)
-                profile_rows = await repo.load_profile(
-                    runtime.workspace_id, runtime.user_id, runtime.agent_id
-                )
+                profile_rows = await repo.load_profile(runtime.workspace_id, runtime.user_id, runtime.agent_id)
                 block = _format_profile_block(profile_rows)
                 if block:
                     prepend.append(SystemMessage(content=block))
@@ -141,8 +139,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
 
         messages = state.get("messages", [])
         answer = state.get("answer") or next(
-            (getattr(m, "content", "") for m in reversed(messages)
-             if isinstance(m, AIMessage)),
+            (getattr(m, "content", "") for m in reversed(messages) if isinstance(m, AIMessage)),
             "",
         )
         question = self._stashed_question
@@ -164,13 +161,16 @@ class FlowMemoryMiddleware(AgentMiddleware):
         if self._pool:
             try:
                 from flow.infrastructure.persistence.repo import FlowRepository
+
                 conversation = f"Q: {question}\nA: {answer}"
                 prefs = await extract_preferences(self._llm, conversation)
                 repo = FlowRepository(self._pool)
                 for pref in prefs:
                     row = await repo.upsert_typed_preference(
-                        runtime.workspace_id, runtime.user_id,
-                        pref["class"], pref["value"],
+                        runtime.workspace_id,
+                        runtime.user_id,
+                        pref["class"],
+                        pref["value"],
                         runtime.agent_id,
                     )
                     new_status = auto_graduate(dict(row))
@@ -189,8 +189,6 @@ class FlowMemoryMiddleware(AgentMiddleware):
             if pattern:
                 problem, solution = pattern
                 ns_pat = (runtime.workspace_id, runtime.agent_id, "patterns")
-                await self._store.aput(
-                    ns_pat, _stable_key(problem), {"problem": problem, "solution": solution}
-                )
+                await self._store.aput(ns_pat, _stable_key(problem), {"problem": problem, "solution": solution})
         except Exception as exc:
             logger.warning("memory.after_agent.pattern_failed", error=str(exc))

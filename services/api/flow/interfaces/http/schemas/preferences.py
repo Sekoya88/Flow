@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class PreferenceUpsertIn(BaseModel):
     key: str = Field(min_length=1, max_length=120)
     value: dict
@@ -38,6 +39,7 @@ class OnboardingAnswersIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class PreferenceOut(BaseModel):
     id: UUID

@@ -8,11 +8,13 @@ from pydantic import BaseModel
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class SnapshotCreateIn(BaseModel):
     version_label: str
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class AgentVersionOut(BaseModel):
     id: UUID

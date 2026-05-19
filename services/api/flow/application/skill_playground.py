@@ -4,6 +4,7 @@ Powers the Skills Hub's "test against a prompt" surface. Deliberately bypasses
 LangGraph, the checkpointer, and the executions table — test runs are isolated
 and don't pollute history, memory, or KG ingestion.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -19,6 +20,7 @@ def _build_skill_llm(settings: Any) -> Any | None:
     if getattr(settings, "anthropic_api_key", None):
         try:
             from langchain_anthropic import ChatAnthropic
+
             return ChatAnthropic(
                 model="claude-haiku-4-5-20251001",
                 api_key=settings.anthropic_api_key,
@@ -29,6 +31,7 @@ def _build_skill_llm(settings: Any) -> Any | None:
     if getattr(settings, "openai_api_key", None):
         try:
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
                 model="gpt-4o-mini",
                 api_key=settings.openai_api_key,
@@ -75,10 +78,7 @@ async def run_skill_test(
             text = getattr(chunk, "content", "") or ""
             if isinstance(text, list):
                 # Anthropic streaming sometimes emits structured blocks
-                text = "".join(
-                    (b.get("text", "") if isinstance(b, dict) else str(b))
-                    for b in text
-                )
+                text = "".join((b.get("text", "") if isinstance(b, dict) else str(b)) for b in text)
             text = str(text)
             if text:
                 yield text

@@ -1,4 +1,5 @@
 """Tests for the prompt rewriter — the core of the self-improvement loop."""
+
 from __future__ import annotations
 
 import json
@@ -19,13 +20,15 @@ def _make_failed_items(n=3) -> list[FailedItem]:
     """Build sample failed items for testing."""
     items = []
     for i in range(n):
-        items.append(FailedItem(
-            input_text=f"Test question {i+1}: What is topic {i+1}?",
-            expected_output=f"A detailed answer about topic {i+1}",
-            actual_output=f"Brief answer about topic {i+1}",
-            score=0.3 + i * 0.1,
-            rationale=f"Answer was too brief, missing key details about topic {i+1}",
-        ))
+        items.append(
+            FailedItem(
+                input_text=f"Test question {i + 1}: What is topic {i + 1}?",
+                expected_output=f"A detailed answer about topic {i + 1}",
+                actual_output=f"Brief answer about topic {i + 1}",
+                score=0.3 + i * 0.1,
+                rationale=f"Answer was too brief, missing key details about topic {i + 1}",
+            )
+        )
     return items
 
 
@@ -41,9 +44,7 @@ def _mock_openai_response(improved_prompt: str, confidence: float = 0.85):
         "confidence": confidence,
     }
     mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content=json.dumps(resp_data)))
-    ]
+    mock_response.choices = [MagicMock(message=MagicMock(content=json.dumps(resp_data)))]
     return mock_response
 
 
@@ -54,9 +55,7 @@ async def test_rewrite_prompt_returns_improved_prompt():
     improved = "You are a helpful and detailed assistant. Always provide comprehensive answers."
 
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(
-        return_value=_mock_openai_response(improved)
-    )
+    client.chat.completions.create = AsyncMock(return_value=_mock_openai_response(improved))
 
     result = await rewrite_prompt(
         current_prompt=original,
@@ -77,9 +76,7 @@ async def test_rewrite_prompt_handles_json_parse_error():
     """should fallback gracefully when LLM returns invalid JSON"""
     client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content="This is not JSON at all"))
-    ]
+    mock_response.choices = [MagicMock(message=MagicMock(content="This is not JSON at all"))]
     client.chat.completions.create = AsyncMock(return_value=mock_response)
 
     result = await rewrite_prompt(
@@ -114,9 +111,7 @@ async def test_rewrite_prompt_handles_api_error():
 async def test_rewrite_prompt_limits_failures():
     """should only send max_failures items to the LLM"""
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(
-        return_value=_mock_openai_response("improved prompt", 0.9)
-    )
+    client.chat.completions.create = AsyncMock(return_value=_mock_openai_response("improved prompt", 0.9))
 
     await rewrite_prompt(
         current_prompt="test",
@@ -145,9 +140,7 @@ async def test_rewrite_prompt_sorts_by_worst_score():
     ]
 
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(
-        return_value=_mock_openai_response("improved", 0.8)
-    )
+    client.chat.completions.create = AsyncMock(return_value=_mock_openai_response("improved", 0.8))
 
     await rewrite_prompt(
         current_prompt="test",
@@ -186,19 +179,22 @@ async def test_rewrite_and_snapshot_creates_candidate_genome():
 
     new_version_id = uuid4()
 
-    with patch(
-        "flow.application.prompt_rewriter.rewrite_prompt",
-        return_value=RewriteResult(
-            original_prompt="You are helpful.",
-            improved_prompt="You are helpful. Always be detailed.",
-            changelog=["Added detail instruction"],
-            failure_analysis="Responses too brief",
-            confidence=0.85,
+    with (
+        patch(
+            "flow.application.prompt_rewriter.rewrite_prompt",
+            return_value=RewriteResult(
+                original_prompt="You are helpful.",
+                improved_prompt="You are helpful. Always be detailed.",
+                changelog=["Added detail instruction"],
+                failure_analysis="Responses too brief",
+                confidence=0.85,
+            ),
         ),
-    ), patch(
-        "flow.application.genome_service.snapshot_genome",
-        return_value=new_version_id,
-    ) as mock_snap:
+        patch(
+            "flow.application.genome_service.snapshot_genome",
+            return_value=new_version_id,
+        ) as mock_snap,
+    ):
         result = await rewrite_and_snapshot(
             pool=pool,
             agent_id=agent_id,
@@ -216,6 +212,7 @@ async def test_rewrite_and_snapshot_creates_candidate_genome():
     mock_snap.assert_called_once()
     # Check it was created as CANDIDATE
     from flow.domain.genome import VersionStatus
+
     assert mock_snap.call_args.kwargs["status"] == VersionStatus.CANDIDATE
 
 
@@ -315,9 +312,7 @@ async def test_rewrite_prompt_handles_markdown_wrapped_json():
         "confidence": 0.7,
     }
     mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content=f"```json\n{json.dumps(resp_data)}\n```"))
-    ]
+    mock_response.choices = [MagicMock(message=MagicMock(content=f"```json\n{json.dumps(resp_data)}\n```"))]
     client.chat.completions.create = AsyncMock(return_value=mock_response)
 
     result = await rewrite_prompt(
@@ -353,9 +348,10 @@ async def test_rewrite_and_snapshot_restores_on_snapshot_failure():
     pool = MagicMock()
     pool.acquire = MagicMock(return_value=cm)
 
-    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
-         patch("flow.application.genome_service.snapshot_genome", side_effect=RuntimeError("db down")):
-
+    with (
+        patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite,
+        patch("flow.application.genome_service.snapshot_genome", side_effect=RuntimeError("db down")),
+    ):
         mock_rewrite.return_value = RewriteResult(
             original_prompt=original_prompt,
             improved_prompt="improved prompt text",
@@ -403,9 +399,10 @@ async def test_rewrite_and_snapshot_returns_candidate_on_success():
     pool = MagicMock()
     pool.acquire = MagicMock(return_value=cm)
 
-    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
-         patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid):
-
+    with (
+        patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite,
+        patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid),
+    ):
         mock_rewrite.return_value = RewriteResult(
             original_prompt=original_prompt,
             improved_prompt="improved prompt text",

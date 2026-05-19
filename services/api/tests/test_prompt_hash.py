@@ -1,4 +1,5 @@
 """Tests for byte-stable prompt hashing."""
+
 from __future__ import annotations
 
 from langchain_core.messages import SystemMessage

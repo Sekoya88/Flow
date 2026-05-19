@@ -60,9 +60,7 @@ class TestExtractPreferences:
     @pytest.mark.asyncio
     async def test_returns_list_of_class_value_dicts(self):
         llm = AsyncMock()
-        llm.ainvoke.return_value = MagicMock(
-            content='[{"class": "tooling", "value": "uses Python"}]'
-        )
+        llm.ainvoke.return_value = MagicMock(content='[{"class": "tooling", "value": "uses Python"}]')
         result = await extract_preferences(llm, "Q: use python. A: here is python code")
         assert result == [{"class": "tooling", "value": "uses Python"}]
 
@@ -83,9 +81,7 @@ class TestExtractPreferences:
     @pytest.mark.asyncio
     async def test_filters_invalid_class(self):
         llm = AsyncMock()
-        llm.ainvoke.return_value = MagicMock(
-            content='[{"class": "invalid_class", "value": "something"}, {"class": "style", "value": "concise"}]'
-        )
+        llm.ainvoke.return_value = MagicMock(content='[{"class": "invalid_class", "value": "something"}, {"class": "style", "value": "concise"}]')
         result = await extract_preferences(llm, "text")
         assert len(result) == 1
         assert result[0]["class"] == "style"

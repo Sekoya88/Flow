@@ -4,6 +4,7 @@ Entry points:
 - build_agent_from_ctx(ctx, checkpointer) — routes by template + provider (use this from execution_runner)
 - build_agent(provider, model, api_key, ...) — low-level prebuilt react-agent builder
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -14,8 +15,10 @@ if TYPE_CHECKING:
 
 def _make_model_wrapper(m: Any, inner: Any) -> Any:
     """Build a single wrap_model_call layer. Separate function to capture m+inner correctly."""
+
     async def _wrapper(msgs: Any) -> Any:
         return await m.wrap_model_call(inner, msgs)
+
     return _wrapper
 
 
@@ -43,6 +46,7 @@ def _patch_llm_for_middleware(llm: Any, middleware: list, runtime: Any) -> None:
             if isinstance(result, dict) and result.get("jump_to") == "end":
                 from langchain_core.messages import AIMessage
                 from langchain_core.outputs import ChatGeneration, ChatResult
+
                 return ChatResult(generations=[[ChatGeneration(message=AIMessage(content=""))]])
             elif isinstance(result, list):
                 current = result
@@ -67,6 +71,7 @@ def _get_llm_for_judge(ctx: GraphContext) -> Any | None:
         return None
     try:
         from langchain_openai import ChatOpenAI
+
         return ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0)
     except Exception:
         return None
@@ -80,10 +85,12 @@ def _make_embed_fn(ctx: GraphContext):
             return []
         try:
             from flow.infrastructure.llm import embeddings as emb_svc
+
             results = await emb_svc.embed_texts(api_key=api_key, texts=[text])
             return results[0] if results else []
         except Exception:
             return []
+
     return _embed
 
 
@@ -148,8 +155,7 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
         # Create LLM first so we can patch it before graph compilation
         llm = get_chat_model(
             {"provider": provider, "model": model_name, "temperature": temp},
-            {"openai": api_key if provider == "openai" else None,
-             "anthropic": api_key if provider == "anthropic" else None},
+            {"openai": api_key if provider == "openai" else None, "anthropic": api_key if provider == "anthropic" else None},
         )
         if llm is None:
             return None
@@ -173,9 +179,11 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
         # the hash is invariant to provider-specific transformations.
         if system_prompt:
             from flow.application.prompt_hash import compute_prompt_hash, record_prompt_hash
+
             _ph = compute_prompt_hash(system_prompt)
             if _ph and ctx.pool is not None:
                 import asyncio
+
                 try:
                     loop = asyncio.get_running_loop()
                     loop.create_task(record_prompt_hash(ctx.pool, agent_id=ctx.agent_id, prompt_hash=_ph))
@@ -186,11 +194,16 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
         # so that repeated calls with the same system prompt hit Anthropic's 5-min cache.
         if provider == "anthropic" and system_prompt:
             from langchain_core.messages import SystemMessage
-            system_prompt = SystemMessage(content=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }])
+
+            system_prompt = SystemMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+            )
 
         raw_graph = build_agent(
             provider=provider,
@@ -208,6 +221,7 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
         return FlowMiddlewareHarness(raw_graph, middleware=middleware, runtime=runtime)
 
     from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
+
     return build_deer_flow_graph(ctx, checkpointer=checkpointer)
 
 
@@ -232,10 +246,10 @@ def build_agent(
     """
     if llm is None:
         from flow.infrastructure.llm.providers import get_chat_model
+
         llm = get_chat_model(
             {"provider": provider, "model": model, "temperature": temperature},
-            {"openai": api_key if provider == "openai" else None,
-             "anthropic": api_key if provider == "anthropic" else None},
+            {"openai": api_key if provider == "openai" else None, "anthropic": api_key if provider == "anthropic" else None},
         )
     if llm is None:
         return None

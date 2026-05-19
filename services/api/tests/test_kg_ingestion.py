@@ -22,14 +22,18 @@ async def test_full_ingestion_creates_note_node():
     mock_repo.list_kg_topics.return_value = ["AI", "Engineering"]
     mock_repo.vector_search_kg.return_value = []
 
-    stub_llm = StubChatModel(responses=[
-        '{"entities": ["LangGraph", "agents"]}',
-        '{"topic": "AI"}',
-        "A note about LangGraph framework.",
-    ])
+    stub_llm = StubChatModel(
+        responses=[
+            '{"entities": ["LangGraph", "agents"]}',
+            '{"topic": "AI"}',
+            "A note about LangGraph framework.",
+        ]
+    )
 
-    with patch("flow.application.kg_ingestion_graph.ChatOpenAI", return_value=stub_llm), \
-         patch("flow.application.kg_ingestion_graph.embed_texts", new_callable=AsyncMock) as mock_emb:
+    with (
+        patch("flow.application.kg_ingestion_graph.ChatOpenAI", return_value=stub_llm),
+        patch("flow.application.kg_ingestion_graph.embed_texts", new_callable=AsyncMock) as mock_emb,
+    ):
         mock_emb.return_value = [[0.1] * 1536]
 
         config = IngestionConfig(

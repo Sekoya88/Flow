@@ -4,6 +4,7 @@ Revision ID: 0018
 Revises: 0017
 Create Date: 2026-05-16
 """
+
 from alembic import op
 
 revision = "0018"
@@ -21,10 +22,7 @@ def upgrade() -> None:
             REFERENCES agent_skills(id) ON DELETE SET NULL
         """
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_golden_items_skill "
-        "ON golden_items (skill_id) WHERE skill_id IS NOT NULL"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_golden_items_skill ON golden_items (skill_id) WHERE skill_id IS NOT NULL")
 
     # Per-execution telemetry: which skill matched on which run
     op.execute(
@@ -39,14 +37,8 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX idx_skill_exec_events_skill "
-        "ON skill_execution_events (skill_id, created_at DESC)"
-    )
-    op.execute(
-        "CREATE INDEX idx_skill_exec_events_exec "
-        "ON skill_execution_events (execution_id)"
-    )
+    op.execute("CREATE INDEX idx_skill_exec_events_skill ON skill_execution_events (skill_id, created_at DESC)")
+    op.execute("CREATE INDEX idx_skill_exec_events_exec ON skill_execution_events (execution_id)")
 
 
 def downgrade() -> None:

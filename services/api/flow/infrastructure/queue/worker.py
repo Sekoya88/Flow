@@ -32,6 +32,7 @@ async def startup(ctx: dict) -> None:
     checkpoint_pool = build_checkpoint_pool(settings.database_url)
     await checkpoint_pool.open()
     from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+
     memory_store_pool = build_memory_store_pool(settings.database_url)
     await memory_store_pool.open()
     memory_store = create_memory_store(memory_store_pool)
@@ -70,11 +71,7 @@ async def task_run_deer_execution(
     import structlog
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    template = (
-        agent_config.get("template")
-        or (agent_config.get("graph") or {}).get("template", "unknown")
-        or "unknown"
-    )
+    template = agent_config.get("template") or (agent_config.get("graph") or {}).get("template", "unknown") or "unknown"
     structlog.contextvars.bind_contextvars(
         execution_id=execution_id,
         agent_id=agent_id,
@@ -98,9 +95,7 @@ async def task_run_deer_execution(
             store=ctx.get("memory_store"),
         )
     finally:
-        structlog.contextvars.unbind_contextvars(
-            "execution_id", "agent_id", "workspace_id", "template"
-        )
+        structlog.contextvars.unbind_contextvars("execution_id", "agent_id", "workspace_id", "template")
 
 
 class WorkerSettings:

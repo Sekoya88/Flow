@@ -56,10 +56,12 @@ async def test_index_skill_creates_has_skill_edge():
     agent_id = uuid.uuid4()
 
     # fetchrow called twice: agent lookup + skill upsert
-    conn.fetchrow = AsyncMock(side_effect=[
-        {"id": agent_node_id},   # agent lookup
-        {"id": uuid.uuid4()},    # skill upsert RETURNING id
-    ])
+    conn.fetchrow = AsyncMock(
+        side_effect=[
+            {"id": agent_node_id},  # agent lookup
+            {"id": uuid.uuid4()},  # skill upsert RETURNING id
+        ]
+    )
 
     await index_skill(
         pool,
@@ -89,12 +91,14 @@ async def test_index_genome_creates_prev_version_edge():
     conn.__aenter__ = AsyncMock(return_value=conn)
     conn.__aexit__ = AsyncMock(return_value=False)
     # Calls: agent lookup, genome upsert, prompt upsert, prev genome lookup
-    conn.fetchrow = AsyncMock(side_effect=[
-        {"id": uuid.uuid4()},  # agent node
-        {"id": uuid.uuid4()},  # genome upsert RETURNING
-        {"id": uuid.uuid4()},  # prompt upsert RETURNING
-        {"id": uuid.uuid4()},  # prev genome node
-    ])
+    conn.fetchrow = AsyncMock(
+        side_effect=[
+            {"id": uuid.uuid4()},  # agent node
+            {"id": uuid.uuid4()},  # genome upsert RETURNING
+            {"id": uuid.uuid4()},  # prompt upsert RETURNING
+            {"id": uuid.uuid4()},  # prev genome node
+        ]
+    )
     conn.execute = AsyncMock()
     pool = MagicMock()
     pool.acquire = MagicMock(return_value=conn)
@@ -120,10 +124,12 @@ async def test_index_genome_creates_prev_version_edge():
 async def test_index_execution_idempotent_on_missing_agent():
     """If agent node not yet indexed, execution still inserts without crashing."""
     pool, conn = _make_pool(fetch_row_return=None)
-    conn.fetchrow = AsyncMock(side_effect=[
-        None,            # agent not found — no has_ran edge
-        {"id": uuid.uuid4()},  # execution upsert RETURNING
-    ])
+    conn.fetchrow = AsyncMock(
+        side_effect=[
+            None,  # agent not found — no has_ran edge
+            {"id": uuid.uuid4()},  # execution upsert RETURNING
+        ]
+    )
 
     await index_execution(
         pool,

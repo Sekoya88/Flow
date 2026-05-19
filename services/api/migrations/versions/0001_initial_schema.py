@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-04-27 16:11:26.240779
 
 """
+
 from collections.abc import Sequence
 
 from alembic import op
@@ -145,9 +146,7 @@ def upgrade() -> None:
         """
     )
 
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_agent_memories_lookup ON agent_memories (workspace_id, agent_id, user_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_agent_memories_lookup ON agent_memories (workspace_id, agent_id, user_id)")
 
     op.execute(
         """
@@ -177,9 +176,7 @@ def upgrade() -> None:
         """
     )
 
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_proposals_workspace_status ON proposals (workspace_id, status)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_proposals_workspace_status ON proposals (workspace_id, status)")
 
     # Idempotent column patches (originally in apply_schema post-DDL block)
     op.execute(

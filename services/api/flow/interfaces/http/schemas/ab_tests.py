@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class ABTestCreateIn(BaseModel):
     golden_set_id: UUID
     agent_a_id: UUID
@@ -16,6 +17,7 @@ class ABTestCreateIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class ABTestResultItem(BaseModel):
     item_id: UUID

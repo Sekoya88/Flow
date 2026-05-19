@@ -1,4 +1,5 @@
 """LLM-judge gate for post-run memory extraction."""
+
 from __future__ import annotations
 
 import json
@@ -33,10 +34,9 @@ Answer:
 async def extract_facts_from_answer(llm, question: str, answer: str) -> list[str]:
     """Call LLM to extract atomic facts. Returns [] on any failure."""
     try:
-        prompt = _FACT_EXTRACTION_PROMPT.format(
-            question=question[:500], answer=answer[:2000]
-        )
+        prompt = _FACT_EXTRACTION_PROMPT.format(question=question[:500], answer=answer[:2000])
         from langchain_core.messages import HumanMessage
+
         out = await llm.ainvoke([HumanMessage(content=prompt)])
         raw = str(out.content).strip()
         facts = json.loads(raw)
@@ -56,10 +56,9 @@ async def should_store_pattern(confidence: float, answer_len: int) -> bool:
 async def extract_pattern_summary(llm, question: str, answer: str) -> tuple[str, str] | None:
     """Extract (problem_summary, solution_steps) for ReasoningBank. Returns None on failure."""
     try:
-        prompt = _PATTERN_SUMMARY_PROMPT.format(
-            question=question[:500], answer=answer[:2000]
-        )
+        prompt = _PATTERN_SUMMARY_PROMPT.format(question=question[:500], answer=answer[:2000])
         from langchain_core.messages import HumanMessage
+
         out = await llm.ainvoke([HumanMessage(content=prompt)])
         raw = str(out.content).strip()
         data = json.loads(raw)

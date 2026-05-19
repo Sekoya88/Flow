@@ -1,4 +1,5 @@
 """Tests for the in-memory token-bucket rate limiter."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ import pytest
 from flow.interfaces.http.rate_limit import RateLimiter, TokenBucket
 
 # ── Unit: TokenBucket ────────────────────────────────────────────────────────
+
 
 def test_bucket_allows_up_to_capacity():
     bucket = TokenBucket(capacity=3, rate=0)  # rate=0 — no refill
@@ -35,6 +37,7 @@ def test_bucket_does_not_exceed_capacity():
 
 
 # ── Unit: RateLimiter ────────────────────────────────────────────────────────
+
 
 def test_rate_limiter_allows_within_limit():
     limiter = RateLimiter(requests_per_minute=5)
@@ -72,6 +75,7 @@ def test_rate_limiter_different_routes_independent():
 
 
 # ── Integration: skill_test_rate_limit dependency ────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_skill_test_rate_limit_raises_429():

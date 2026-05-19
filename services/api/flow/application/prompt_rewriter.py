@@ -13,6 +13,7 @@ Design principles (inspired by LangChain deep-agent patterns):
   3. Changelog generation for human review
   4. Idempotent: same inputs → deterministically similar outputs
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FailedItem:
     """A single golden-set item that the agent failed."""
+
     input_text: str
     expected_output: str
     actual_output: str
@@ -39,11 +41,12 @@ class FailedItem:
 @dataclass
 class RewriteResult:
     """Output of the prompt rewriter."""
+
     original_prompt: str
     improved_prompt: str
-    changelog: list[str]          # human-readable list of changes made
-    failure_analysis: str          # structured analysis of what went wrong
-    confidence: float              # 0.0–1.0 — how confident the rewriter is
+    changelog: list[str]  # human-readable list of changes made
+    failure_analysis: str  # structured analysis of what went wrong
+    confidence: float  # 0.0–1.0 — how confident the rewriter is
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -102,7 +105,7 @@ async def rewrite_prompt(
     sorted_failures = sorted(failed_items, key=lambda x: x.score)[:max_failures]
 
     failures_text = "\n\n".join(
-        f"--- FAILURE {i+1} (score: {f.score:.2f}) ---\n"
+        f"--- FAILURE {i + 1} (score: {f.score:.2f}) ---\n"
         f"Input: {f.input_text[:500]}\n"
         f"Expected: {f.expected_output[:500]}\n"
         f"Actual: {f.actual_output[:500]}\n"
@@ -219,12 +222,14 @@ async def rewrite_and_snapshot(
     async with pool.acquire() as conn:
         agent_row = await conn.fetchrow(
             "SELECT config FROM agents WHERE id = $1 AND workspace_id = $2",
-            agent_id, workspace_id,
+            agent_id,
+            workspace_id,
         )
         if not agent_row:
             return None
 
         import json as _json
+
         config = agent_row["config"]
         if isinstance(config, str):
             config = _json.loads(config)
@@ -236,7 +241,9 @@ async def rewrite_and_snapshot(
         config["_rewrite_changelog"] = rewrite.changelog
         await conn.execute(
             "UPDATE agents SET config = $1 WHERE id = $2 AND workspace_id = $3",
-            config, agent_id, workspace_id,
+            config,
+            agent_id,
+            workspace_id,
         )
 
     candidate_id = None
@@ -262,7 +269,9 @@ async def rewrite_and_snapshot(
             config.pop("_rewrite_changelog", None)
             await conn.execute(
                 "UPDATE agents SET config = $1 WHERE id = $2 AND workspace_id = $3",
-                config, agent_id, workspace_id,
+                config,
+                agent_id,
+                workspace_id,
             )
 
     if candidate_id is None:

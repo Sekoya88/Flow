@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class PersonaSaveIn(BaseModel):
     workspace_id: UUID
     content_md: str = Field(..., max_length=20_000)
@@ -28,6 +29,7 @@ class PersonaQuestionnaireIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class PersonaOut(BaseModel):
     id: UUID

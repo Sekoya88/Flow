@@ -8,6 +8,7 @@ Evaluation flow:
   3. INSERT a new golden_results row (never UPDATE) so history accumulates.
   4. Trigger regression/genome snapshot logic on the aggregate.
 """
+
 from __future__ import annotations
 
 import json
@@ -198,14 +199,16 @@ async def evaluate_golden_set(
         )
 
         scores.append(judgment["score"])
-        results.append({
-            "item_id": str(item["id"]),
-            "input_text": item["input_text"],
-            "expected_output": item["expected_output"],
-            "actual_output": actual_output,
-            "score": judgment["score"],
-            "rationale": judgment["rationale"],
-        })
+        results.append(
+            {
+                "item_id": str(item["id"]),
+                "input_text": item["input_text"],
+                "expected_output": item["expected_output"],
+                "actual_output": actual_output,
+                "score": judgment["score"],
+                "rationale": judgment["rationale"],
+            }
+        )
 
     total = len(results)
     scored = len(scores)
@@ -259,22 +262,16 @@ async def auto_eval_tick(ctx: dict) -> None:
     failed_count = 0
     for ws in workspaces:
         ws_id = ws["id"]
-        agent = await pool.fetchrow(
-            "SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        agent = await pool.fetchrow("SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id)
         if not agent:
             continue
 
-        gset = await pool.fetchrow(
-            "SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        gset = await pool.fetchrow("SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id)
         if not gset:
             continue
 
         logger.info("cron.auto_eval_tick.running workspace_id=%s agent_id=%s", ws_id, agent["id"])
-        user = await pool.fetchrow(
-            "SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        user = await pool.fetchrow("SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id)
         user_id = user["user_id"] if user else None
 
         active_genome = await get_active_genome(pool, agent["id"])
@@ -306,6 +303,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                 from uuid import UUID as _UUID
 
                 from flow.application.ab_runner import ABTestRunner
+
                 candidate_id = _UUID(candidate_id_str)
                 prev_genome = await get_active_genome(pool, agent["id"])
                 if prev_genome and prev_genome.id:
@@ -314,7 +312,10 @@ async def auto_eval_tick(ctx: dict) -> None:
                         "INSERT INTO ab_tests "
                         "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
                         "VALUES ($1, $2, $3, $4, $4, 'running')",
-                        test_id, ws_id, gset["id"], agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
+                        test_id,
+                        ws_id,
+                        gset["id"],
+                        agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
                     )
                     summary = await ABTestRunner(pool, client).run(
                         test_id=test_id,
@@ -375,6 +376,7 @@ async def skill_decay_tick(ctx: dict) -> None:
     pool = ctx["pool"]
     agent_rows = await pool.fetch("SELECT id, workspace_id FROM agents")
     from flow.infrastructure.persistence.repo import FlowRepository
+
     repo = FlowRepository(pool)
     decayed = 0
     for row in agent_rows:
@@ -393,6 +395,7 @@ async def auto_safety_eval_tick(ctx: dict) -> None:
     and has not yet had its safety_eval_passed flag set.
     """
     import datetime
+
     pool = ctx["pool"]
     settings = ctx.get("settings")
     log = structlog.get_logger()
@@ -541,7 +544,9 @@ async def auto_safety_eval_tick(ctx: dict) -> None:
                         INSERT INTO proposals (id, workspace_id, user_id, title, body, status)
                         VALUES ($1, $2, $3, $4, $5, 'pending')
                         """,
-                        alert_id, workspace_id, fallback_user,
+                        alert_id,
+                        workspace_id,
+                        fallback_user,
                         "Safety rollback: auto-promoted genome regressed",
                         f"Auto-promoted genome {version_id} scored {new_avg:.2f} vs baseline {baseline_score:.2f} "
                         f"(delta -{baseline_score - new_avg:.2f} > threshold {rollback_delta:.2f}). "

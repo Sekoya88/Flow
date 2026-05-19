@@ -36,6 +36,7 @@ async def register(
     # Seed canonical agents + golden sets in background so registration returns immediately
     async def _seed():
         from scripts.seed_agents_and_datasets import seed_workspace
+
         try:
             await seed_workspace(repo._pool, ws)
         except Exception:
@@ -89,7 +90,5 @@ async def me(
     workspaces = await repo.list_workspaces_for_user(user_id)
     return {
         "user": {"id": str(user["id"]), "email": user["email"]},
-        "workspaces": [
-            {"id": str(w["id"]), "name": w["name"], "role": w["role"]} for w in workspaces
-        ],
+        "workspaces": [{"id": str(w["id"]), "name": w["name"], "role": w["role"]} for w in workspaces],
     }

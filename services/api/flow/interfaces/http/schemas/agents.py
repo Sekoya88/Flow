@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class AgentCreateIn(BaseModel):
     workspace_id: UUID
     name: str = Field(min_length=1, max_length=200)
@@ -49,6 +50,7 @@ class ExecuteIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class AgentCreateOut(BaseModel):
     id: UUID

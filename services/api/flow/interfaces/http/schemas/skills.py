@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class SkillCreateIn(BaseModel):
     workspace_id: UUID
     agent_id: UUID
@@ -20,6 +21,7 @@ class SkillTestIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class SkillOut(BaseModel):
     id: UUID

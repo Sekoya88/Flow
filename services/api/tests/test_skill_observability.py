@@ -1,4 +1,5 @@
 """Tests for Phase A: skill observability — golden_items linkage + execution events."""
+
 from __future__ import annotations
 
 import datetime
@@ -10,6 +11,7 @@ import pytest
 from flow.infrastructure.persistence.repo import FlowRepository
 
 # ── Repo method unit tests ───────────────────────────────────────────────────
+
 
 def _mock_pool():
     pool = AsyncMock()
@@ -120,10 +122,12 @@ async def test_log_skill_match_accepts_none_execution_id():
 @pytest.mark.asyncio
 async def test_count_skill_events_by_day_returns_daily_buckets():
     pool = _mock_pool()
-    pool.fetch = AsyncMock(return_value=[
-        {"date": datetime.date(2026, 5, 14), "count": 3},
-        {"date": datetime.date(2026, 5, 15), "count": 7},
-    ])
+    pool.fetch = AsyncMock(
+        return_value=[
+            {"date": datetime.date(2026, 5, 14), "count": 3},
+            {"date": datetime.date(2026, 5, 15), "count": 7},
+        ]
+    )
     repo = FlowRepository.__new__(FlowRepository)
     repo._pool = pool
 
@@ -139,6 +143,7 @@ async def test_count_skill_events_by_day_returns_daily_buckets():
 
 # ── nodes.py integration: log_skill_match called alongside increment_skill_use ─
 
+
 @pytest.mark.asyncio
 async def test_nodes_logs_skill_match_on_trigger():
     """When a skill matches the user query, log_skill_match must be called once per match."""
@@ -149,17 +154,12 @@ async def test_nodes_logs_skill_match_on_trigger():
     execution_id = uuid4()
 
     mock_repo = AsyncMock()
-    mock_repo.list_active_skills.return_value = [{
-        "id": skill_id,
-        "content_md": (
-            "---\n"
-            "name: test-skill\n"
-            "description: A test skill\n"
-            "version: '1.0'\n"
-            "triggers:\n  - revenue forecast\n"
-            "---\n\nDo the thing."
-        ),
-    }]
+    mock_repo.list_active_skills.return_value = [
+        {
+            "id": skill_id,
+            "content_md": ("---\nname: test-skill\ndescription: A test skill\nversion: '1.0'\ntriggers:\n  - revenue forecast\n---\n\nDo the thing."),
+        }
+    ]
     mock_repo.increment_skill_use = AsyncMock()
     mock_repo.log_skill_match = AsyncMock()
     mock_repo.get_agent_config = AsyncMock(return_value=None)

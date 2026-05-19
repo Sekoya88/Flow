@@ -1,4 +1,5 @@
 """Tests for FlowMemoryMiddleware."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,20 +11,26 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 def _make_runtime():
     from flow.infrastructure.llm.middleware.base import HarnessRuntime
+
     return HarnessRuntime(
-        workspace_id=uuid4(), agent_id=uuid4(),
-        user_id=uuid4(), execution_id=uuid4(), thread_id="t1",
+        workspace_id=uuid4(),
+        agent_id=uuid4(),
+        user_id=uuid4(),
+        execution_id=uuid4(),
+        thread_id="t1",
     )
 
 
 def _make_store(facts=None, patterns=None):
     store = AsyncMock()
+
     async def asearch(ns, query=None, limit=8):
         if "facts" in ns:
             return [MagicMock(value={"text": f}) for f in (facts or [])]
         if "patterns" in ns:
             return [MagicMock(value={"problem": p, "solution": "s"}) for p in (patterns or [])]
         return []
+
     store.asearch = asearch
     store.aput = AsyncMock()
     return store
@@ -31,9 +38,11 @@ def _make_store(facts=None, patterns=None):
 
 # ── before_agent ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_before_agent_prepends_system_message_when_facts_exist():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store(facts=["User prefers bullet lists"])
     mw = FlowMemoryMiddleware(store=store, llm=None, embed=None)
     runtime = _make_runtime()
@@ -46,6 +55,7 @@ async def test_before_agent_prepends_system_message_when_facts_exist():
 @pytest.mark.asyncio
 async def test_before_agent_noop_when_store_empty():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store(facts=[], patterns=[])
     mw = FlowMemoryMiddleware(store=store, llm=None, embed=None)
     runtime = _make_runtime()
@@ -56,9 +66,11 @@ async def test_before_agent_noop_when_store_empty():
 
 # ── after_agent ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_after_agent_stores_extracted_facts():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store()
     embed = AsyncMock(return_value=[0.1, 0.2])
     llm = MagicMock()
@@ -69,8 +81,7 @@ async def test_after_agent_stores_extracted_facts():
     ):
         mw = FlowMemoryMiddleware(store=store, llm=llm, embed=embed)
         runtime = _make_runtime()
-        state = {"answer": "Python is great", "confidence": 0.9,
-                 "messages": [HumanMessage(content="q"), AIMessage(content="Python is great")]}
+        state = {"answer": "Python is great", "confidence": 0.9, "messages": [HumanMessage(content="q"), AIMessage(content="Python is great")]}
         await mw.after_agent(state, runtime)
 
     store.aput.assert_called()
@@ -82,20 +93,23 @@ async def test_after_agent_stores_extracted_facts():
 @pytest.mark.asyncio
 async def test_after_agent_skips_pattern_below_confidence():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store()
     embed = AsyncMock(return_value=[0.1])
 
-    with patch(
-        "flow.infrastructure.llm.middleware.memory.extract_facts_from_answer",
-        new=AsyncMock(return_value=["some fact"]),
-    ), patch(
-        "flow.infrastructure.llm.middleware.memory.extract_pattern_summary",
-        new=AsyncMock(return_value=("problem", "solution")),
-    ) as mock_pattern:
+    with (
+        patch(
+            "flow.infrastructure.llm.middleware.memory.extract_facts_from_answer",
+            new=AsyncMock(return_value=["some fact"]),
+        ),
+        patch(
+            "flow.infrastructure.llm.middleware.memory.extract_pattern_summary",
+            new=AsyncMock(return_value=("problem", "solution")),
+        ) as mock_pattern,
+    ):
         mw = FlowMemoryMiddleware(store=store, llm=MagicMock(), embed=embed, min_confidence=0.7)
         runtime = _make_runtime()
-        state = {"answer": "ok", "confidence": 0.5,
-                 "messages": [HumanMessage(content="q"), AIMessage(content="ok")]}
+        state = {"answer": "ok", "confidence": 0.5, "messages": [HumanMessage(content="q"), AIMessage(content="ok")]}
         await mw.after_agent(state, runtime)
 
     mock_pattern.assert_not_called()
@@ -104,22 +118,27 @@ async def test_after_agent_skips_pattern_below_confidence():
 @pytest.mark.asyncio
 async def test_before_agent_queries_last_human_message_not_last_message():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     queried = []
     store = AsyncMock()
+
     async def asearch(ns, query=None, limit=8):
         queried.append(query)
         if "facts" in ns:
             return [MagicMock(value={"text": "fact"})]
         return []
+
     store.asearch = asearch
     store.aput = AsyncMock()
 
     mw = FlowMemoryMiddleware(store=store, llm=None, embed=None)
     runtime = _make_runtime()
-    state = {"messages": [
-        HumanMessage(content="what is python"),
-        AIMessage(content="Python is a language"),  # last message is AI
-    ]}
+    state = {
+        "messages": [
+            HumanMessage(content="what is python"),
+            AIMessage(content="Python is a language"),  # last message is AI
+        ]
+    }
     await mw.before_agent(state, runtime)
     # Query should come from the HumanMessage, not the AIMessage
     assert queried[0] == "what is python"
@@ -128,6 +147,7 @@ async def test_before_agent_queries_last_human_message_not_last_message():
 @pytest.mark.asyncio
 async def test_after_agent_noop_when_no_llm():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store()
     mw = FlowMemoryMiddleware(store=store, llm=None, embed=None)
     runtime = _make_runtime()
@@ -138,6 +158,7 @@ async def test_after_agent_noop_when_no_llm():
 @pytest.mark.asyncio
 async def test_after_agent_empty_messages_stores_nothing_without_answer():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
     store = _make_store()
     embed = AsyncMock(return_value=[0.1])
 

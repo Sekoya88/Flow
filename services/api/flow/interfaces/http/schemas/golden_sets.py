@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class GoldenSetCreateIn(BaseModel):
     name: str
     description: str = ""
@@ -24,6 +25,7 @@ class GoldenSetEvaluateIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class GoldenSetOut(BaseModel):
     id: UUID

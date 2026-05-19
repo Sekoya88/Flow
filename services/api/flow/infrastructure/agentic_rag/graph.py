@@ -25,9 +25,7 @@ from flow.infrastructure.observability.logging import get_logger
 
 log = get_logger("flow.agentic_rag")
 
-_ALLOWED_ROUTING = frozenset(
-    {"RETRIEVE_HYBRID", "RETRIEVE_DENSE", "WEB_SEARCH", "DIRECT_ANSWER", "MULTI_HOP"}
-)
+_ALLOWED_ROUTING = frozenset({"RETRIEVE_HYBRID", "RETRIEVE_DENSE", "WEB_SEARCH", "DIRECT_ANSWER", "MULTI_HOP"})
 
 
 class AgenticState(TypedDict, total=False):
@@ -86,11 +84,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
     async def supervisor_node(state: AgenticState) -> dict[str, Any]:
         t0 = time.perf_counter()
         exp = _exp_blob(state)
-        prev = (
-            f"previous routing: {state.get('routing_decision', '')}"
-            if int(state.get("iteration_count") or 1) > 1
-            else "first attempt"
-        )
+        prev = f"previous routing: {state.get('routing_decision', '')}" if int(state.get("iteration_count") or 1) > 1 else "first attempt"
         prompt = SUPERVISOR_PROMPT.format(
             query=state.get("query_current", ""),
             iteration=state.get("iteration_count", 1),
@@ -251,8 +245,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
         prompt = REWRITER_PROMPT.format(
             query=state.get("query_current", ""),
             failure_reason=(
-                f"only {len(state.get('graded_docs') or [])} relevant chunks after grading "
-                f"from {len(state.get('retrieved_docs') or [])} retrieved."
+                f"only {len(state.get('graded_docs') or [])} relevant chunks after grading from {len(state.get('retrieved_docs') or [])} retrieved."
             ),
             attempt=attempt,
             max_attempts=state.get("max_iterations", 3),
@@ -292,11 +285,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
 
                     tc = TavilyClient(api_key=key)
                     r = tc.search(state.get("query_current", ""), max_results=5)
-                    return [
-                        str(x.get("content", ""))
-                        for x in (r.get("results") or [])
-                        if x.get("content")
-                    ]
+                    return [str(x.get("content", "")) for x in (r.get("results") or []) if x.get("content")]
 
                 results = await asyncio.to_thread(_run)
             except Exception:
@@ -309,9 +298,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
 
     async def web_fallback_node(state: AgenticState) -> dict[str, Any]:
         exp = _exp_blob(state)
-        exp["reasoning_steps"] = list(exp.get("reasoning_steps") or []) + [
-            "max iterations reached — web fallback"
-        ]
+        exp["reasoning_steps"] = list(exp.get("reasoning_steps") or []) + ["max iterations reached — web fallback"]
         return {"web_fallback_used": True, "explanation": exp}
 
     async def assemble_node(state: AgenticState) -> dict[str, Any]:
@@ -335,9 +322,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
         steps.append("supervisor: DIRECT_ANSWER — skipped retrieval")
         exp["reasoning_steps"] = steps
         return {
-            "rag_bits": [
-                "[agentic_rag] Supervisor chose DIRECT_ANSWER — no knowledge retrieval context."
-            ],
+            "rag_bits": ["[agentic_rag] Supervisor chose DIRECT_ANSWER — no knowledge retrieval context."],
             "explanation": exp,
         }
 
@@ -370,8 +355,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
             confidence = round(sum(used_scores) / len(used_scores), 3)
         elif graded:
             confidence = round(
-                sum(float((d.get("grade") or {}).get("thematic_score", 0.0)) for d in graded)
-                / len(graded),
+                sum(float((d.get("grade") or {}).get("thematic_score", 0.0)) for d in graded) / len(graded),
                 3,
             )
         else:

@@ -8,6 +8,7 @@ Drift is detected by comparing the hash of the prompt about to be sent against
 the hash stored on the active agent_versions row. A mismatch means something
 (template, config, environment) is mutating the prompt between runs.
 """
+
 from __future__ import annotations
 
 import hashlib

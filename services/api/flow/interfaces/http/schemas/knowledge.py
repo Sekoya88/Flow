@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class KnowledgeCreateIn(BaseModel):
     workspace_id: UUID
     title: str = Field(min_length=1, max_length=200)

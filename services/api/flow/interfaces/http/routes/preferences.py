@@ -64,9 +64,7 @@ async def list_preferences(
     repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
 ) -> dict:
     await _assert_workspace_access(repo, user_id, workspace_id)
-    global_rows, agent_rows = await repo.get_typed_preferences(
-        workspace_id, user_id, agent_id, status_filter, class_filter
-    )
+    global_rows, agent_rows = await repo.get_typed_preferences(workspace_id, user_id, agent_id, status_filter, class_filter)
     return {
         "global": [_row_to_out(dict(r)) for r in global_rows],
         "agent_specific": [_row_to_out(dict(r)) for r in agent_rows],
@@ -96,7 +94,10 @@ async def submit_onboarding(
     count = 0
     for item in processed:
         await repo.upsert_typed_preference(
-            workspace_id, user_id, item["class"], item["value"],
+            workspace_id,
+            user_id,
+            item["class"],
+            item["value"],
             initial_status="active",
         )
         count += 1
@@ -113,10 +114,9 @@ async def import_cv(
     await _assert_workspace_access(repo, user_id, workspace_id)
 
     is_pdf = (file.content_type or "") == "application/pdf" or (file.filename or "").endswith(".pdf")
-    is_docx = (
-        (file.content_type or "") == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        or (file.filename or "").endswith(".docx")
-    )
+    is_docx = (file.content_type or "") == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or (
+        file.filename or ""
+    ).endswith(".docx")
     if not is_pdf and not is_docx:
         raise HTTPException(status_code=422, detail="file must be PDF or DOCX")
 
@@ -131,7 +131,10 @@ async def import_cv(
 
     for item in prefs:
         await repo.upsert_typed_preference(
-            workspace_id, user_id, item["class"], item["value"],
+            workspace_id,
+            user_id,
+            item["class"],
+            item["value"],
             initial_status="candidate",
         )
 
@@ -146,8 +149,12 @@ async def create_preference(
 ) -> dict:
     await _assert_workspace_access(repo, user_id, body.workspace_id)
     row = await repo.upsert_typed_preference(
-        body.workspace_id, user_id, body.class_, body.value,
-        body.agent_id, initial_status=body.status,
+        body.workspace_id,
+        user_id,
+        body.class_,
+        body.value,
+        body.agent_id,
+        initial_status=body.status,
     )
     new_status = auto_graduate(dict(row))
     if new_status:

@@ -41,9 +41,7 @@ async def run_evaluation_sse(
 
         # Resolve workspace
         workspaces = await repo._pool.fetch(
-            "SELECT w.id FROM workspaces w "
-            "JOIN workspace_members wm ON wm.workspace_id = w.id "
-            "WHERE wm.user_id = $1 LIMIT 1",
+            "SELECT w.id FROM workspaces w JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = $1 LIMIT 1",
             user_id,
         )
         if not workspaces:
@@ -57,9 +55,7 @@ async def run_evaluation_sse(
         # Resolve agent
         resolved_agent_id = agent_id
         if resolved_agent_id is None:
-            row = await repo._pool.fetchrow(
-                "SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", workspace_id
-            )
+            row = await repo._pool.fetchrow("SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", workspace_id)
             if not row:
                 yield evt("error", message="No agent found in workspace")
                 yield evt("done", results=None)
@@ -85,9 +81,7 @@ async def run_evaluation_sse(
         # Resolve golden set
         resolved_set_id = set_id
         if resolved_set_id is None:
-            row = await repo._pool.fetchrow(
-                "SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", workspace_id
-            )
+            row = await repo._pool.fetchrow("SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", workspace_id)
             if not row:
                 yield evt("error", message="No golden set found. Import sample datasets first.")
                 yield evt("done", results=None)
@@ -95,8 +89,7 @@ async def run_evaluation_sse(
             resolved_set_id = row["id"]
 
         items = await repo._pool.fetch(
-            "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items "
-            "WHERE set_id = $1 ORDER BY created_at",
+            "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1 ORDER BY created_at",
             resolved_set_id,
         )
         if not items:
@@ -113,8 +106,7 @@ async def run_evaluation_sse(
         scores = []
 
         for i, item in enumerate(items):
-            yield evt("progress", index=i, total=len(items),
-                      message=f"Item {i+1}/{len(items)}: running agent…")
+            yield evt("progress", index=i, total=len(items), message=f"Item {i + 1}/{len(items)}: running agent…")
 
             # Real agent LLM call
             actual_output = await run_agent_on_item(
@@ -124,8 +116,7 @@ async def run_evaluation_sse(
                 openai_api_key=openai_key,
             )
 
-            yield evt("progress", index=i, total=len(items),
-                      message=f"Item {i+1}/{len(items)}: scoring with judge…")
+            yield evt("progress", index=i, total=len(items), message=f"Item {i + 1}/{len(items)}: scoring with judge…")
 
             # Score
             judgment = await judge_single(
@@ -154,20 +145,22 @@ async def run_evaluation_sse(
             )
 
             scores.append(judgment["score"])
-            results.append({
-                "item_id": str(item["id"]),
-                "input_text": item["input_text"][:120],
-                "actual_output": actual_output[:200],
-                "score": judgment["score"],
-                "rationale": judgment["rationale"],
-            })
+            results.append(
+                {
+                    "item_id": str(item["id"]),
+                    "input_text": item["input_text"][:120],
+                    "actual_output": actual_output[:200],
+                    "score": judgment["score"],
+                    "rationale": judgment["rationale"],
+                }
+            )
 
             tick = "✓" if judgment["score"] >= 0.7 else "✗"
             yield evt(
                 "item_result",
                 index=i,
                 score=judgment["score"],
-                message=f"{tick} Item {i+1}: {judgment['score']:.2f} — {judgment['rationale'][:80]}",
+                message=f"{tick} Item {i + 1}: {judgment['score']:.2f} — {judgment['rationale'][:80]}",
             )
 
         total = len(results)
@@ -177,7 +170,7 @@ async def run_evaluation_sse(
 
         yield evt(
             "summary",
-            message=f"Done — pass rate: {pass_rate*100:.1f}% | avg score: {avg_score:.3f}",
+            message=f"Done — pass rate: {pass_rate * 100:.1f}% | avg score: {avg_score:.3f}",
         )
 
         if pass_rate < 0.7:
@@ -215,23 +208,22 @@ async def run_evaluation_sse(
 
             # Boost skill scores for items that passed and have a skill linkage
             try:
-                passing_item_ids = [
-                    r["item_id"] for r in results if r["score"] >= 0.7
-                ]
+                passing_item_ids = [r["item_id"] for r in results if r["score"] >= 0.7]
                 if passing_item_ids:
                     skill_rows = await repo._pool.fetch(
-                        "SELECT DISTINCT skill_id FROM golden_items "
-                        "WHERE id = ANY($1::uuid[]) AND skill_id IS NOT NULL",
+                        "SELECT DISTINCT skill_id FROM golden_items WHERE id = ANY($1::uuid[]) AND skill_id IS NOT NULL",
                         [r for r in passing_item_ids],
                     )
                     for sr in skill_rows:
                         await repo.boost_skill_score(sr["skill_id"])
             except Exception as boost_exc:
                 import logging as _log
+
                 _log.getLogger(__name__).debug("skill_boost_skipped: %s", boost_exc)
 
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).warning("post_eval_hooks failed: %s", exc)
 
         yield evt(
@@ -272,9 +264,7 @@ async def regression_report(
     """
     # Resolve workspace
     workspaces = await repo._pool.fetch(
-        "SELECT w.id FROM workspaces w "
-        "JOIN workspace_members wm ON wm.workspace_id = w.id "
-        "WHERE wm.user_id = $1 LIMIT 1",
+        "SELECT w.id FROM workspaces w JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = $1 LIMIT 1",
         user_id,
     )
     if not workspaces:
@@ -317,7 +307,9 @@ async def regression_report(
         ORDER BY MIN(gr.created_at) DESC
         LIMIT $3
         """,
-        resolved_set_id, resolved_agent_id, runs,
+        resolved_set_id,
+        resolved_agent_id,
+        runs,
     )
 
     if len(run_rows) < 2:
@@ -341,7 +333,8 @@ async def regression_report(
             WHERE gr.eval_run_id = $1 AND gr.agent_id = $2
             ORDER BY gi.created_at
             """,
-            run["eval_run_id"], resolved_agent_id,
+            run["eval_run_id"],
+            resolved_agent_id,
         )
         scores_by_item = {}
         for it in items:
@@ -350,12 +343,14 @@ async def regression_report(
                 "input_text": it["input_text"][:120],
                 "rationale": it["grading_rationale"],
             }
-        run_data.append({
-            "run_id": str(run["eval_run_id"]),
-            "run_at": run["run_at"].isoformat() if run["run_at"] else None,
-            "version_label": run["agent_version_label"],
-            "scores": scores_by_item,
-        })
+        run_data.append(
+            {
+                "run_id": str(run["eval_run_id"]),
+                "run_at": run["run_at"].isoformat() if run["run_at"] else None,
+                "version_label": run["agent_version_label"],
+                "scores": scores_by_item,
+            }
+        )
 
     # Compare consecutive runs
     comparisons = []
@@ -393,18 +388,20 @@ async def regression_report(
         prev_avg = sum(prev_scores) / len(prev_scores) if prev_scores else 0
         curr_avg = sum(curr_scores) / len(curr_scores) if curr_scores else 0
 
-        comparisons.append({
-            "from_run": prev["run_id"],
-            "to_run": curr["run_id"],
-            "from_version": prev["version_label"],
-            "to_version": curr["version_label"],
-            "avg_delta": round(curr_avg - prev_avg, 3),
-            "improved_count": len(improved),
-            "regressed_count": len(regressed),
-            "stable_count": len(stable),
-            "improved": sorted(improved, key=lambda x: -x["delta"]),
-            "regressed": sorted(regressed, key=lambda x: x["delta"]),
-        })
+        comparisons.append(
+            {
+                "from_run": prev["run_id"],
+                "to_run": curr["run_id"],
+                "from_version": prev["version_label"],
+                "to_version": curr["version_label"],
+                "avg_delta": round(curr_avg - prev_avg, 3),
+                "improved_count": len(improved),
+                "regressed_count": len(regressed),
+                "stable_count": len(stable),
+                "improved": sorted(improved, key=lambda x: -x["delta"]),
+                "regressed": sorted(regressed, key=lambda x: x["delta"]),
+            }
+        )
 
     # Overall trend
     if len(comparisons) >= 2:
@@ -447,9 +444,7 @@ async def trigger_improvement(
     """
     # Resolve workspace
     workspaces = await repo._pool.fetch(
-        "SELECT w.id FROM workspaces w "
-        "JOIN workspace_members wm ON wm.workspace_id = w.id "
-        "WHERE wm.user_id = $1 LIMIT 1",
+        "SELECT w.id FROM workspaces w JOIN workspace_members wm ON wm.workspace_id = w.id WHERE wm.user_id = $1 LIMIT 1",
         user_id,
     )
     if not workspaces:
@@ -496,6 +491,7 @@ async def trigger_improvement(
 
     # Run fresh evaluation
     from flow.application.golden_evaluator import evaluate_golden_set
+
     eval_result = await evaluate_golden_set(
         pool=repo._pool,
         golden_set_id=resolved_set_id,
@@ -562,4 +558,3 @@ async def trigger_improvement(
         "num_failures": len(failed_items),
         **rewrite_info,
     }
-

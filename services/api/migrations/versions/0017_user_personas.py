@@ -4,6 +4,7 @@ Revision ID: 0017
 Revises: 0016
 Create Date: 2026-05-16
 """
+
 from alembic import op
 
 revision = "0017"
@@ -27,10 +28,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE UNIQUE INDEX idx_user_personas_unique "
-        "ON user_personas (workspace_id, user_id)"
-    )
+    op.execute("CREATE UNIQUE INDEX idx_user_personas_unique ON user_personas (workspace_id, user_id)")
 
 
 def downgrade() -> None:

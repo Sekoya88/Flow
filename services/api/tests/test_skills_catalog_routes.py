@@ -1,4 +1,5 @@
 """Contract tests for the Skills Hub additions: catalog, activate, test stream."""
+
 from __future__ import annotations
 
 import datetime
@@ -68,6 +69,7 @@ def _make_repo() -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
     _app = create_app()
     _app.dependency_overrides[get_repo] = _make_repo
@@ -75,6 +77,7 @@ def app(monkeypatch):
 
 
 # ── /catalog ────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_catalog_returns_cross_agent_skills_with_agent_name(app):
@@ -105,6 +108,7 @@ async def test_catalog_rejects_other_workspace(app):
 
 
 # ── /activate ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_activate_returns_active_row(app):
@@ -142,6 +146,7 @@ class _FakeLLM:
 async def test_test_endpoint_streams_tokens(app, monkeypatch):
     # Patch the LLM builder so we don't need real API keys.
     from flow.application import skill_playground
+
     monkeypatch.setattr(skill_playground, "_build_skill_llm", lambda _s: _FakeLLM())
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

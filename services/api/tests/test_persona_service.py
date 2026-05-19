@@ -1,4 +1,5 @@
 """Tests for persona_service: template fallback + LLM path + middleware injection."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 @pytest.mark.asyncio
 async def test_synthesize_falls_back_to_template_when_no_llm():
     from flow.application.persona_service import synthesize_persona
+
     facets = [
         {"class": "style", "value": "concise"},
         {"class": "tooling", "value": "python"},
@@ -30,6 +32,7 @@ async def test_synthesize_falls_back_to_template_when_no_llm():
 @pytest.mark.asyncio
 async def test_synthesize_falls_back_when_facets_empty_even_with_llm():
     from flow.application.persona_service import synthesize_persona
+
     llm = MagicMock()
     llm.ainvoke = AsyncMock()  # should NOT be called
     out = await synthesize_persona(llm=llm, facets=[], cv_text=None)
@@ -40,6 +43,7 @@ async def test_synthesize_falls_back_when_facets_empty_even_with_llm():
 @pytest.mark.asyncio
 async def test_synthesize_uses_llm_response_when_available():
     from flow.application.persona_service import synthesize_persona
+
     expected = "# Identity\nYou work with a senior engineer.\n"
     llm = MagicMock()
     response = MagicMock()
@@ -53,6 +57,7 @@ async def test_synthesize_uses_llm_response_when_available():
 @pytest.mark.asyncio
 async def test_synthesize_handles_anthropic_block_list_content():
     from flow.application.persona_service import synthesize_persona
+
     llm = MagicMock()
     response = MagicMock()
     response.content = [{"type": "text", "text": "# Identity\nblock A"}, "block B"]
@@ -65,6 +70,7 @@ async def test_synthesize_handles_anthropic_block_list_content():
 @pytest.mark.asyncio
 async def test_synthesize_falls_back_on_llm_exception():
     from flow.application.persona_service import synthesize_persona
+
     llm = MagicMock()
     llm.ainvoke = AsyncMock(side_effect=RuntimeError("network down"))
     facets = [{"class": "domain", "value": "data"}]
@@ -79,6 +85,7 @@ async def test_synthesize_falls_back_on_llm_exception():
 @pytest.mark.asyncio
 async def test_regenerate_persona_upserts_and_returns_row():
     from flow.application import persona_service
+
     workspace_id = uuid4()
     user_id = uuid4()
 
@@ -114,15 +121,20 @@ async def test_regenerate_persona_upserts_and_returns_row():
 
 def _make_runtime():
     from flow.infrastructure.llm.middleware.base import HarnessRuntime
+
     return HarnessRuntime(
-        workspace_id=uuid4(), agent_id=uuid4(),
-        user_id=uuid4(), execution_id=uuid4(), thread_id="t1",
+        workspace_id=uuid4(),
+        agent_id=uuid4(),
+        user_id=uuid4(),
+        execution_id=uuid4(),
+        thread_id="t1",
     )
 
 
 @pytest.mark.asyncio
 async def test_persona_middleware_prepends_system_message_when_row_exists():
     from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
+
     pool = MagicMock()
     pool.fetchrow = AsyncMock(return_value={"content_md": "# Identity\nYou work with X."})
     mw = FlowPersonaMiddleware(pool=pool)
@@ -136,6 +148,7 @@ async def test_persona_middleware_prepends_system_message_when_row_exists():
 @pytest.mark.asyncio
 async def test_persona_middleware_noop_when_no_row():
     from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
+
     pool = MagicMock()
     pool.fetchrow = AsyncMock(return_value=None)
     mw = FlowPersonaMiddleware(pool=pool)
@@ -147,6 +160,7 @@ async def test_persona_middleware_noop_when_no_row():
 @pytest.mark.asyncio
 async def test_persona_middleware_noop_when_content_empty():
     from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
+
     pool = MagicMock()
     pool.fetchrow = AsyncMock(return_value={"content_md": "   \n  "})
     mw = FlowPersonaMiddleware(pool=pool)
@@ -158,6 +172,7 @@ async def test_persona_middleware_noop_when_content_empty():
 @pytest.mark.asyncio
 async def test_persona_middleware_noop_when_pool_none():
     from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
+
     mw = FlowPersonaMiddleware(pool=None)
     state = {"messages": [HumanMessage(content="hi")]}
     result = await mw.before_agent(state, _make_runtime())
@@ -167,6 +182,7 @@ async def test_persona_middleware_noop_when_pool_none():
 @pytest.mark.asyncio
 async def test_persona_middleware_swallows_db_error():
     from flow.infrastructure.llm.middleware.persona import FlowPersonaMiddleware
+
     pool = MagicMock()
     pool.fetchrow = AsyncMock(side_effect=RuntimeError("connection lost"))
     mw = FlowPersonaMiddleware(pool=pool)

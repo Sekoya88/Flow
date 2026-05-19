@@ -1,4 +1,5 @@
 """Integration tests for Loop B: eval pass → genome snapshot → A/B test → proposal."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -43,8 +44,10 @@ async def test_maybe_snapshot_creates_candidate_on_improvement():
     pool = AsyncMock()
     new_version_id = uuid4()
 
-    with patch("flow.application.genome_service.get_active_genome", return_value=active_genome), \
-         patch("flow.application.genome_service.snapshot_genome", return_value=new_version_id) as mock_snap:
+    with (
+        patch("flow.application.genome_service.get_active_genome", return_value=active_genome),
+        patch("flow.application.genome_service.snapshot_genome", return_value=new_version_id) as mock_snap,
+    ):
         result = await _maybe_snapshot_eval_pass(
             pool=pool,
             agent_id=uuid4(),
@@ -59,6 +62,7 @@ async def test_maybe_snapshot_creates_candidate_on_improvement():
     # Should be created as CANDIDATE
     call_kwargs = mock_snap.call_args.kwargs
     from flow.domain.genome import VersionStatus, VersionTrigger
+
     assert call_kwargs["status"] == VersionStatus.CANDIDATE
     assert call_kwargs["trigger"] == VersionTrigger.EVAL_PASS
 
@@ -71,8 +75,10 @@ async def test_maybe_snapshot_creates_candidate_when_no_active_genome():
     pool = AsyncMock()
     new_version_id = uuid4()
 
-    with patch("flow.application.genome_service.get_active_genome", return_value=None), \
-         patch("flow.application.genome_service.snapshot_genome", return_value=new_version_id) as mock_snap:
+    with (
+        patch("flow.application.genome_service.get_active_genome", return_value=None),
+        patch("flow.application.genome_service.snapshot_genome", return_value=new_version_id) as mock_snap,
+    ):
         result = await _maybe_snapshot_eval_pass(
             pool=pool,
             agent_id=uuid4(),
@@ -158,10 +164,12 @@ async def test_ab_runner_run_returns_summary_with_correct_winner():
 
     pool = AsyncMock()
     # Version label lookup
-    pool.fetch = AsyncMock(return_value=[
-        {"id": version_a_id, "version_label": "v1"},
-        {"id": version_b_id, "version_label": "v2"},
-    ])
+    pool.fetch = AsyncMock(
+        return_value=[
+            {"id": version_a_id, "version_label": "v1"},
+            {"id": version_b_id, "version_label": "v2"},
+        ]
+    )
     pool.execute = AsyncMock()
 
     with patch.object(
@@ -170,13 +178,21 @@ async def test_ab_runner_run_returns_summary_with_correct_winner():
         side_effect=[
             # version A scores
             MagicMock(
-                version_id=version_a_id, version_label="v1",
-                avg_score=0.60, pass_rate=0.60, item_count=5, per_item=[],
+                version_id=version_a_id,
+                version_label="v1",
+                avg_score=0.60,
+                pass_rate=0.60,
+                item_count=5,
+                per_item=[],
             ),
             # version B scores
             MagicMock(
-                version_id=version_b_id, version_label="v2",
-                avg_score=0.80, pass_rate=0.80, item_count=5, per_item=[],
+                version_id=version_b_id,
+                version_label="v2",
+                avg_score=0.80,
+                pass_rate=0.80,
+                item_count=5,
+                per_item=[],
             ),
         ],
     ):

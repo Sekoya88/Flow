@@ -4,6 +4,7 @@ Mirrors Hermes Agent's pattern: a single durable identity block goes FIRST,
 before dynamic memory facts or per-agent system prompts. The user authors
 (or regenerates) it from /settings/profile; we just read & inject.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -27,8 +28,7 @@ class FlowPersonaMiddleware(AgentMiddleware):
             return state
         try:
             row = await self._pool.fetchrow(
-                "SELECT content_md FROM user_personas "
-                "WHERE workspace_id = $1 AND user_id = $2",
+                "SELECT content_md FROM user_personas WHERE workspace_id = $1 AND user_id = $2",
                 runtime.workspace_id,
                 runtime.user_id,
             )

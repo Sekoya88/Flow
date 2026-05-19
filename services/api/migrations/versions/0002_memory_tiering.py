@@ -4,6 +4,7 @@ Revision ID: 0002
 Revises: 0001
 Create Date: 2026-04-27
 """
+
 from collections.abc import Sequence
 
 from alembic import op
@@ -31,10 +32,7 @@ def upgrade() -> None:
         """
     )
 
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_episodic_memories_lookup "
-        "ON episodic_memories (workspace_id, agent_id, user_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_episodic_memories_lookup ON episodic_memories (workspace_id, agent_id, user_id)")
 
     # Agent negatives — workspace-level negative examples (rejected proposals, low-score runs)
     op.execute(
@@ -50,10 +48,7 @@ def upgrade() -> None:
         """
     )
 
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_agent_negatives_lookup "
-        "ON agent_negatives (workspace_id, agent_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_agent_negatives_lookup ON agent_negatives (workspace_id, agent_id)")
 
 
 def downgrade() -> None:

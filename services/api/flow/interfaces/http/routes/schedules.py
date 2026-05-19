@@ -57,18 +57,12 @@ def _next_run_for(cron_expr: str) -> str:
     return nxt.isoformat() + "Z"
 
 
-
 @router.get("/cron-jobs")
 async def list_cron_jobs(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
 ) -> dict:
     """List system ARQ cron jobs with next scheduled run time."""
-    return {
-        "cron_jobs": [
-            {**job, "next_run": _next_run_for(job["cron_expr"])}
-            for job in _SYSTEM_CRON_JOBS
-        ]
-    }
+    return {"cron_jobs": [{**job, "next_run": _next_run_for(job["cron_expr"])} for job in _SYSTEM_CRON_JOBS]}
 
 
 @router.post("")

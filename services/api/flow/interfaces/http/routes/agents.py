@@ -129,9 +129,7 @@ async def execute_agent(
             raise HTTPException(status_code=404, detail="parent execution not found")
         thread_id = parent_row["thread_id"]
 
-    eid, resolved_thread = await repo.create_execution(
-        agent_id, workspace_id, body.message, thread_id=thread_id
-    )
+    eid, resolved_thread = await repo.create_execution(agent_id, workspace_id, body.message, thread_id=thread_id)
     raw_cfg = agent["config"]
     agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
     # SSE uses Redis pub/sub per execution id — no hub registration needed.
@@ -174,13 +172,23 @@ async def vibe_agent(
             "name": "Custom Agent",
             "template": "tool-agent",
             "system_prompt": "You are a helpful assistant.",
-            "tools": {"retrieve": False, "sandbox": False, "long_term_memory": False, "tavily_search": True, "fetch_webpage": True, "arxiv_search": False, "hf_papers": False},
+            "tools": {
+                "retrieve": False,
+                "sandbox": False,
+                "long_term_memory": False,
+                "tavily_search": True,
+                "fetch_webpage": True,
+                "arxiv_search": False,
+                "hf_papers": False,
+            },
         }
 
-    response = await llm.ainvoke([
-        SystemMessage(content=_VIBE_SYSTEM),
-        HumanMessage(content=body.description),
-    ])
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=_VIBE_SYSTEM),
+            HumanMessage(content=body.description),
+        ]
+    )
     raw = str(response.content).strip()
     # Strip markdown code fences if present
     if raw.startswith("```"):
@@ -194,7 +202,15 @@ async def vibe_agent(
             "name": "Custom Agent",
             "template": "tool-agent",
             "system_prompt": raw[:500],
-            "tools": {"retrieve": False, "sandbox": False, "long_term_memory": False, "tavily_search": True, "fetch_webpage": True, "arxiv_search": False, "hf_papers": False},
+            "tools": {
+                "retrieve": False,
+                "sandbox": False,
+                "long_term_memory": False,
+                "tavily_search": True,
+                "fetch_webpage": True,
+                "arxiv_search": False,
+                "hf_papers": False,
+            },
         }
     return cfg
 
@@ -233,7 +249,15 @@ async def patch_agent(
         cfg = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
         if any(k in data for k in tool_keys):
             tools = {**(cfg.get("tools") if isinstance(cfg.get("tools"), dict) else {})}
-            defaults = {"retrieve": True, "sandbox": True, "long_term_memory": True, "tavily_search": False, "fetch_webpage": False, "arxiv_search": False, "hf_papers": False}
+            defaults = {
+                "retrieve": True,
+                "sandbox": True,
+                "long_term_memory": True,
+                "tavily_search": False,
+                "fetch_webpage": False,
+                "arxiv_search": False,
+                "hf_papers": False,
+            }
             merged = {**defaults, **tools}
             for field in tool_keys:
                 if field in data and data[field] is not None:
@@ -259,11 +283,13 @@ async def patch_agent(
     auto_keys = ("auto_improve_threshold", "auto_improve_rollback_delta")
     auto_data = {k: data[k] for k in auto_keys if k in data}
     if auto_data:
-        set_clauses = ", ".join(f"{k} = ${i+3}" for i, k in enumerate(auto_data))
+        set_clauses = ", ".join(f"{k} = ${i + 3}" for i, k in enumerate(auto_data))
         values = list(auto_data.values())
         await repo._pool.execute(
             f"UPDATE agents SET {set_clauses} WHERE id = $1 AND workspace_id = $2",
-            agent_id, workspace_id, *values,
+            agent_id,
+            workspace_id,
+            *values,
         )
     fresh = await repo.get_agent(agent_id, workspace_id)
     assert fresh is not None
@@ -303,7 +329,8 @@ async def agent_stats(
     # Total runs + avg confidence from execution_events final payloads
     total_runs = await repo._pool.fetchval(
         "SELECT COUNT(*) FROM executions WHERE agent_id = $1 AND workspace_id = $2",
-        agent_id, workspace_id,
+        agent_id,
+        workspace_id,
     )
 
     # Confidence from execution_events where kind='final' and payload->>'confidence' exists
@@ -321,7 +348,8 @@ async def agent_stats(
         ORDER BY e.created_at DESC
         LIMIT 50
         """,
-        agent_id, workspace_id,
+        agent_id,
+        workspace_id,
     )
     confidences = []
     for r in conf_rows:
@@ -352,14 +380,16 @@ async def agent_stats(
         GROUP BY (metadata->>'grade')::int
         ORDER BY grade
         """,
-        workspace_id, agent_id,
+        workspace_id,
+        agent_id,
     )
     grade_dist = {r["grade"]: r["cnt"] for r in grade_rows} if grade_rows else {}
 
     # Last run time
     last_run = await repo._pool.fetchval(
         "SELECT MAX(created_at) FROM executions WHERE agent_id = $1 AND workspace_id = $2",
-        agent_id, workspace_id,
+        agent_id,
+        workspace_id,
     )
 
     return {
@@ -392,9 +422,5 @@ async def delete_agent(
     async with repo._pool.acquire() as conn:
         async with conn.transaction():
             # ab_tests FK has NO ACTION — must delete before agent
-            await conn.execute(
-                "DELETE FROM ab_tests WHERE agent_a_id = $1 OR agent_b_id = $1", agent_id
-            )
-            await conn.execute(
-                "DELETE FROM agents WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id
-            )
+            await conn.execute("DELETE FROM ab_tests WHERE agent_a_id = $1 OR agent_b_id = $1", agent_id)
+            await conn.execute("DELETE FROM agents WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id)

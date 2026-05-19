@@ -12,9 +12,7 @@ ROUTING_LITERAL = (
 
 
 class RoutingDecision(BaseModel):
-    decision: str = Field(
-        description="RETRIEVE_HYBRID | RETRIEVE_DENSE | WEB_SEARCH | DIRECT_ANSWER | MULTI_HOP"
-    )
+    decision: str = Field(description="RETRIEVE_HYBRID | RETRIEVE_DENSE | WEB_SEARCH | DIRECT_ANSWER | MULTI_HOP")
     reasoning: str = ""
     sub_queries: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)

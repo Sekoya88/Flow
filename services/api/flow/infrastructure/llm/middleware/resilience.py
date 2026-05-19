@@ -20,12 +20,14 @@ def _retryable_exceptions():
     excs = []
     try:
         from openai import APIStatusError, APITimeoutError, RateLimitError
+
         excs += [RateLimitError, APIStatusError, APITimeoutError]
     except ImportError:
         pass
     try:
         from anthropic import APIStatusError as AnthASE
         from anthropic import RateLimitError as AnthRLE
+
         excs += [AnthRLE, AnthASE]
     except ImportError:
         pass

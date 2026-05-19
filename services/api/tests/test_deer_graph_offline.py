@@ -47,6 +47,7 @@ def test_graph_context_has_store_field():
 def test_react_agent_template_exists():
     """react-agent template is registered in TEMPLATES."""
     from flow.infrastructure.graph.spec import TEMPLATES
+
     assert "react-agent" in TEMPLATES
     spec = TEMPLATES["react-agent"]
     assert spec.template == "react-agent"

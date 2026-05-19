@@ -9,24 +9,24 @@ import structlog
 # ── Node colour / prefix map for agentic logs ────────────────────────
 _NODE_STYLES: dict[str, tuple[str, str]] = {
     # (ANSI colour, glyph)
-    "planner":     ("\033[94m", "◈"),   # blue
-    "worker":      ("\033[96m", "⚙"),   # cyan
-    "synthesizer": ("\033[95m", "✦"),   # magenta
-    "reflector":   ("\033[93m", "⟳"),   # yellow
-    "tool_agent":  ("\033[92m", "⚡"),  # green
-    "retriever":   ("\033[36m", "⌕"),   # teal
-    "router":      ("\033[33m", "⇒"),   # orange
+    "planner": ("\033[94m", "◈"),  # blue
+    "worker": ("\033[96m", "⚙"),  # cyan
+    "synthesizer": ("\033[95m", "✦"),  # magenta
+    "reflector": ("\033[93m", "⟳"),  # yellow
+    "tool_agent": ("\033[92m", "⚡"),  # green
+    "retriever": ("\033[36m", "⌕"),  # teal
+    "router": ("\033[33m", "⇒"),  # orange
 }
 _RESET = "\033[0m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 
 _LOG_LEVEL_COLORS = {
-    "debug":    "\033[2m",      # dim
-    "info":     "\033[0m",      # normal
-    "warning":  "\033[33m",     # yellow
-    "error":    "\033[31m",     # red
-    "critical": "\033[1;31m",   # bold red
+    "debug": "\033[2m",  # dim
+    "info": "\033[0m",  # normal
+    "warning": "\033[33m",  # yellow
+    "error": "\033[31m",  # red
+    "critical": "\033[1;31m",  # bold red
 }
 
 

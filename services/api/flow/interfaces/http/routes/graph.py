@@ -1,4 +1,5 @@
 """Knowledge Graph API — entity subgraph + workspace graph + position persist."""
+
 from __future__ import annotations
 
 import uuid
@@ -63,10 +64,12 @@ async def _fetch_workspace_graph(
             "AND (node_type != 'execution' OR created_at >= $2)"
         )
         if type_list:
-            placeholders = ", ".join(f"${i+3}" for i in range(len(type_list)))
+            placeholders = ", ".join(f"${i + 3}" for i in range(len(type_list)))
             nodes = await conn.fetch(
                 f"{base} AND node_type IN ({placeholders}) LIMIT 2000",
-                workspace_id, since_dt, *type_list,
+                workspace_id,
+                since_dt,
+                *type_list,
             )
         else:
             nodes = await conn.fetch(f"{base} LIMIT 2000", workspace_id, since_dt)
@@ -76,8 +79,7 @@ async def _fetch_workspace_graph(
             return {"nodes": [], "edges": []}
 
         edges = await conn.fetch(
-            "SELECT id, source_id, target_id, edge_type, weight "
-            "FROM kg_edges WHERE source_id = ANY($1) AND target_id = ANY($1)",
+            "SELECT id, source_id, target_id, edge_type, weight FROM kg_edges WHERE source_id = ANY($1) AND target_id = ANY($1)",
             node_ids,
         )
     return {
@@ -94,27 +96,27 @@ async def _fetch_entity_graph(
 ) -> dict[str, Any]:
     async with pool.acquire() as conn:
         root = await conn.fetchrow(
-            "SELECT id, node_type, ref_id, ref_type, label, metadata, pos_x, pos_y "
-            "FROM kg_nodes WHERE workspace_id=$1 AND ref_type=$2 AND ref_id=$3",
-            workspace_id, node_type, ref_id,
+            "SELECT id, node_type, ref_id, ref_type, label, metadata, pos_x, pos_y FROM kg_nodes WHERE workspace_id=$1 AND ref_type=$2 AND ref_id=$3",
+            workspace_id,
+            node_type,
+            ref_id,
         )
         if not root:
             raise HTTPException(status_code=404, detail="node not found")
 
         edges = await conn.fetch(
-            "SELECT id, source_id, target_id, edge_type, weight "
-            "FROM kg_edges WHERE source_id=$1 OR target_id=$1",
+            "SELECT id, source_id, target_id, edge_type, weight FROM kg_edges WHERE source_id=$1 OR target_id=$1",
             root["id"],
         )
-        neighbour_ids = {
-            e["source_id"] if e["target_id"] == root["id"] else e["target_id"]
-            for e in edges
-        }
-        neighbours = await conn.fetch(
-            "SELECT id, node_type, ref_id, ref_type, label, metadata, pos_x, pos_y "
-            "FROM kg_nodes WHERE id = ANY($1)",
-            list(neighbour_ids),
-        ) if neighbour_ids else []
+        neighbour_ids = {e["source_id"] if e["target_id"] == root["id"] else e["target_id"] for e in edges}
+        neighbours = (
+            await conn.fetch(
+                "SELECT id, node_type, ref_id, ref_type, label, metadata, pos_x, pos_y FROM kg_nodes WHERE id = ANY($1)",
+                list(neighbour_ids),
+            )
+            if neighbour_ids
+            else []
+        )
 
     return {
         "node": _serialize_node(root),
@@ -133,7 +135,10 @@ async def _update_node_position(
     async with pool.acquire() as conn:
         result = await conn.execute(
             "UPDATE kg_nodes SET pos_x=$1, pos_y=$2 WHERE id=$3 AND workspace_id=$4",
-            x, y, node_id, workspace_id,
+            x,
+            y,
+            node_id,
+            workspace_id,
         )
         if result == "UPDATE 0":
             raise HTTPException(status_code=404, detail="node not found")

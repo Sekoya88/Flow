@@ -1,4 +1,5 @@
 """Time/date utilities: date_lookup."""
+
 from __future__ import annotations
 
 import datetime

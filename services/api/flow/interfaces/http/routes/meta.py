@@ -33,7 +33,10 @@ DATABASE_OVERVIEW: dict = {
         {"name": "execution_events", "columns": ["id", "execution_id", "kind", "payload (jsonb)", "created_at"]},
         {"name": "knowledge_sources", "columns": ["id", "workspace_id", "title", "body", "created_at"]},
         {"name": "knowledge_chunks", "columns": ["id", "source_id", "chunk_index", "content", "embedding vector(1536)"]},
-        {"name": "user_preferences", "columns": ["id", "workspace_id", "user_id", "agent_id", "class", "value", "score", "status", "pinned", "decay_half_life_days"]},
+        {
+            "name": "user_preferences",
+            "columns": ["id", "workspace_id", "user_id", "agent_id", "class", "value", "score", "status", "pinned", "decay_half_life_days"],
+        },
         {"name": "agent_memories", "columns": ["id", "workspace_id", "agent_id", "user_id", "content", "embedding", "created_at"]},
         {"name": "execution_feedback", "columns": ["id", "execution_id", "user_id", "score", "comment", "created_at"]},
         {"name": "proposals", "columns": ["id", "workspace_id", "user_id", "title", "body", "status", "created_at"]},

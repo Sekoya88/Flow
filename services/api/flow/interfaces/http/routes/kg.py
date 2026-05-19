@@ -258,11 +258,23 @@ async def seed_demo_graph(
         ("Skill: Deep Research", "skill", "Multi-hop search with source triangulation"),
     ]
     _DEMO_EDGES = [
-        (0, 1, "has_component"), (0, 2, "has_component"), (0, 3, "has_component"), (0, 4, "has_component"),
-        (1, 2, "delegates_to"), (2, 3, "feeds_into"), (3, 4, "triggers"),
-        (2, 5, "uses_tool"), (2, 6, "uses_tool"), (2, 7, "uses_tool"), (2, 8, "uses_tool"),
-        (9, 1, "triggers"), (3, 10, "produces"), (4, 11, "produces"), (4, 12, "produces"),
-        (13, 1, "configures"), (14, 2, "enhances"),
+        (0, 1, "has_component"),
+        (0, 2, "has_component"),
+        (0, 3, "has_component"),
+        (0, 4, "has_component"),
+        (1, 2, "delegates_to"),
+        (2, 3, "feeds_into"),
+        (3, 4, "triggers"),
+        (2, 5, "uses_tool"),
+        (2, 6, "uses_tool"),
+        (2, 7, "uses_tool"),
+        (2, 8, "uses_tool"),
+        (9, 1, "triggers"),
+        (3, 10, "produces"),
+        (4, 11, "produces"),
+        (4, 12, "produces"),
+        (13, 1, "configures"),
+        (14, 2, "enhances"),
     ]
 
     node_ids: list[UUID] = []
@@ -275,8 +287,13 @@ async def seed_demo_graph(
             VALUES ($1, $2, $3, $4, $5, '{}', $6, $7)
             ON CONFLICT (id) DO NOTHING
             """,
-            nid, workspace_id, label, ntype, summary,
-            float(hash(label) % 800), float(hash(summary) % 600),
+            nid,
+            workspace_id,
+            label,
+            ntype,
+            summary,
+            float(hash(label) % 800),
+            float(hash(summary) % 600),
         )
 
     for src_idx, tgt_idx, etype in _DEMO_EDGES:
@@ -287,7 +304,11 @@ async def seed_demo_graph(
             VALUES ($1, $2, $3, $4, $5, 1.0)
             ON CONFLICT (id) DO NOTHING
             """,
-            eid, workspace_id, node_ids[src_idx], node_ids[tgt_idx], etype,
+            eid,
+            workspace_id,
+            node_ids[src_idx],
+            node_ids[tgt_idx],
+            etype,
         )
 
     engine = KGGraphEngine(request.app.state.pool)
@@ -342,8 +363,12 @@ async def sync_entities(
             DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
                           metadata = EXCLUDED.metadata
             """,
-            nid, workspace_id, ag["name"], f"Agent: {ag['name']}",
-            meta, str(ag["id"]),
+            nid,
+            workspace_id,
+            ag["name"],
+            f"Agent: {ag['name']}",
+            meta,
+            str(ag["id"]),
         )
         upserted_agents += 1
 
@@ -351,14 +376,16 @@ async def sync_entities(
         parsed = parse_skill_md(sk["content_md"])
         desc = parsed.description or sk.get("description") or ""
         nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-skill-{workspace_id}-{sk['id']}")
-        meta = _json.dumps({
-            "description": desc,
-            "triggers": parsed.triggers,
-            "allowed_tools": parsed.allowed_tools,
-            "score": float(sk.get("score") or 0.0),
-            "use_count": int(sk.get("use_count") or 0),
-            "version": int(sk.get("version") or 1),
-        })
+        meta = _json.dumps(
+            {
+                "description": desc,
+                "triggers": parsed.triggers,
+                "allowed_tools": parsed.allowed_tools,
+                "score": float(sk.get("score") or 0.0),
+                "use_count": int(sk.get("use_count") or 0),
+                "version": int(sk.get("version") or 1),
+            }
+        )
         await pool.execute(
             """
             INSERT INTO kg_nodes
@@ -368,8 +395,12 @@ async def sync_entities(
             DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
                           metadata = EXCLUDED.metadata
             """,
-            nid, workspace_id, sk["name"], desc or sk["name"],
-            meta, str(sk["id"]),
+            nid,
+            workspace_id,
+            sk["name"],
+            desc or sk["name"],
+            meta,
+            str(sk["id"]),
         )
         upserted_skills += 1
 
@@ -386,7 +417,10 @@ async def sync_entities(
                 VALUES ($1, $2, $3, $4, 'has_skill', 1.0)
                 ON CONFLICT (id) DO NOTHING
                 """,
-                eid, workspace_id, agent_nid, nid,
+                eid,
+                workspace_id,
+                agent_nid,
+                nid,
             )
 
     engine = KGGraphEngine(request.app.state.pool)

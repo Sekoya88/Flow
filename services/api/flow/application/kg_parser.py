@@ -42,10 +42,11 @@ def parse_obsidian_note(doc: ObsidianDocument) -> ParsedNote:
     if fm_match:
         try:
             import yaml
+
             frontmatter = yaml.safe_load(fm_match.group(1)) or {}
         except Exception:
             frontmatter = {}
-        body = content[fm_match.end():]
+        body = content[fm_match.end() :]
 
     # Extract wikilinks before stripping markup
     wikilinks = list(dict.fromkeys(_WIKILINK_RE.findall(body)))
@@ -63,7 +64,7 @@ def parse_obsidian_note(doc: ObsidianDocument) -> ParsedNote:
     if h1:
         title = h1.group(1).strip()
         # Remove H1 line from body
-        clean_body = clean_body[: h1.start()].strip() + "\n" + clean_body[h1.end():].strip()
+        clean_body = clean_body[: h1.start()].strip() + "\n" + clean_body[h1.end() :].strip()
         clean_body = clean_body.strip()
     else:
         title = Path(doc.filename).stem

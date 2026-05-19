@@ -1,4 +1,5 @@
 """Tests for AgentMiddleware base class and FlowMiddlewareHarness."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -10,6 +11,7 @@ import pytest
 
 def _make_runtime():
     from flow.infrastructure.llm.middleware.base import HarnessRuntime
+
     return HarnessRuntime(
         workspace_id=uuid4(),
         agent_id=uuid4(),
@@ -21,6 +23,7 @@ def _make_runtime():
 
 def _make_stub_graph(chunks: list) -> MagicMock:
     """Stub graph that yields (mode, chunk) tuples and supports aget_state."""
+
     async def _astream(state, config, **kwargs):
         for item in chunks:
             yield item
@@ -37,9 +40,11 @@ async def _collect(gen: AsyncGenerator) -> list:
 
 # ── passthrough ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_harness_passes_chunks_through():
     from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness
+
     runtime = _make_runtime()
     graph = _make_stub_graph([("updates", {"node": {"answer": "hi"}})])
     harness = FlowMiddlewareHarness(graph, middleware=[], runtime=runtime)
@@ -48,6 +53,7 @@ async def test_harness_passes_chunks_through():
 
 
 # ── before_agent order ────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_before_agent_runs_in_order():
@@ -58,6 +64,7 @@ async def test_before_agent_runs_in_order():
     class M(AgentMiddleware):
         def __init__(self, n):
             self.n = n
+
         async def before_agent(self, state, runtime):
             calls.append(self.n)
             return state
@@ -70,6 +77,7 @@ async def test_before_agent_runs_in_order():
 
 
 # ── after_agent fires after stream ────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_after_agent_fires_after_stream_exhausted():
@@ -91,6 +99,7 @@ async def test_after_agent_fires_after_stream_exhausted():
 
 # ── after_agent fires even if generator broken early ─────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_after_agent_fires_on_early_generator_close():
     from flow.infrastructure.llm.middleware.base import AgentMiddleware, FlowMiddlewareHarness
@@ -102,15 +111,17 @@ async def test_after_agent_fires_on_early_generator_close():
             after_called.append(state)
 
     runtime = _make_runtime()
-    graph = _make_stub_graph([
-        ("updates", {"node": {"answer": "partial"}}),
-        ("updates", {}),
-        ("updates", {}),
-    ])
+    graph = _make_stub_graph(
+        [
+            ("updates", {"node": {"answer": "partial"}}),
+            ("updates", {}),
+            ("updates", {}),
+        ]
+    )
     harness = FlowMiddlewareHarness(graph, middleware=[M()], runtime=runtime)
 
     gen = harness.astream({"messages": []}, {})
-    await gen.__anext__()   # consume one chunk then close
+    await gen.__anext__()  # consume one chunk then close
     await gen.aclose()
 
     assert len(after_called) == 1
@@ -119,6 +130,7 @@ async def test_after_agent_fires_on_early_generator_close():
 
 
 # ── after_agent failure doesn't crash ─────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_after_agent_error_doesnt_crash_run():
@@ -137,9 +149,11 @@ async def test_after_agent_error_doesnt_crash_run():
 
 # ── aget_state delegates ───────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_aget_state_delegates_to_graph():
     from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness
+
     runtime = _make_runtime()
     graph = _make_stub_graph([])
     harness = FlowMiddlewareHarness(graph, middleware=[], runtime=runtime)

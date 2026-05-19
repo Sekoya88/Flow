@@ -14,7 +14,7 @@ from flow.infrastructure.llm.embeddings import embed_texts
 @dataclass
 class IngestionConfig:
     workspace_id: UUID
-    repo: Any          # FlowRepository — avoid circular import
+    repo: Any  # FlowRepository — avoid circular import
     openai_api_key: str
 
 
@@ -59,6 +59,7 @@ def build_kg_ingestion_graph(config: IngestionConfig):
     # ── Node 3: entity extraction ──────────────────────────────────────────
     async def extract_entities(state: IngestionState) -> dict:
         import json
+
         llm = _llm()
         parsed = state["parsed"]
         try:
@@ -78,6 +79,7 @@ Text:
     # ── Node 4: topic assignment ───────────────────────────────────────────
     async def assign_topic(state: IngestionState) -> dict:
         import json
+
         llm = _llm()
         parsed = state["parsed"]
         existing_topics = await repo.list_kg_topics(workspace_id)
@@ -104,9 +106,7 @@ Note preview: {parsed.body[:800]}"""
         parsed = state["parsed"]
         text_to_embed = f"{parsed.title}\n\n{parsed.body[:2000]}"
         try:
-            resp = await llm.ainvoke(
-                f"Summarize in ≤200 characters:\n{parsed.body[:1500]}"
-            )
+            resp = await llm.ainvoke(f"Summarize in ≤200 characters:\n{parsed.body[:1500]}")
             summary = resp.content[:200]
         except Exception:
             summary = parsed.title
@@ -191,9 +191,7 @@ Note preview: {parsed.body[:800]}"""
                     continue
                 dist = float(row["dist"])
                 if dist < 0.15:  # similarity > 0.85
-                    await repo.upsert_kg_edge(
-                        workspace_id, note_id, row["id"], "similar_to", 1.0 - dist
-                    )
+                    await repo.upsert_kg_edge(workspace_id, note_id, row["id"], "similar_to", 1.0 - dist)
 
         return {}
 

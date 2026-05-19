@@ -1,4 +1,5 @@
 """Integration tests for /api/v1/dashboard routes."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -32,6 +33,7 @@ def _auth() -> dict:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
 
     _app = create_app()

@@ -276,20 +276,22 @@ GOLDEN_DATASETS = [
                     "Identify the key questions to ask next, any red flags present, "
                     "and the appropriate flag level following the Lucis protocol."
                 ),
-                "expected_output": json.dumps({
-                    "domain": "sleep",
-                    "priority_questions": [
-                        "sleepQualityRecent: subjective quality rating",
-                        "sleepNightAwakenings: frequency and duration",
-                        "sleepFallAsleepTime: sleep latency",
-                        "sleepSnoringOrApneaHints: apnea screen",
-                        "sleepDaytimeSleepiness: severity (mild/moderate/severe)",
-                    ],
-                    "red_flags_detected": ["severe_insomnia (>3 months, functional impact)"],
-                    "flag_level": "urgent",
-                    "tone_notes": "Acknowledge fatigue impact before probing. Validate that 4 months of insomnia is significant.",
-                    "next_action": "Explore apnea triad (snoring + pauses + daytime sleepiness). If complete triad: refer for polysomnography.",
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "sleep",
+                        "priority_questions": [
+                            "sleepQualityRecent: subjective quality rating",
+                            "sleepNightAwakenings: frequency and duration",
+                            "sleepFallAsleepTime: sleep latency",
+                            "sleepSnoringOrApneaHints: apnea screen",
+                            "sleepDaytimeSleepiness: severity (mild/moderate/severe)",
+                        ],
+                        "red_flags_detected": ["severe_insomnia (>3 months, functional impact)"],
+                        "flag_level": "urgent",
+                        "tone_notes": "Acknowledge fatigue impact before probing. Validate that 4 months of insomnia is significant.",
+                        "next_action": "Explore apnea triad (snoring + pauses + daytime sleepiness). If complete triad: refer for polysomnography.",
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) severe_insomnia flag identified (>3 months + functional impact), "
                     "(2) sleep latency and awakening questions mentioned, "
@@ -308,29 +310,31 @@ GOLDEN_DATASETS = [
                     "The patient says he sleeps '7-8 hours' and feels it's 'enough'. "
                     "Apply the Lucis sleep protocol. What is the red flag assessment?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "sleep",
-                    "priority_questions": [
-                        "sleepDaytimeSleepiness: severity (here: SEVERE — sleeping while driving is critical)",
-                        "sleepSnoringOrApneaHints: confirmed apneaSuspected",
-                        "sleepHoursPerNight: subjective vs objective discrepancy",
-                        "Impact on driving safety",
-                    ],
-                    "red_flags_detected": [
-                        "suspected_apnea (complete triad: snoring + witnessed pauses + severe daytime sleepiness)",
-                        "SAFETY CRITICAL: falling asleep while driving",
-                    ],
-                    "flag_level": "urgent",
-                    "tone_notes": (
-                        "Patient downplays symptoms ('7-8h is enough'). "
-                        "Gently surface the discrepancy between subjective perception and partner's observations. "
-                        "The driving risk elevates this to safety-critical."
-                    ),
-                    "next_action": (
-                        "Strongly recommend polysomnography consultation (sleep specialist). "
-                        "Advise against driving until evaluated. Do NOT say 'vous avez de l apnée du sommeil'."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "sleep",
+                        "priority_questions": [
+                            "sleepDaytimeSleepiness: severity (here: SEVERE — sleeping while driving is critical)",
+                            "sleepSnoringOrApneaHints: confirmed apneaSuspected",
+                            "sleepHoursPerNight: subjective vs objective discrepancy",
+                            "Impact on driving safety",
+                        ],
+                        "red_flags_detected": [
+                            "suspected_apnea (complete triad: snoring + witnessed pauses + severe daytime sleepiness)",
+                            "SAFETY CRITICAL: falling asleep while driving",
+                        ],
+                        "flag_level": "urgent",
+                        "tone_notes": (
+                            "Patient downplays symptoms ('7-8h is enough'). "
+                            "Gently surface the discrepancy between subjective perception and partner's observations. "
+                            "The driving risk elevates this to safety-critical."
+                        ),
+                        "next_action": (
+                            "Strongly recommend polysomnography consultation (sleep specialist). "
+                            "Advise against driving until evaluated. Do NOT say 'vous avez de l apnée du sommeil'."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) suspected_apnea identified with complete triad, "
                     "(2) driving safety risk explicitly flagged, "
@@ -351,23 +355,25 @@ GOLDEN_DATASETS = [
                     "- Night awakenings: 1-2 times per night, goes back to sleep quickly "
                     "What are the next questions and overall assessment?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "sleep",
-                    "priority_questions": [
-                        "sleepNightAwakenings: cause of awakenings (stress? noise? nocturia?)",
-                        "sleepSnoringOrApneaHints: ask partner for witnessed pauses (only snoring reported so far)",
-                        "Duration: how long has quality been poor?",
-                        "Bedtime routine: screens, caffeine timing",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": "Sleep quality is poor but no critical flags. Incomplete apnea triad (snoring only, no pauses, mild sleepiness).",
-                    "next_action": (
-                        "Monitor. Ask partner about pauses if possible. "
-                        "Explore sleep hygiene (screens, caffeine, bedtime routine). "
-                        "No urgent referral needed at this stage."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "sleep",
+                        "priority_questions": [
+                            "sleepNightAwakenings: cause of awakenings (stress? noise? nocturia?)",
+                            "sleepSnoringOrApneaHints: ask partner for witnessed pauses (only snoring reported so far)",
+                            "Duration: how long has quality been poor?",
+                            "Bedtime routine: screens, caffeine timing",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": "Sleep quality is poor but no critical flags. Incomplete apnea triad (snoring only, no pauses, mild sleepiness).",
+                        "next_action": (
+                            "Monitor. Ask partner about pauses if possible. "
+                            "Explore sleep hygiene (screens, caffeine, bedtime routine). "
+                            "No urgent referral needed at this stage."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly identifies INCOMPLETE apnea triad (snoring alone ≠ suspected_apnea), "
                     "(2) suggests asking partner about witnessed pauses, "
@@ -383,19 +389,21 @@ GOLDEN_DATASETS = [
                     "Conducting a quick-depth sleep assessment in the Lucis protocol. "
                     "What are the 3 most important questions and why? What response do you give the patient?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "sleep",
-                    "depth": "quick",
-                    "priority_questions": [
-                        "sleepHoursPerNight: 8h confirmed (sevenTo8 or eightPlus option) — good baseline",
-                        "sleepQualityRecent: subjective quality despite good hours? (hours ≠ quality)",
-                        "sleepSnoringOrApneaHints: non-restorative sleep despite 8h can indicate apnea",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "normal",
-                    "tone_notes": "Quick assessment. Don't over-probe when patient reports good sleep. Validate and move on.",
-                    "next_action": "No concerns. Quick confirmation of quality + apnea screen. Move to next domain.",
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "sleep",
+                        "depth": "quick",
+                        "priority_questions": [
+                            "sleepHoursPerNight: 8h confirmed (sevenTo8 or eightPlus option) — good baseline",
+                            "sleepQualityRecent: subjective quality despite good hours? (hours ≠ quality)",
+                            "sleepSnoringOrApneaHints: non-restorative sleep despite 8h can indicate apnea",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "normal",
+                        "tone_notes": "Quick assessment. Don't over-probe when patient reports good sleep. Validate and move on.",
+                        "next_action": "No concerns. Quick confirmation of quality + apnea screen. Move to next domain.",
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) only 3 questions proposed (respects 'quick' depth limit), "
                     "(2) notes that hours ≠ quality (important clinical insight), "
@@ -421,28 +429,29 @@ GOLDEN_DATASETS = [
                     "Je n'ai jamais consulté de psy, j'aurais peut-être dû.' "
                     "Conduct the Lucis mental health screening. What is the protocol response?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "mentalHealth",
-                    "priority_questions": [
-                        "emotionFrequency: daily? several times/week? — quantify the burden",
-                        "emotionalImpact: how much does this affect work/relationships/daily life?",
-                        "mentalHealthConsultation: normalize that considering therapy is a healthy step",
-                        "stressManagementStrategies: what helps currently?",
-                        "mentalEnergyLevel: energy to face daily demands",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": (
-                        "Patient is self-aware and already considering help. Validate this. "
-                        "Do NOT say 'ça ressemble à de l anxiété généralisée'. "
-                        "Do NOT minimize ('tout le monde a des périodes de stress'). "
-                        "Acknowledge impact, normalize consulting."
-                    ),
-                    "next_action": (
-                        "Encourage professional consultation. Note sleep-mood link (shared symptom). "
-                        "Assess support network. No emergency flag."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "mentalHealth",
+                        "priority_questions": [
+                            "emotionFrequency: daily? several times/week? — quantify the burden",
+                            "emotionalImpact: how much does this affect work/relationships/daily life?",
+                            "mentalHealthConsultation: normalize that considering therapy is a healthy step",
+                            "stressManagementStrategies: what helps currently?",
+                            "mentalEnergyLevel: energy to face daily demands",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": (
+                            "Patient is self-aware and already considering help. Validate this. "
+                            "Do NOT say 'ça ressemble à de l anxiété généralisée'. "
+                            "Do NOT minimize ('tout le monde a des périodes de stress'). "
+                            "Acknowledge impact, normalize consulting."
+                        ),
+                        "next_action": (
+                            "Encourage professional consultation. Note sleep-mood link (shared symptom). Assess support network. No emergency flag."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) no diagnosis stated (not 'generalized anxiety', not 'burnout'), "
                     "(2) validates patient's self-awareness about needing help, "
@@ -460,30 +469,32 @@ GOLDEN_DATASETS = [
                     "Apply the Lucis mental health protocol. "
                     "What questions follow and what is the appropriate agent response text?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "mentalHealth",
-                    "patient_response_summary": "Daily irritability, affecting work and family relationships, personality change noticed by partner",
-                    "priority_questions": [
-                        "emotionEvolution: has this gotten worse over time?",
-                        "workImpactOnMentalHealth: specific work stressors?",
-                        "takesMentalHealthMedication: any current pharmacological support?",
-                        "mentalHealthControlFeeling: sense of control over emotions?",
-                        "mentalHealthConsultation: has professional help been considered?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": (
-                        "Partner has noticed change — this is significant and worth acknowledging. "
-                        "Ask about duration and trajectory (getting worse?). "
-                        "Validate difficulty without labeling: 'Quand ceux qu on aime remarquent un changement, "
-                        "c est important d y prêter attention.'"
-                    ),
-                    "next_action": (
-                        "Assess sleep quality (irritability + poor sleep often linked). "
-                        "Professional consultation recommendation appropriate. "
-                        "Do NOT say 'vous souffrez peut-être de dépression' or 'burnout'."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "mentalHealth",
+                        "patient_response_summary": "Daily irritability, affecting work and family relationships, personality change noticed by partner",
+                        "priority_questions": [
+                            "emotionEvolution: has this gotten worse over time?",
+                            "workImpactOnMentalHealth: specific work stressors?",
+                            "takesMentalHealthMedication: any current pharmacological support?",
+                            "mentalHealthControlFeeling: sense of control over emotions?",
+                            "mentalHealthConsultation: has professional help been considered?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": (
+                            "Partner has noticed change — this is significant and worth acknowledging. "
+                            "Ask about duration and trajectory (getting worse?). "
+                            "Validate difficulty without labeling: 'Quand ceux qu on aime remarquent un changement, "
+                            "c est important d y prêter attention.'"
+                        ),
+                        "next_action": (
+                            "Assess sleep quality (irritability + poor sleep often linked). "
+                            "Professional consultation recommendation appropriate. "
+                            "Do NOT say 'vous souffrez peut-être de dépression' or 'burnout'."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) acknowledges partner's observation as clinically significant, "
                     "(2) explores evolution/trajectory of symptoms, "
@@ -501,27 +512,29 @@ GOLDEN_DATASETS = [
                     "How does the Lucis protocol handle a patient already receiving mental health care? "
                     "What questions remain relevant and what is the appropriate tone?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "mentalHealth",
-                    "priority_questions": [
-                        "mentalHealthConsultationImpact: 'ça m aide beaucoup' — confirm progress is meaningful",
-                        "mentalEnergyLevel: current energy baseline on difficult days",
-                        "stressManagementStrategies: what are they applying from therapy?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "normal",
-                    "tone_notes": (
-                        "Patient is already receiving appropriate care. Validate progress. "
-                        "Do NOT suggest they need a different approach. "
-                        "Acknowledge that 'difficult days' are normal in recovery. "
-                        "'Vous avez pris une bonne décision en consultant — c est courageux.'"
-                    ),
-                    "next_action": (
-                        "Brief assessment only — they have professional support. "
-                        "Note current therapy in medical background for context. "
-                        "Focus on functional status and energy rather than deep emotional probing."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "mentalHealth",
+                        "priority_questions": [
+                            "mentalHealthConsultationImpact: 'ça m aide beaucoup' — confirm progress is meaningful",
+                            "mentalEnergyLevel: current energy baseline on difficult days",
+                            "stressManagementStrategies: what are they applying from therapy?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "normal",
+                        "tone_notes": (
+                            "Patient is already receiving appropriate care. Validate progress. "
+                            "Do NOT suggest they need a different approach. "
+                            "Acknowledge that 'difficult days' are normal in recovery. "
+                            "'Vous avez pris une bonne décision en consultant — c est courageux.'"
+                        ),
+                        "next_action": (
+                            "Brief assessment only — they have professional support. "
+                            "Note current therapy in medical background for context. "
+                            "Focus on functional status and energy rather than deep emotional probing."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) validates the patient's decision to seek therapy, "
                     "(2) does NOT re-probe emotional history at length (they have a therapist), "
@@ -542,36 +555,38 @@ GOLDEN_DATASETS = [
                     "j aimerais comprendre à quelle fréquence vous ressentez cela et dans quelles situations.'\n"
                     "Identify which responses comply with the protocol and why."
                 ),
-                "expected_output": json.dumps({
-                    "assessment": {
-                        "Response A": {
-                            "compliant": False,
-                            "violations": [
-                                "Diagnostic language: 'anxiété généralisée ou dépression légère' — FORBIDDEN",
-                                "Prescriptive: 'vous devriez consulter un psychiatre' without proper assessment first",
-                                "Premature conclusion without quantifying frequency/impact",
-                            ],
+                "expected_output": json.dumps(
+                    {
+                        "assessment": {
+                            "Response A": {
+                                "compliant": False,
+                                "violations": [
+                                    "Diagnostic language: 'anxiété généralisée ou dépression légère' — FORBIDDEN",
+                                    "Prescriptive: 'vous devriez consulter un psychiatre' without proper assessment first",
+                                    "Premature conclusion without quantifying frequency/impact",
+                                ],
+                            },
+                            "Response B": {
+                                "compliant": False,
+                                "violations": [
+                                    "Minimization: 'tout le monde traverse des périodes difficiles' — explicitly FORBIDDEN by protocol",
+                                    "No follow-up assessment planned",
+                                    "Dismisses patient's experience with generic platitude",
+                                ],
+                            },
+                            "Response C": {
+                                "compliant": True,
+                                "strengths": [
+                                    "Validates without minimizing ('éprouvantes' acknowledges difficulty)",
+                                    "Proposes concrete next step (frequency + context questions)",
+                                    "Non-diagnostic — gathers information before any conclusion",
+                                    "Empathetic framing with purposeful redirection",
+                                ],
+                            },
                         },
-                        "Response B": {
-                            "compliant": False,
-                            "violations": [
-                                "Minimization: 'tout le monde traverse des périodes difficiles' — explicitly FORBIDDEN by protocol",
-                                "No follow-up assessment planned",
-                                "Dismisses patient's experience with generic platitude",
-                            ],
-                        },
-                        "Response C": {
-                            "compliant": True,
-                            "strengths": [
-                                "Validates without minimizing ('éprouvantes' acknowledges difficulty)",
-                                "Proposes concrete next step (frequency + context questions)",
-                                "Non-diagnostic — gathers information before any conclusion",
-                                "Empathetic framing with purposeful redirection",
-                            ],
-                        },
-                    },
-                    "protocol_rule_tested": "mental-health: never diagnose, never minimize, lead gently with information gathering",
-                }),
+                        "protocol_rule_tested": "mental-health: never diagnose, never minimize, lead gently with information gathering",
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly identifies Response A as violation (diagnosis), "
                     "(2) correctly identifies Response B as violation (minimization — explicitly cited in protocol), "
@@ -599,35 +614,37 @@ GOLDEN_DATASETS = [
                     "J aime cuisiner, peu de plats préparés.' "
                     "Apply the Lucis nutrition protocol. What questions remain, any flags?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "nutrition",
-                    "provided_info": {
-                        "diet_type": "vegan (3 years)",
-                        "meals_per_day": 2,
-                        "meal_times": "noon and 8pm",
-                        "supplements": "B12",
-                        "hydration": "1.5L water/day",
-                        "ultra_processed": "low (cooks regularly)",
-                    },
-                    "priority_questions": [
-                        "Protein sources: legumes, tofu, seitan, tempeh? Quantity per meal?",
-                        "Iron and zinc: any known deficiency? Blood tests in last 12 months?",
-                        "Omega-3: algae oil or other source?",
-                        "Vitamin D: supplement or sun exposure?",
-                        "Calcium: fortified plant milk? Leafy greens?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": (
-                        "Patient is a committed, informed vegan. "
-                        "Do NOT suggest veganism is problematic or encourage meat. "
-                        "Frame additional questions as routine nutritional optimization, not concern."
-                    ),
-                    "next_action": (
-                        "Check vegan-specific micronutrient gaps (B12 ✓, but D, iron, zinc, omega-3 not confirmed). "
-                        "Recommend blood panel including ferritin, vitD, B12 level."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "nutrition",
+                        "provided_info": {
+                            "diet_type": "vegan (3 years)",
+                            "meals_per_day": 2,
+                            "meal_times": "noon and 8pm",
+                            "supplements": "B12",
+                            "hydration": "1.5L water/day",
+                            "ultra_processed": "low (cooks regularly)",
+                        },
+                        "priority_questions": [
+                            "Protein sources: legumes, tofu, seitan, tempeh? Quantity per meal?",
+                            "Iron and zinc: any known deficiency? Blood tests in last 12 months?",
+                            "Omega-3: algae oil or other source?",
+                            "Vitamin D: supplement or sun exposure?",
+                            "Calcium: fortified plant milk? Leafy greens?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": (
+                            "Patient is a committed, informed vegan. "
+                            "Do NOT suggest veganism is problematic or encourage meat. "
+                            "Frame additional questions as routine nutritional optimization, not concern."
+                        ),
+                        "next_action": (
+                            "Check vegan-specific micronutrient gaps (B12 ✓, but D, iron, zinc, omega-3 not confirmed). "
+                            "Recommend blood panel including ferritin, vitD, B12 level."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) identifies vegan-specific micronutrient risks (iron, zinc, D, omega-3), "
                     "(2) validates B12 supplementation as correct, "
@@ -646,35 +663,36 @@ GOLDEN_DATASETS = [
                     "If the patient then says '2-3 verres de vin vendredi soir, pareil samedi, "
                     "et parfois un verre le mercredi,' evaluate the flag status."
                 ),
-                "expected_output": json.dumps({
-                    "domain": "lifestyle",
-                    "quantification_approach": {
-                        "initial_response": "Patient minimizes with 'pas beaucoup, juste le weekend'",
-                        "follow_up_questions": [
-                            "weeklyAlcoholAmount: 'En comptant sur la semaine, combien de verres en tout environ ?'",
-                            "Type of alcohol: 'De quel type d alcool principalement — vin, bière, spiritueux ?'",
-                            "Context: 'C est plutôt en soirée, lors de repas ?' (normalizing framing)",
-                        ],
-                        "quantitative_framing_principle": (
-                            "Never ask 'est-ce que vous buvez beaucoup ?'. "
-                            "Always count units: 'combien de verres au total cette semaine ?'"
+                "expected_output": json.dumps(
+                    {
+                        "domain": "lifestyle",
+                        "quantification_approach": {
+                            "initial_response": "Patient minimizes with 'pas beaucoup, juste le weekend'",
+                            "follow_up_questions": [
+                                "weeklyAlcoholAmount: 'En comptant sur la semaine, combien de verres en tout environ ?'",
+                                "Type of alcohol: 'De quel type d alcool principalement — vin, bière, spiritueux ?'",
+                                "Context: 'C est plutôt en soirée, lors de repas ?' (normalizing framing)",
+                            ],
+                            "quantitative_framing_principle": (
+                                "Never ask 'est-ce que vous buvez beaucoup ?'. Always count units: 'combien de verres au total cette semaine ?'"
+                            ),
+                        },
+                        "calculation": {
+                            "friday": "2-3 glasses wine = 2-3 units",
+                            "saturday": "2-3 glasses wine = 2-3 units",
+                            "wednesday": "1 glass = 1 unit",
+                            "weekly_total": "5-7 units/week",
+                            "WHO_threshold": "14 units/week (increased risk)",
+                        },
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": (
+                            "5-7 units is below WHO heavy-use threshold (14). No heavy_alcohol_use flag. "
+                            "Note quantity non-judgmentally. Do not say 'c est trop'."
                         ),
-                    },
-                    "calculation": {
-                        "friday": "2-3 glasses wine = 2-3 units",
-                        "saturday": "2-3 glasses wine = 2-3 units",
-                        "wednesday": "1 glass = 1 unit",
-                        "weekly_total": "5-7 units/week",
-                        "WHO_threshold": "14 units/week (increased risk)",
-                    },
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": (
-                        "5-7 units is below WHO heavy-use threshold (14). No heavy_alcohol_use flag. "
-                        "Note quantity non-judgmentally. Do not say 'c est trop'."
-                    ),
-                    "next_action": "Record as moderate use. Monitor. Note if mental health or metabolic risk factors are high.",
-                }),
+                        "next_action": "Record as moderate use. Monitor. Note if mental health or metabolic risk factors are high.",
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) uses quantitative framing to follow up patient minimization, "
                     "(2) correctly calculates ~5-7 units/week, "
@@ -691,38 +709,40 @@ GOLDEN_DATASETS = [
                     "Apply the Lucis lifestyle protocol tobacco branch. "
                     "Evaluate flags, determine protocol response, and demonstrate correct tone."
                 ),
-                "expected_output": json.dumps({
-                    "domain": "lifestyle",
-                    "tobacco_branch": "current_smoker",
-                    "data_collected": {
-                        "cigarettesPerDay": 25,
-                        "whenStartedSmoking": "15 years ago",
-                        "pack_years": "25 × 15 / 20 = 18.75 pack-years",
-                        "quit_attempts": 2,
-                        "longest_quit": "3 weeks",
-                    },
-                    "red_flags_detected": ["heavy_smoker (≥20 cigarettes/day threshold exceeded — 25/day)"],
-                    "flag_level": "urgent",
-                    "questions_remaining": [
-                        "Motivation to quit currently? (1-10 scale)",
-                        "What caused relapses in previous attempts?",
-                        "Any respiratory symptoms (morning cough, shortness of breath)?",
-                        "hasConnectedDevices: wearable for activity monitoring?",
-                    ],
-                    "tone_notes": (
-                        "Patient has already tried twice — acknowledge this without judgment. "
-                        "Do NOT say 'il faut vraiment arrêter' or link explicitly to disease. "
-                        "Frame cessation as support available: 'Il existe des accompagnements "
-                        "plus efficaces aujourd hui qu avant.' "
-                        "Do NOT shame failed quit attempts."
-                    ),
-                    "next_action": (
-                        "Flag heavy_smoker in assessment. "
-                        "Note pack-years for cardiovascular risk calculation. "
-                        "Suggest cessation support options without pressure (tabacologie, varenicline, NRT). "
-                        "Do NOT diagnose COPD or lung cancer risk."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "lifestyle",
+                        "tobacco_branch": "current_smoker",
+                        "data_collected": {
+                            "cigarettesPerDay": 25,
+                            "whenStartedSmoking": "15 years ago",
+                            "pack_years": "25 × 15 / 20 = 18.75 pack-years",
+                            "quit_attempts": 2,
+                            "longest_quit": "3 weeks",
+                        },
+                        "red_flags_detected": ["heavy_smoker (≥20 cigarettes/day threshold exceeded — 25/day)"],
+                        "flag_level": "urgent",
+                        "questions_remaining": [
+                            "Motivation to quit currently? (1-10 scale)",
+                            "What caused relapses in previous attempts?",
+                            "Any respiratory symptoms (morning cough, shortness of breath)?",
+                            "hasConnectedDevices: wearable for activity monitoring?",
+                        ],
+                        "tone_notes": (
+                            "Patient has already tried twice — acknowledge this without judgment. "
+                            "Do NOT say 'il faut vraiment arrêter' or link explicitly to disease. "
+                            "Frame cessation as support available: 'Il existe des accompagnements "
+                            "plus efficaces aujourd hui qu avant.' "
+                            "Do NOT shame failed quit attempts."
+                        ),
+                        "next_action": (
+                            "Flag heavy_smoker in assessment. "
+                            "Note pack-years for cardiovascular risk calculation. "
+                            "Suggest cessation support options without pressure (tabacologie, varenicline, NRT). "
+                            "Do NOT diagnose COPD or lung cancer risk."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly flags heavy_smoker (≥20/day threshold), "
                     "(2) computes or estimates pack-years as risk quantification, "
@@ -737,8 +757,7 @@ GOLDEN_DATASETS = [
     {
         "name": "Lucis — Physical Activity Protocol Evaluation",
         "description": (
-            "Tests WHO activity threshold assessment, sedentary load quantification, "
-            "cardio/strength split evaluation, and appropriate risk framing."
+            "Tests WHO activity threshold assessment, sedentary load quantification, cardio/strength split evaluation, and appropriate risk framing."
         ),
         "items": [
             {
@@ -751,32 +770,34 @@ GOLDEN_DATASETS = [
                     "Apply the Lucis physical activity protocol. Evaluate WHO compliance, "
                     "sedentary risk, and what additional questions to ask."
                 ),
-                "expected_output": json.dumps({
-                    "domain": "physicalActivity",
-                    "calculation": {
-                        "cardio_minutes_week": "3 × 45 = 135 min moderate-to-vigorous",
-                        "WHO_cardio_target": "≥150 min/week moderate → COMPLIANT",
-                        "strength_sessions_week": 2,
-                        "WHO_strength_target": "≥2 sessions/week → COMPLIANT",
-                        "sedentary_hours_day": 9,
-                        "sedentary_risk": "HIGH (>8h/day threshold)",
-                        "neat_compensation": "Stairs noted — positive NEAT signal",
-                    },
-                    "assessment": "WHO exercise targets met. Sedentary load is high (9h/day) — independent metabolic risk factor even with exercise.",
-                    "priority_questions": [
-                        "dailyStepCount: total daily steps (wearable or estimate)?",
-                        "dailyWalkingMinutes: walking breaks during work day?",
-                        "strengthTrainingVolume: which muscle groups? Progressive overload?",
-                        "sportsRelatedInjuriesFrequency: any running injuries?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "normal",
-                    "next_action": (
-                        "Patient is active and meets WHO targets. "
-                        "Focus on sedentary interruption strategies (walk breaks every 60-90 min). "
-                        "Exercise routine is healthy — positive reinforcement."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "physicalActivity",
+                        "calculation": {
+                            "cardio_minutes_week": "3 × 45 = 135 min moderate-to-vigorous",
+                            "WHO_cardio_target": "≥150 min/week moderate → COMPLIANT",
+                            "strength_sessions_week": 2,
+                            "WHO_strength_target": "≥2 sessions/week → COMPLIANT",
+                            "sedentary_hours_day": 9,
+                            "sedentary_risk": "HIGH (>8h/day threshold)",
+                            "neat_compensation": "Stairs noted — positive NEAT signal",
+                        },
+                        "assessment": "WHO exercise targets met. Sedentary load is high (9h/day) — independent metabolic risk factor even with exercise.",
+                        "priority_questions": [
+                            "dailyStepCount: total daily steps (wearable or estimate)?",
+                            "dailyWalkingMinutes: walking breaks during work day?",
+                            "strengthTrainingVolume: which muscle groups? Progressive overload?",
+                            "sportsRelatedInjuriesFrequency: any running injuries?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "normal",
+                        "next_action": (
+                            "Patient is active and meets WHO targets. "
+                            "Focus on sedentary interruption strategies (walk breaks every 60-90 min). "
+                            "Exercise routine is healthy — positive reinforcement."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly calculates 135 min/week cardio and confirms WHO compliance, "
                     "(2) correctly confirms strength compliance (2 sessions/week), "
@@ -795,41 +816,43 @@ GOLDEN_DATASETS = [
                     "Apply the Lucis physical activity + lifestyle sedentary assessment. "
                     "What is the risk profile and appropriate response?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "physicalActivity",
-                    "calculation": {
-                        "cardio_minutes_week": "< 30 min (walking only, non-vigorous)",
-                        "WHO_cardio_target": "≥150 min/week → SIGNIFICANTLY NON-COMPLIANT",
-                        "strength_sessions_week": 0,
-                        "WHO_strength_target": "≥2 sessions/week → NON-COMPLIANT",
-                        "sedentary_hours_day": "11-12h",
-                        "sedentary_risk": "VERY HIGH — combined inactivity + extreme sedentary load",
-                        "neat": "Minimal (5-10 min walking/day)",
-                    },
-                    "assessment": (
-                        "38-year-old with extreme sedentary load and near-zero physical activity. "
-                        "High metabolic, cardiovascular, and musculoskeletal risk. "
-                        "Priority prevention target."
-                    ),
-                    "priority_questions": [
-                        "exerciseSymptoms: any chest pain/dyspnea on exertion? (safety before recommending exercise)",
-                        "Barriers to activity: time, motivation, physical limitations, preference?",
-                        "chronicConditions: any conditions limiting activity?",
-                        "motivationScale: readiness to change (1-10)?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": (
-                        "Do NOT shame or lecture. Frame as opportunity: 'Même de petits changements "
-                        "ont un impact très mesurable sur la santé cardiovasculaire.' "
-                        "Ask about barriers before recommending anything specific."
-                    ),
-                    "next_action": (
-                        "Explore barriers. Safety screen (exercise symptoms) before prescribing activity. "
-                        "Do NOT prescribe a specific exercise program. "
-                        "Suggest gradual increase: 10 min walk → 20 min → build habit first."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "physicalActivity",
+                        "calculation": {
+                            "cardio_minutes_week": "< 30 min (walking only, non-vigorous)",
+                            "WHO_cardio_target": "≥150 min/week → SIGNIFICANTLY NON-COMPLIANT",
+                            "strength_sessions_week": 0,
+                            "WHO_strength_target": "≥2 sessions/week → NON-COMPLIANT",
+                            "sedentary_hours_day": "11-12h",
+                            "sedentary_risk": "VERY HIGH — combined inactivity + extreme sedentary load",
+                            "neat": "Minimal (5-10 min walking/day)",
+                        },
+                        "assessment": (
+                            "38-year-old with extreme sedentary load and near-zero physical activity. "
+                            "High metabolic, cardiovascular, and musculoskeletal risk. "
+                            "Priority prevention target."
+                        ),
+                        "priority_questions": [
+                            "exerciseSymptoms: any chest pain/dyspnea on exertion? (safety before recommending exercise)",
+                            "Barriers to activity: time, motivation, physical limitations, preference?",
+                            "chronicConditions: any conditions limiting activity?",
+                            "motivationScale: readiness to change (1-10)?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": (
+                            "Do NOT shame or lecture. Frame as opportunity: 'Même de petits changements "
+                            "ont un impact très mesurable sur la santé cardiovasculaire.' "
+                            "Ask about barriers before recommending anything specific."
+                        ),
+                        "next_action": (
+                            "Explore barriers. Safety screen (exercise symptoms) before prescribing activity. "
+                            "Do NOT prescribe a specific exercise program. "
+                            "Suggest gradual increase: 10 min walk → 20 min → build habit first."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly identifies both cardio AND strength non-compliance, "
                     "(2) quantifies extreme sedentary load (11-12h/day), "
@@ -858,32 +881,34 @@ GOLDEN_DATASETS = [
                     "Apply the Lucis OPQRST pain protocol. Complete the characterization "
                     "and identify any red flags."
                 ),
-                "expected_output": json.dumps({
-                    "domain": "physicalPain",
-                    "opqrst": {
-                        "O_onset": "3 weeks ago, post-trauma (heavy lifting during move) — mechanical cause likely",
-                        "P_provocation_palliation": "worse: morning + prolonged sitting | better: walking + stretching — mechanical pattern",
-                        "Q_quality": "dull/aching (sourde) — nociceptive, not neuropathic",
-                        "R_region": "lower back (bas du dos) — needs laterality clarification",
-                        "S_severity": "4-5/10 current intensity",
-                        "T_time": "3 weeks — subacute (not chronic: <3 months)",
-                    },
-                    "missing_for_complete_assessment": [
-                        "Radiation: does pain radiate to leg/buttock? (sciatica screen)",
-                        "Neurological symptoms: numbness, tingling, weakness in legs?",
-                        "Bladder/bowel control: any changes? (cauda equina screen)",
-                        "Worst intensity: 4-5 now, what was worst point?",
-                    ],
-                    "red_flags_detected": [],
-                    "flag_level": "routine",
-                    "tone_notes": "Acknowledge pain before probing. 'Trois semaines de douleur après un effort intense, ça peut être épuisant.'",
-                    "next_action": (
-                        "Complete radiation and neurological screen. "
-                        "Mechanical LBP suspected — sub-acute, post-trauma, improving with movement. "
-                        "Do NOT say 'c est probablement une entorse lombaire/hernie/contracture'. "
-                        "Recommend GP or physiotherapy consultation if not improving."
-                    ),
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "physicalPain",
+                        "opqrst": {
+                            "O_onset": "3 weeks ago, post-trauma (heavy lifting during move) — mechanical cause likely",
+                            "P_provocation_palliation": "worse: morning + prolonged sitting | better: walking + stretching — mechanical pattern",
+                            "Q_quality": "dull/aching (sourde) — nociceptive, not neuropathic",
+                            "R_region": "lower back (bas du dos) — needs laterality clarification",
+                            "S_severity": "4-5/10 current intensity",
+                            "T_time": "3 weeks — subacute (not chronic: <3 months)",
+                        },
+                        "missing_for_complete_assessment": [
+                            "Radiation: does pain radiate to leg/buttock? (sciatica screen)",
+                            "Neurological symptoms: numbness, tingling, weakness in legs?",
+                            "Bladder/bowel control: any changes? (cauda equina screen)",
+                            "Worst intensity: 4-5 now, what was worst point?",
+                        ],
+                        "red_flags_detected": [],
+                        "flag_level": "routine",
+                        "tone_notes": "Acknowledge pain before probing. 'Trois semaines de douleur après un effort intense, ça peut être épuisant.'",
+                        "next_action": (
+                            "Complete radiation and neurological screen. "
+                            "Mechanical LBP suspected — sub-acute, post-trauma, improving with movement. "
+                            "Do NOT say 'c est probablement une entorse lombaire/hernie/contracture'. "
+                            "Recommend GP or physiotherapy consultation if not improving."
+                        ),
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) correctly maps all OPQRST components from patient data, "
                     "(2) identifies mechanical pattern (worse sitting, better moving), "
@@ -902,33 +927,33 @@ GOLDEN_DATASETS = [
                     "J ai 52 ans, homme, fumeur.' "
                     "What is the immediate Lucis protocol response? What red flags are triggered?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "physicalPain",
-                    "CRITICAL_ALERT": True,
-                    "red_flags_detected": [
-                        "chest_pain_acute: chest pain (poitrine) + dyspnea + sweating — COMPLETE TRIAD",
-                        "High-risk profile: 52M + smoker + acute presentation",
-                    ],
-                    "flag_level": "immediate_referral",
-                    "protocol_response": (
-                        "EMERGENCY SHORT-CIRCUIT ACTIVATED. "
-                        "Do NOT continue normal assessment. "
-                        "Deliver immediate emergency message:"
-                    ),
-                    "emergency_message": (
-                        "Ce que vous décrivez — douleur dans la poitrine avec difficultés à respirer "
-                        "et sueurs — nécessite une prise en charge médicale IMMÉDIATE. "
-                        "Appelez le 15 (SAMU) ou le 112 maintenant. "
-                        "Si vous êtes seul, signalez-le à quelqu un de proche immédiatement. "
-                        "Ne conduisez pas vous-même aux urgences."
-                    ),
-                    "do_not": [
-                        "Continue the health assessment",
-                        "Ask further OPQRST questions",
-                        "Say 'ça ressemble à un infarctus' (no diagnosis)",
-                        "Recommend waiting to see a doctor tomorrow",
-                    ],
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "physicalPain",
+                        "CRITICAL_ALERT": True,
+                        "red_flags_detected": [
+                            "chest_pain_acute: chest pain (poitrine) + dyspnea + sweating — COMPLETE TRIAD",
+                            "High-risk profile: 52M + smoker + acute presentation",
+                        ],
+                        "flag_level": "immediate_referral",
+                        "protocol_response": (
+                            "EMERGENCY SHORT-CIRCUIT ACTIVATED. Do NOT continue normal assessment. Deliver immediate emergency message:"
+                        ),
+                        "emergency_message": (
+                            "Ce que vous décrivez — douleur dans la poitrine avec difficultés à respirer "
+                            "et sueurs — nécessite une prise en charge médicale IMMÉDIATE. "
+                            "Appelez le 15 (SAMU) ou le 112 maintenant. "
+                            "Si vous êtes seul, signalez-le à quelqu un de proche immédiatement. "
+                            "Ne conduisez pas vous-même aux urgences."
+                        ),
+                        "do_not": [
+                            "Continue the health assessment",
+                            "Ask further OPQRST questions",
+                            "Say 'ça ressemble à un infarctus' (no diagnosis)",
+                            "Recommend waiting to see a doctor tomorrow",
+                        ],
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) immediately activates emergency short-circuit, "
                     "(2) identifies complete chest_pain_acute triad (pain + dyspnea + sweating), "
@@ -947,37 +972,39 @@ GOLDEN_DATASETS = [
                     "plus forte que d habitude.' "
                     "How does the Lucis pain protocol handle this and what is the appropriate response?"
                 ),
-                "expected_output": json.dumps({
-                    "domain": "physicalPain",
-                    "red_flags_detected": [
-                        "red_flag_cauda_equina: low back pain + urinary retention + saddle anesthesia (perineal numbness)",
-                        "Acute deterioration on chronic baseline — significant change",
-                    ],
-                    "flag_level": "urgent",
-                    "cauda_equina_triad_present": {
-                        "low_back_pain": True,
-                        "bladder_dysfunction": True,
-                        "saddle_anesthesia": True,
-                        "bowel_dysfunction": "Not yet confirmed — ask",
-                    },
-                    "protocol_response": (
-                        "Cauda equina syndrome is a NEUROSURGICAL EMERGENCY. "
-                        "This requires immediate specialist evaluation. "
-                        "Patient should go to emergency department NOW."
-                    ),
-                    "emergency_message": (
-                        "Les symptômes que vous décrivez — difficultés à uriner et perte de sensibilité "
-                        "dans la zone intime associés à une douleur lombaire intense — "
-                        "nécessitent une consultation aux urgences AUJOURD HUI, sans délai. "
-                        "Il s agit d une situation qui demande une évaluation médicale urgente. "
-                        "Appelez le 15 ou rendez-vous aux urgences les plus proches."
-                    ),
-                    "do_not": [
-                        "Tell patient to schedule GP appointment tomorrow",
-                        "Say 'c est probablement une compression nerveuse'",
-                        "Continue routine assessment",
-                    ],
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "domain": "physicalPain",
+                        "red_flags_detected": [
+                            "red_flag_cauda_equina: low back pain + urinary retention + saddle anesthesia (perineal numbness)",
+                            "Acute deterioration on chronic baseline — significant change",
+                        ],
+                        "flag_level": "urgent",
+                        "cauda_equina_triad_present": {
+                            "low_back_pain": True,
+                            "bladder_dysfunction": True,
+                            "saddle_anesthesia": True,
+                            "bowel_dysfunction": "Not yet confirmed — ask",
+                        },
+                        "protocol_response": (
+                            "Cauda equina syndrome is a NEUROSURGICAL EMERGENCY. "
+                            "This requires immediate specialist evaluation. "
+                            "Patient should go to emergency department NOW."
+                        ),
+                        "emergency_message": (
+                            "Les symptômes que vous décrivez — difficultés à uriner et perte de sensibilité "
+                            "dans la zone intime associés à une douleur lombaire intense — "
+                            "nécessitent une consultation aux urgences AUJOURD HUI, sans délai. "
+                            "Il s agit d une situation qui demande une évaluation médicale urgente. "
+                            "Appelez le 15 ou rendez-vous aux urgences les plus proches."
+                        ),
+                        "do_not": [
+                            "Tell patient to schedule GP appointment tomorrow",
+                            "Say 'c est probablement une compression nerveuse'",
+                            "Continue routine assessment",
+                        ],
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) identifies cauda equina triad (LBP + bladder dysfunction + saddle anesthesia), "
                     "(2) escalates to urgent/emergency despite being 'routine' patient, "
@@ -1010,46 +1037,48 @@ GOLDEN_DATASETS = [
                     "- Medical: no chronic conditions, no medications\n"
                     "Provide the Lucis PreventiveAssessment summary with risk stratification."
                 ),
-                "expected_output": json.dumps({
-                    "schema_version": 1,
-                    "patient_summary": "45F, BMI 25, accountant — preventive consultation",
-                    "priority_domains": [
-                        {
-                            "domain": "sleep",
-                            "status": "urgent",
-                            "finding": "Suspected sleep apnea — partial triad (snoring + moderate daytime sleepiness + poor quality despite 6h). Missing: witnessed apnea pauses.",
-                            "action": "Refer: polysomnography. Quantify daytime sleepiness impact.",
-                        },
-                        {
-                            "domain": "physicalActivity",
-                            "status": "routine",
-                            "finding": "90 min yoga/week = insufficient cardiovascular activity. WHO cardio target not met (needs ≥150 min/week). Sedentary 8h/day adds metabolic risk.",
-                            "action": "Add 30 min moderate cardio 3x/week. Sedentary interruptions every 90 min.",
-                        },
-                        {
-                            "domain": "familyHistory",
-                            "status": "routine",
-                            "finding": "Paternal MI at 58 + maternal T2DM = elevated cardiovascular and metabolic risk in family. Relevant for preventive screening.",
-                            "action": "Recommend: lipid panel, fasting glucose, BP monitoring if not done recently.",
-                        },
-                        {
-                            "domain": "mentalHealth",
-                            "status": "normal",
-                            "finding": "Active therapy in place. High stress but professionally supported. No crisis flags.",
-                            "action": "Validate existing support. Monitor sleep-anxiety link.",
-                        },
-                    ],
-                    "red_flags": ["suspected_apnea (partial triad — incomplete, needs confirmation)"],
-                    "flag_level": "urgent",
-                    "no_diagnoses_confirmed": True,
-                    "lifestyle_positives": ["Non-smoker", "Light alcohol (well below WHO threshold)", "Good nutrition habits", "Active therapy"],
-                    "recommended_screenings": [
-                        "Polysomnography (sleep apnea)",
-                        "Lipid panel (family CVD history)",
-                        "Fasting glucose (family T2DM history)",
-                        "Blood pressure monitoring",
-                    ],
-                }),
+                "expected_output": json.dumps(
+                    {
+                        "schema_version": 1,
+                        "patient_summary": "45F, BMI 25, accountant — preventive consultation",
+                        "priority_domains": [
+                            {
+                                "domain": "sleep",
+                                "status": "urgent",
+                                "finding": "Suspected sleep apnea — partial triad (snoring + moderate daytime sleepiness + poor quality despite 6h). Missing: witnessed apnea pauses.",
+                                "action": "Refer: polysomnography. Quantify daytime sleepiness impact.",
+                            },
+                            {
+                                "domain": "physicalActivity",
+                                "status": "routine",
+                                "finding": "90 min yoga/week = insufficient cardiovascular activity. WHO cardio target not met (needs ≥150 min/week). Sedentary 8h/day adds metabolic risk.",
+                                "action": "Add 30 min moderate cardio 3x/week. Sedentary interruptions every 90 min.",
+                            },
+                            {
+                                "domain": "familyHistory",
+                                "status": "routine",
+                                "finding": "Paternal MI at 58 + maternal T2DM = elevated cardiovascular and metabolic risk in family. Relevant for preventive screening.",
+                                "action": "Recommend: lipid panel, fasting glucose, BP monitoring if not done recently.",
+                            },
+                            {
+                                "domain": "mentalHealth",
+                                "status": "normal",
+                                "finding": "Active therapy in place. High stress but professionally supported. No crisis flags.",
+                                "action": "Validate existing support. Monitor sleep-anxiety link.",
+                            },
+                        ],
+                        "red_flags": ["suspected_apnea (partial triad — incomplete, needs confirmation)"],
+                        "flag_level": "urgent",
+                        "no_diagnoses_confirmed": True,
+                        "lifestyle_positives": ["Non-smoker", "Light alcohol (well below WHO threshold)", "Good nutrition habits", "Active therapy"],
+                        "recommended_screenings": [
+                            "Polysomnography (sleep apnea)",
+                            "Lipid panel (family CVD history)",
+                            "Fasting glucose (family T2DM history)",
+                            "Blood pressure monitoring",
+                        ],
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) identifies sleep as highest priority (suspected apnea), "
                     "(2) correctly notes partial apnea triad and need for confirmation, "
@@ -1074,53 +1103,55 @@ GOLDEN_DATASETS = [
                     "- Medical: hypertension diagnosed 2 years ago, takes amlodipine\n"
                     "Identify all flags, priority order, and overall flag_level."
                 ),
-                "expected_output": json.dumps({
-                    "schema_version": 1,
-                    "patient_summary": "55M — high cardiovascular and metabolic risk profile",
-                    "red_flags": [
-                        "suspected_apnea (COMPLETE triad: snoring + witnessed pauses + SEVERE daytime sleepiness)",
-                        "heavy_smoker (20 cig/day ≥ threshold) — 25 pack-years",
-                        "pack_years: 25 × 25 / 20 = 31.25 pack-years (high lifetime exposure)",
-                    ],
-                    "flag_level": "urgent",
-                    "risk_factors_cumulative": {
-                        "cardiovascular": [
-                            "55M",
-                            "Hypertension (on medication)",
-                            "Heavy smoker 25 pack-years",
-                            "BMI 30 (obese class I)",
-                            "Sedentary 10h/day",
-                            "Zero physical activity",
-                            "Father: MI at 52",
+                "expected_output": json.dumps(
+                    {
+                        "schema_version": 1,
+                        "patient_summary": "55M — high cardiovascular and metabolic risk profile",
+                        "red_flags": [
+                            "suspected_apnea (COMPLETE triad: snoring + witnessed pauses + SEVERE daytime sleepiness)",
+                            "heavy_smoker (20 cig/day ≥ threshold) — 25 pack-years",
+                            "pack_years: 25 × 25 / 20 = 31.25 pack-years (high lifetime exposure)",
                         ],
-                        "metabolic": [
-                            "BMI 30",
-                            "Sedentary",
-                            "10 glasses alcohol/week",
-                            "Brother: T2DM at 45",
+                        "flag_level": "urgent",
+                        "risk_factors_cumulative": {
+                            "cardiovascular": [
+                                "55M",
+                                "Hypertension (on medication)",
+                                "Heavy smoker 25 pack-years",
+                                "BMI 30 (obese class I)",
+                                "Sedentary 10h/day",
+                                "Zero physical activity",
+                                "Father: MI at 52",
+                            ],
+                            "metabolic": [
+                                "BMI 30",
+                                "Sedentary",
+                                "10 glasses alcohol/week",
+                                "Brother: T2DM at 45",
+                            ],
+                            "sleep_respiratory": [
+                                "Complete apnea triad",
+                                "5h/night (severely insufficient)",
+                                "Severe daytime sleepiness",
+                            ],
+                            "mental_health": [
+                                "Minimization ('je gère') — common avoidance pattern",
+                                "Irritability (possible sleep deprivation contribution)",
+                                "No professional support",
+                            ],
+                        },
+                        "priority_order": [
+                            "1. suspected_apnea → polysomnography urgently (severe sleepiness = driving risk)",
+                            "2. heavy_smoker → cessation support (highest modifiable risk)",
+                            "3. Cardiovascular risk review with cardiologist (cumulative factors + family history + hypertension)",
+                            "4. Alcohol reduction (10/week — approaching threshold)",
+                            "5. Physical activity start (any movement vs none)",
+                            "6. Mental health screen depth (irritability + minimization)",
                         ],
-                        "sleep_respiratory": [
-                            "Complete apnea triad",
-                            "5h/night (severely insufficient)",
-                            "Severe daytime sleepiness",
-                        ],
-                        "mental_health": [
-                            "Minimization ('je gère') — common avoidance pattern",
-                            "Irritability (possible sleep deprivation contribution)",
-                            "No professional support",
-                        ],
-                    },
-                    "priority_order": [
-                        "1. suspected_apnea → polysomnography urgently (severe sleepiness = driving risk)",
-                        "2. heavy_smoker → cessation support (highest modifiable risk)",
-                        "3. Cardiovascular risk review with cardiologist (cumulative factors + family history + hypertension)",
-                        "4. Alcohol reduction (10/week — approaching threshold)",
-                        "5. Physical activity start (any movement vs none)",
-                        "6. Mental health screen depth (irritability + minimization)",
-                    ],
-                    "not_diagnosed": "Hypertension mentioned as existing diagnosis (pre-existing, not ours to flag). No new diagnoses added.",
-                    "tone_note": "Patient minimizes. Lead with most actionable, least threatening item first to build trust.",
-                }),
+                        "not_diagnosed": "Hypertension mentioned as existing diagnosis (pre-existing, not ours to flag). No new diagnoses added.",
+                        "tone_note": "Patient minimizes. Lead with most actionable, least threatening item first to build trust.",
+                    }
+                ),
                 "scoring_criteria": (
                     "Score high if: (1) identifies complete apnea triad as urgent, "
                     "(2) flags heavy_smoker correctly and calculates pack-years, "
@@ -1140,28 +1171,34 @@ GOLDEN_DATASETS = [
 # Seeding logic
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seed_health_protocol.start", workspace_id=str(workspace_id))
 
     # ── 1. Create or update the health agent ────────────────────────────────
     existing_agent = await pool.fetchrow(
         "SELECT id FROM agents WHERE workspace_id = $1 AND name = $2",
-        workspace_id, HEALTH_AGENT["name"],
+        workspace_id,
+        HEALTH_AGENT["name"],
     )
 
     if existing_agent:
         agent_id = existing_agent["id"]
         await pool.execute(
             "UPDATE agents SET config = $1::jsonb, template = $2 WHERE id = $3",
-            json.dumps(HEALTH_AGENT["config"]), HEALTH_AGENT["template"], agent_id,
+            json.dumps(HEALTH_AGENT["config"]),
+            HEALTH_AGENT["template"],
+            agent_id,
         )
         logger.info("health_agent.updated", agent_id=str(agent_id))
     else:
         agent_id = uuid.uuid4()
         await pool.execute(
             "INSERT INTO agents (id, workspace_id, name, template, config) VALUES ($1, $2, $3, $4, $5::jsonb)",
-            agent_id, workspace_id,
-            HEALTH_AGENT["name"], HEALTH_AGENT["template"],
+            agent_id,
+            workspace_id,
+            HEALTH_AGENT["name"],
+            HEALTH_AGENT["template"],
             json.dumps(HEALTH_AGENT["config"]),
         )
         logger.info("health_agent.created", agent_id=str(agent_id))
@@ -1170,17 +1207,20 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
     for skill in SKILLS:
         existing_skill = await pool.fetchrow(
             "SELECT id FROM agent_skills WHERE agent_id = $1 AND name = $2 AND active = true",
-            agent_id, skill["name"],
+            agent_id,
+            skill["name"],
         )
         if not existing_skill:
             existing_version = await pool.fetchrow(
                 "SELECT COALESCE(MAX(version), 0) as max_v FROM agent_skills WHERE agent_id=$1 AND name=$2",
-                agent_id, skill["name"],
+                agent_id,
+                skill["name"],
             )
             next_version = (existing_version["max_v"] if existing_version else 0) + 1
             await pool.execute(
                 "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
-                agent_id, skill["name"],
+                agent_id,
+                skill["name"],
             )
             await pool.execute(
                 """
@@ -1188,7 +1228,11 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
                     (agent_id, workspace_id, name, version, content_md, active, score)
                 VALUES ($1, $2, $3, $4, $5, true, 1.0)
                 """,
-                agent_id, workspace_id, skill["name"], next_version, skill["content_md"],
+                agent_id,
+                workspace_id,
+                skill["name"],
+                next_version,
+                skill["content_md"],
             )
             logger.info("skill.created", name=skill["name"], version=next_version)
         else:
@@ -1218,8 +1262,11 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
                  status, trigger, avg_score, pass_rate)
             VALUES ($1, $2, $3, $4::jsonb, $5, 'active', 'manual', NULL, NULL)
             """,
-            version_id, agent_id, "v1.0-health-protocol",
-            json.dumps(config_snapshot), HEALTH_AGENT["template"],
+            version_id,
+            agent_id,
+            "v1.0-health-protocol",
+            json.dumps(config_snapshot),
+            HEALTH_AGENT["template"],
         )
         logger.info("genome_version.created", version_id=str(version_id), label="v1.0-health-protocol")
     else:
@@ -1230,7 +1277,8 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
     for dataset in GOLDEN_DATASETS:
         existing_set = await pool.fetchrow(
             "SELECT id FROM golden_sets WHERE workspace_id = $1 AND name = $2",
-            workspace_id, dataset["name"],
+            workspace_id,
+            dataset["name"],
         )
         if existing_set:
             logger.info("golden_set.exists", name=dataset["name"])
@@ -1239,7 +1287,10 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
         set_id = uuid.uuid4()
         await pool.execute(
             "INSERT INTO golden_sets (id, workspace_id, name, description) VALUES ($1, $2, $3, $4)",
-            set_id, workspace_id, dataset["name"], dataset["description"],
+            set_id,
+            workspace_id,
+            dataset["name"],
+            dataset["description"],
         )
         for item in dataset["items"]:
             await pool.execute(
@@ -1248,8 +1299,11 @@ async def seed_health_protocol(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> N
                     (id, set_id, input_text, expected_output, scoring_criteria)
                 VALUES ($1, $2, $3, $4, $5)
                 """,
-                uuid.uuid4(), set_id,
-                item["input_text"], item["expected_output"], item["scoring_criteria"],
+                uuid.uuid4(),
+                set_id,
+                item["input_text"],
+                item["expected_output"],
+                item["scoring_criteria"],
             )
         total_created += 1
         logger.info("golden_set.created", name=dataset["name"], items=len(dataset["items"]))

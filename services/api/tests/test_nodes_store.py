@@ -1,4 +1,5 @@
 """Tests that graph nodes read from and write to AsyncPostgresStore via ctx.store."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -16,9 +17,7 @@ async def test_planner_reads_store_facts_when_store_present():
     from flow.infrastructure.graph.nodes import make_planner
 
     mock_store = AsyncMock()
-    mock_store.asearch = AsyncMock(return_value=[
-        MagicMock(value={"content": "fact: user prefers concise answers"})
-    ])
+    mock_store.asearch = AsyncMock(return_value=[MagicMock(value={"content": "fact: user prefers concise answers"})])
 
     ctx = GraphContext(
         pool=AsyncMock(),

@@ -5,6 +5,7 @@ We synthesize it from the user's typed preferences (style/tooling/veto/goal/
 domain/channel) plus optional CV-extracted text. LLM is preferred but the
 function has a deterministic fallback so it works even with no API key.
 """
+
 from __future__ import annotations
 
 import json
@@ -107,10 +108,7 @@ async def synthesize_persona(
         text = getattr(response, "content", "") or ""
         if isinstance(text, list):
             # Anthropic content blocks
-            text = "\n".join(
-                str(b.get("text", "")) if isinstance(b, dict) else str(b)
-                for b in text
-            )
+            text = "\n".join(str(b.get("text", "")) if isinstance(b, dict) else str(b) for b in text)
         text = str(text).strip()
         return text or _format_template(facets, cv_text)
     except Exception:
@@ -122,6 +120,7 @@ def _build_persona_llm(settings: Any) -> Any | None:
     if getattr(settings, "anthropic_api_key", None):
         try:
             from langchain_anthropic import ChatAnthropic
+
             return ChatAnthropic(
                 model="claude-haiku-4-5-20251001",
                 api_key=settings.anthropic_api_key,
@@ -131,6 +130,7 @@ def _build_persona_llm(settings: Any) -> Any | None:
     if getattr(settings, "openai_api_key", None):
         try:
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
                 model="gpt-4o-mini",
                 api_key=settings.openai_api_key,
@@ -178,11 +178,7 @@ async def synthesize_from_questionnaire(
     answers: list[dict[str, str]],
 ) -> str:
     """Build a SOUL.md from explicit questionnaire Q&A pairs."""
-    qa_text = "\n".join(
-        f"Q: {a.get('question', '').strip()}\nA: {a.get('answer', '').strip()}"
-        for a in answers
-        if a.get("answer", "").strip()
-    )
+    qa_text = "\n".join(f"Q: {a.get('question', '').strip()}\nA: {a.get('answer', '').strip()}" for a in answers if a.get("answer", "").strip())
     if not qa_text:
         return _format_template([], None)
     if llm is None:
@@ -192,7 +188,20 @@ async def synthesize_from_questionnaire(
             v = a.get("answer", "").strip()
             if v:
                 lines.append(f"- **{q}**: {v}")
-        lines += ["", "## Voice & style", "- (unspecified)", "", "## What to avoid", "- (unspecified)", "", "## Current focus", "- (unspecified)", "", "## Technical posture", "- (unspecified)"]
+        lines += [
+            "",
+            "## Voice & style",
+            "- (unspecified)",
+            "",
+            "## What to avoid",
+            "- (unspecified)",
+            "",
+            "## Current focus",
+            "- (unspecified)",
+            "",
+            "## Technical posture",
+            "- (unspecified)",
+        ]
         return "\n".join(lines)
     prompt = _QUESTIONNAIRE_PROMPT.format(qa_text=qa_text)
     try:
@@ -227,10 +236,7 @@ async def regenerate_persona(
         workspace_id,
         user_id,
     )
-    facets = [
-        {"class": r["class"], "value": r["value"]}
-        for r in facet_rows
-    ]
+    facets = [{"class": r["class"], "value": r["value"]} for r in facet_rows]
     llm = _build_persona_llm(settings)
     content = await synthesize_persona(llm, facets, cv_text=None)
 

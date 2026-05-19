@@ -17,11 +17,13 @@ async def parse_upload(files: list[UploadFile]) -> list[ObsidianDocument]:
         if f.filename and not f.filename.endswith(".md"):
             continue
         raw = await f.read()
-        docs.append(ObsidianDocument(
-            filename=f.filename or "unknown.md",
-            raw_content=raw.decode("utf-8", errors="replace"),
-            source="upload",
-        ))
+        docs.append(
+            ObsidianDocument(
+                filename=f.filename or "unknown.md",
+                raw_content=raw.decode("utf-8", errors="replace"),
+                source="upload",
+            )
+        )
     return docs
 
 
@@ -94,9 +96,11 @@ async def sync_from_path(
                 continue
         relative = str(md_file.relative_to(root))
         raw = md_file.read_text(encoding="utf-8", errors="replace")
-        docs.append(ObsidianDocument(
-            filename=relative,
-            raw_content=raw,
-            source="sync",
-        ))
+        docs.append(
+            ObsidianDocument(
+                filename=relative,
+                raw_content=raw,
+                source="sync",
+            )
+        )
     return docs

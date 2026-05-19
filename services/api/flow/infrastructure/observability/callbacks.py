@@ -1,4 +1,5 @@
 """LangChain callback handler for structured observability (model + tool events)."""
+
 from __future__ import annotations
 
 import time

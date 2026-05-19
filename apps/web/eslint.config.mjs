@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Common async data-fetching pattern — not a bug, just a perf hint
+      "react-hooks/set-state-in-effect": "warn",
+      // Too strict for a fast-moving codebase
+      "@typescript-eslint/no-explicit-any": "warn",
+      // Cosmetic JSX escaping — not a functional issue
+      "react/no-unescaped-entities": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

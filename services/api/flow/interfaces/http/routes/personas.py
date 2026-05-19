@@ -1,4 +1,5 @@
 """SOUL.md persona routes — read / save / regenerate per (workspace, user)."""
+
 from __future__ import annotations
 
 import json
@@ -109,6 +110,7 @@ async def questionnaire_persona(
 ) -> PersonaResponseOut:
     await _assert_workspace_access(repo, user_id, body.workspace_id)
     from flow.application.persona_service import _build_persona_llm
+
     llm = _build_persona_llm(settings)
     answers = [{"question": a.question, "answer": a.answer} for a in body.answers]
     content = await synthesize_from_questionnaire(llm, answers)

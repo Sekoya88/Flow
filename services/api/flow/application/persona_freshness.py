@@ -8,6 +8,7 @@ Idempotent: already-stale personas are skipped; a persona regenerated after
 being flagged will have stale_since removed on next regenerate (regenerate_persona
 overwrites derived_from via the INSERT ... ON CONFLICT DO UPDATE path).
 """
+
 from __future__ import annotations
 
 import json
@@ -86,6 +87,7 @@ async def persona_freshness_tick(ctx: dict) -> None:
     flagged = await mark_stale_personas(pool)
     try:
         import structlog
+
         structlog.get_logger().info("cron.persona_freshness_tick.done", flagged=flagged)
     except Exception:
         logger.info("cron.persona_freshness_tick.done flagged=%d", flagged)

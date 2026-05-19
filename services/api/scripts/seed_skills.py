@@ -673,7 +673,6 @@ Verify citations for accessibility, relevance, and claim support. A citation tha
 """,
         },
     ],
-
     "Research Analyst": [
         {
             "name": "structured-research-report",
@@ -790,7 +789,6 @@ Output: {"source": "LLaVA (2023)", "recency": 2, "authority": 3, "relevance": 3,
 """,
         },
     ],
-
     "Code Review Agent": [
         {
             "name": "security-vulnerability-scan",
@@ -912,7 +910,6 @@ Output: {"scores": {"correctness": 4, "readability": 4, "testability": 3, "perfo
 """,
         },
     ],
-
     "Daily AI Briefing": [
         {
             "name": "news-digest-synthesis",
@@ -1012,7 +1009,6 @@ Output: [{"title": "Anthropic publishes safety evals methodology", "score": 8, "
 """,
         },
     ],
-
     "Knowledge Curator": [
         {
             "name": "knowledge-extraction",
@@ -1127,7 +1123,6 @@ Output: {"action": "merge", "target_id": "existing-uuid", "merged_entity": {"nam
 """,
         },
     ],
-
     "Data Analyst": [
         {
             "name": "exploratory-data-analysis",
@@ -1225,7 +1220,6 @@ Output: {"insights": [{"observation": "APAC revenue declined 18% in Q3 vs Q2", "
 """,
         },
     ],
-
     "Legal Document Analyzer": [
         {
             "name": "contract-risk-extraction",
@@ -1330,7 +1324,6 @@ Output: {"obligations": [{"party": "Client", "obligation": "Pay invoice", "deadl
 """,
         },
     ],
-
     "Competitive Intelligence": [
         {
             "name": "competitor-profile",
@@ -1434,7 +1427,6 @@ Output item: {"type": "Research", "description": "40% increase in arXiv papers o
 """,
         },
     ],
-
     "Meeting Summarizer": [
         {
             "name": "meeting-summary",
@@ -1538,7 +1530,6 @@ Output: {"overall_tone": "tense", "alignment": {"level": "LOW", "evidence": "No 
 """,
         },
     ],
-
     "Bug Triage Assistant": [
         {
             "name": "bug-severity-classification",
@@ -1647,7 +1638,6 @@ Output: {"symptom": "500 errors on user lookup", "proximate_cause": "Null pointe
 """,
         },
     ],
-
     "Financial Report Analyst": [
         {
             "name": "financial-metrics-extraction",
@@ -1753,7 +1743,6 @@ Takeaways: ["Revenue growth accelerating — 18% vs 14% last quarter", "Gross ma
 """,
         },
     ],
-
     "Content Strategist": [
         {
             "name": "content-brief-generation",
@@ -1864,6 +1853,7 @@ Persona: {"name": "Senior ML Engineer", "demographics": {"role": "ML Engineer L5
 
 # ── DB operations ─────────────────────────────────────────────────────────────
 
+
 async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seeding_skills", workspace_id=str(workspace_id))
     seeded = 0
@@ -1871,7 +1861,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
     for agent_name, skills in SKILLS.items():
         agent_row = await pool.fetchrow(
             "SELECT id FROM agents WHERE workspace_id = $1 AND name = $2",
-            workspace_id, agent_name,
+            workspace_id,
+            agent_name,
         )
         if not agent_row:
             logger.warning("agent_not_found", name=agent_name)
@@ -1886,7 +1877,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
             # Get next version (append-only versioning, matching repo.upsert_agent_skill)
             row = await pool.fetchrow(
                 "SELECT COALESCE(MAX(version), 0) AS max_v FROM agent_skills WHERE agent_id=$1 AND name=$2",
-                agent_id, name,
+                agent_id,
+                name,
             )
             max_v = row["max_v"] if row else 0
 
@@ -1898,7 +1890,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
             # Deactivate old versions (none, but for correctness)
             await pool.execute(
                 "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
-                agent_id, name,
+                agent_id,
+                name,
             )
 
             await pool.execute(
@@ -1906,7 +1899,11 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
                 INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, active)
                 VALUES ($1, $2, $3, $4, $5, true)
                 """,
-                agent_id, workspace_id, name, 1, content_md,
+                agent_id,
+                workspace_id,
+                name,
+                1,
+                content_md,
             )
             logger.info("skill.seeded", agent=agent_name, skill=name)
             seeded += 1

@@ -41,20 +41,22 @@ async def list_skills(
     skills = []
     for r in rows:
         parsed = parse_skill_md(r["content_md"])
-        skills.append({
-            "id": str(r["id"]),
-            "name": parsed.name if parsed.name != "unnamed" else r["name"],
-            "version": r["version"],
-            "content_md": r["content_md"],
-            "description": parsed.description,
-            "allowed_tools": parsed.allowed_tools,
-            "triggers": parsed.triggers,
-            "metadata": parsed.metadata,
-            "active": True,
-            "score": r.get("score", 1.0) if hasattr(r, "get") else 1.0,
-            "use_count": r.get("use_count", 0) if hasattr(r, "get") else 0,
-            "created_at": r["created_at"].isoformat(),
-        })
+        skills.append(
+            {
+                "id": str(r["id"]),
+                "name": parsed.name if parsed.name != "unnamed" else r["name"],
+                "version": r["version"],
+                "content_md": r["content_md"],
+                "description": parsed.description,
+                "allowed_tools": parsed.allowed_tools,
+                "triggers": parsed.triggers,
+                "metadata": parsed.metadata,
+                "active": True,
+                "score": r.get("score", 1.0) if hasattr(r, "get") else 1.0,
+                "use_count": r.get("use_count", 0) if hasattr(r, "get") else 0,
+                "created_at": r["created_at"].isoformat(),
+            }
+        )
     return {"skills": skills}
 
 
@@ -101,9 +103,7 @@ async def deactivate_skill(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> DeactivateOut:
-    await repo._pool.execute(
-        "UPDATE agent_skills SET active = false WHERE id = $1", skill_id
-    )
+    await repo._pool.execute("UPDATE agent_skills SET active = false WHERE id = $1", skill_id)
     return {"deactivated": True}
 
 
@@ -286,13 +286,15 @@ async def improve_skill(
     )
 
     # Post proposal with embedded skill_candidate_id for approval routing
-    proposal_body = json.dumps({
-        "skill_candidate_id": str(candidate_id),
-        "failure_analysis": result.failure_analysis,
-        "changelog": result.changelog,
-        "confidence": result.confidence,
-        "num_failures": len(failed_items),
-    })
+    proposal_body = json.dumps(
+        {
+            "skill_candidate_id": str(candidate_id),
+            "failure_analysis": result.failure_analysis,
+            "changelog": result.changelog,
+            "confidence": result.confidence,
+            "num_failures": len(failed_items),
+        }
+    )
     proposal_id = await repo.create_proposal(
         workspace_id=skill["workspace_id"],
         user_id=user_id,

@@ -8,21 +8,21 @@ from uuid import UUID
 
 
 class VersionStatus(StrEnum):
-    CANDIDATE = "candidate"   # auto-triggered, awaiting proposal approval
-    ACTIVE    = "active"      # the live version for this agent
-    ARCHIVED  = "archived"    # superseded by a newer active version
+    CANDIDATE = "candidate"  # auto-triggered, awaiting proposal approval
+    ACTIVE = "active"  # the live version for this agent
+    ARCHIVED = "archived"  # superseded by a newer active version
 
 
 class VersionTrigger(StrEnum):
-    MANUAL        = "manual"
-    CONFIG_PATCH  = "config_patch"
+    MANUAL = "manual"
+    CONFIG_PATCH = "config_patch"
     SKILL_CREATED = "skill_created"
-    EVAL_PASS     = "eval_pass"
+    EVAL_PASS = "eval_pass"
 
 
 @dataclass
 class ModelConfig:
-    provider: str              # "openai" | "anthropic" | "ollama"
+    provider: str  # "openai" | "anthropic" | "ollama"
     model: str
     temperature: float
     extra: dict[str, Any] = field(default_factory=dict)
@@ -32,11 +32,11 @@ class ModelConfig:
 class AgentGenome:
     # Required (no defaults)
     agent_id: UUID
-    version_label: str         # "v3" | "auto-skill-2026-05-08T03:00"
-    template: str              # "deer_flow" | "linear-3" | "tool-agent"
-    system_prompt: str         # first-class field
+    version_label: str  # "v3" | "auto-skill-2026-05-08T03:00"
+    template: str  # "deer_flow" | "linear-3" | "tool-agent"
+    system_prompt: str  # first-class field
     llm_config: ModelConfig
-    tools: dict[str, bool]     # {"retrieve": True, "sandbox": False, ...}
+    tools: dict[str, bool]  # {"retrieve": True, "sandbox": False, ...}
     status: VersionStatus
     trigger: VersionTrigger
 
@@ -47,10 +47,10 @@ class AgentGenome:
     # Optional with None defaults
     created_by: UUID | None = None
     created_at: datetime.datetime | None = None
-    avg_score: float | None = None         # cached from last eval
+    avg_score: float | None = None  # cached from last eval
     pass_rate: float | None = None
-    proposal_id: UUID | None = None        # linked proposal (CANDIDATE only)
-    id: UUID | None = None                 # None until persisted
+    proposal_id: UUID | None = None  # linked proposal (CANDIDATE only)
+    id: UUID | None = None  # None until persisted
 
     def to_jsonb_dict(self) -> dict:
         """Convert to JSON-safe dict for asyncpg JSONB storage."""

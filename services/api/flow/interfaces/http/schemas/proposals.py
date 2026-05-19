@@ -8,11 +8,13 @@ from pydantic import BaseModel
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class ProposalActionIn(BaseModel):
     status: Literal["approved", "rejected"]
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class ProposalOut(BaseModel):
     id: UUID

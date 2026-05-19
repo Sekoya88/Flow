@@ -1,4 +1,3 @@
-
 import pytest
 
 from flow.infrastructure.llm.stub import StubChatModel

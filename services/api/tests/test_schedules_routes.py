@@ -1,4 +1,5 @@
 """Integration tests for /api/v1/schedules routes."""
+
 from __future__ import annotations
 
 import datetime
@@ -57,6 +58,7 @@ def _make_repo_mock() -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
 
     _app = create_app()

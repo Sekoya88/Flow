@@ -85,10 +85,7 @@ async def get_execution(
         "answer": row["answer"],
         "thread_id": str(row["thread_id"]) if row["thread_id"] else str(row["id"]),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        "events": [
-            {"id": e["id"], "kind": e["kind"], "payload": dict(e["payload"])}
-            for e in events
-        ],
+        "events": [{"id": e["id"], "kind": e["kind"], "payload": dict(e["payload"])} for e in events],
     }
 
 
@@ -103,9 +100,7 @@ async def mint_stream_token(
     row = await repo.get_execution_for_user(execution_id, user_id)
     if not row:
         raise HTTPException(status_code=404, detail="execution not found")
-    token = create_stream_token(
-        secret=settings.jwt_secret, sub=user_id, execution_id=execution_id, ttl_seconds=120
-    )
+    token = create_stream_token(secret=settings.jwt_secret, sub=user_id, execution_id=execution_id, ttl_seconds=120)
     return {"stream_jwt": token}
 
 
@@ -168,6 +163,7 @@ async def approve_execution(
 
     # Re-enqueue so the worker picks up and resumes from the interrupt point
     from flow.infrastructure.queue.client import get_arq_pool
+
     arq = await get_arq_pool()
     await arq.enqueue_job(
         "task_run_deer_execution",

@@ -14,10 +14,17 @@ class DockerSandbox:
             tmp_path = f.name
         try:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "run", "--rm", "--network=none",
-                "--memory=128m", "--cpus=0.5",
-                "-v", f"{tmp_path}:/code.py:ro",
-                "python:3.12-slim", "python", "/code.py",
+                "docker",
+                "run",
+                "--rm",
+                "--network=none",
+                "--memory=128m",
+                "--cpus=0.5",
+                "-v",
+                f"{tmp_path}:/code.py:ro",
+                "python:3.12-slim",
+                "python",
+                "/code.py",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

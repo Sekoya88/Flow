@@ -1,4 +1,5 @@
 """Integration tests for /api/v1/golden-sets routes."""
+
 from __future__ import annotations
 
 import datetime
@@ -39,9 +40,7 @@ def _make_pool_mock(ws_id=_WS_ID, set_id=_SET_ID, item_id=_ITEM_ID) -> MagicMock
     ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
 
     # _get_workspace: list_workspaces_for_user falls back to pool.fetchrow
-    pool.fetchrow = AsyncMock(
-        return_value=_fake_record(id=ws_id, name="default")
-    )
+    pool.fetchrow = AsyncMock(return_value=_fake_record(id=ws_id, name="default"))
     pool.fetchval = AsyncMock(return_value=set_id)
     pool.fetch = AsyncMock(
         return_value=[
@@ -62,9 +61,7 @@ def _make_repo_mock(ws_id=_WS_ID) -> FlowRepository:
     pool = _make_pool_mock(ws_id=ws_id)
     repo = MagicMock(spec=FlowRepository)
     repo._pool = pool
-    repo.list_workspaces_for_user = AsyncMock(
-        return_value=[{"id": ws_id}]
-    )
+    repo.list_workspaces_for_user = AsyncMock(return_value=[{"id": ws_id}])
     return repo
 
 
@@ -72,6 +69,7 @@ def _make_repo_mock(ws_id=_WS_ID) -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
 
     _app = create_app()
@@ -128,9 +126,7 @@ async def test_get_golden_set_items(app):
         ]
     )
     # _assert_set_access uses fetchrow; keep returning the ws row for access check
-    repo._pool.fetchrow = AsyncMock(
-        return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID)
-    )
+    repo._pool.fetchrow = AsyncMock(return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID))
     app.dependency_overrides[get_repo] = lambda: repo
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -156,9 +152,7 @@ async def test_get_golden_set_404_when_no_access(app):
 @pytest.mark.asyncio
 async def test_add_golden_item_returns_id(app):
     repo = _make_repo_mock()
-    repo._pool.fetchrow = AsyncMock(
-        return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID)
-    )
+    repo._pool.fetchrow = AsyncMock(return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID))
     repo._pool.fetchval = AsyncMock(return_value=_ITEM_ID)
     app.dependency_overrides[get_repo] = lambda: repo
 
@@ -179,9 +173,7 @@ async def test_add_golden_item_returns_id(app):
 @pytest.mark.asyncio
 async def test_delete_golden_item_ok(app):
     repo = _make_repo_mock()
-    repo._pool.fetchrow = AsyncMock(
-        return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID)
-    )
+    repo._pool.fetchrow = AsyncMock(return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID))
     app.dependency_overrides[get_repo] = lambda: repo
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

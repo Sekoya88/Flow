@@ -7,6 +7,7 @@ the bucket is empty.
 No external dependencies. Not suitable for multi-process deployments —
 use Redis-based limiting when horizontally scaled.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,7 @@ class TokenBucket:
 
     def __init__(self, capacity: float, rate: float) -> None:
         self.capacity = capacity
-        self.rate = rate          # tokens per second
+        self.rate = rate  # tokens per second
         self.tokens = capacity
         self.last_refill = time.monotonic()
 
@@ -45,9 +46,7 @@ class RateLimiter:
     def __init__(self, requests_per_minute: int = 10) -> None:
         self._rpm = requests_per_minute
         self._rate = requests_per_minute / 60.0
-        self._buckets: dict[tuple, TokenBucket] = defaultdict(
-            lambda: TokenBucket(capacity=float(self._rpm), rate=self._rate)
-        )
+        self._buckets: dict[tuple, TokenBucket] = defaultdict(lambda: TokenBucket(capacity=float(self._rpm), rate=self._rate))
         self._lock = Lock()
 
     def check(self, user_id: UUID, route_key: str) -> bool:

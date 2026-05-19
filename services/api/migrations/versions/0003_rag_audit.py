@@ -50,18 +50,10 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_rag_query_history_execution ON rag_query_history (execution_id)"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_rag_query_history_workspace ON rag_query_history (workspace_id)"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_rag_query_history_created ON rag_query_history (created_at DESC)"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_rag_citations_query ON rag_citations (query_history_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_rag_query_history_execution ON rag_query_history (execution_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_rag_query_history_workspace ON rag_query_history (workspace_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_rag_query_history_created ON rag_query_history (created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_rag_citations_query ON rag_citations (query_history_id)")
     op.execute(
         """
         CREATE OR REPLACE VIEW v_rag_explanation_full AS

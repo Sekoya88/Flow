@@ -1,4 +1,5 @@
 """A/B test runner for comparing two agent genome versions on a golden set."""
+
 from __future__ import annotations
 
 import logging
@@ -85,9 +86,10 @@ class ABTestRunner:
             winner = version_b_id if delta > 0 else version_a_id
 
         await self._pool.execute(
-            "UPDATE ab_tests SET status = 'completed', version_a_id = $1, version_b_id = $2 "
-            "WHERE id = $3",
-            version_a_id, version_b_id, test_id,
+            "UPDATE ab_tests SET status = 'completed', version_a_id = $1, version_b_id = $2 WHERE id = $3",
+            version_a_id,
+            version_b_id,
+            test_id,
         )
 
         logger.info(
@@ -131,7 +133,9 @@ class ABTestRunner:
               AND gr.agent_version_label = $3
               AND gr.actual_output IS NOT NULL
             """,
-            golden_set_id, agent_id, version_label,
+            golden_set_id,
+            agent_id,
+            version_label,
         )
 
         scores: list[float] = []
@@ -147,11 +151,13 @@ class ABTestRunner:
             )
             score = judgment["score"]
             scores.append(score)
-            per_item.append({
-                "item_id": str(item["item_id"]),
-                "score": score,
-                "rationale": judgment["rationale"],
-            })
+            per_item.append(
+                {
+                    "item_id": str(item["item_id"]),
+                    "score": score,
+                    "rationale": judgment["rationale"],
+                }
+            )
 
             await self._pool.execute(
                 """
@@ -160,8 +166,13 @@ class ABTestRunner:
                      actual_output, grading_rationale)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 """,
-                uuid4(), test_id, item["item_id"], ab_label,
-                score, item["actual_output"], judgment["rationale"],
+                uuid4(),
+                test_id,
+                item["item_id"],
+                ab_label,
+                score,
+                item["actual_output"],
+                judgment["rationale"],
             )
 
         item_count = len(items)

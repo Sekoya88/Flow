@@ -1,4 +1,5 @@
 """Tests for /api/graph routes — workspace graph, entity subgraph, position patch."""
+
 from __future__ import annotations
 
 import uuid
@@ -23,8 +24,10 @@ def _auth() -> dict:
 
 def _make_app(pool_mock: MagicMock):
     import os
+
     os.environ["FLOW_JWT_SECRET"] = _SECRET
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
 
     app = create_app()
@@ -39,22 +42,32 @@ async def test_workspace_graph_returns_nodes_and_edges():
 
     pool = MagicMock()
     conn = MagicMock()
-    conn.fetch = AsyncMock(side_effect=[
-        # first call: kg_nodes
-        [{"id": node_id, "node_type": "agent", "ref_id": str(uuid.uuid4()), "ref_type": "agent",
-          "label": "Bot", "metadata": {}, "pos_x": 0.0, "pos_y": 0.0}],
-        # second call: kg_edges
-        [],
-    ])
+    conn.fetch = AsyncMock(
+        side_effect=[
+            # first call: kg_nodes
+            [
+                {
+                    "id": node_id,
+                    "node_type": "agent",
+                    "ref_id": str(uuid.uuid4()),
+                    "ref_type": "agent",
+                    "label": "Bot",
+                    "metadata": {},
+                    "pos_x": 0.0,
+                    "pos_y": 0.0,
+                }
+            ],
+            # second call: kg_edges
+            [],
+        ]
+    )
     pool.acquire = MagicMock(return_value=conn)
     conn.__aenter__ = AsyncMock(return_value=conn)
     conn.__aexit__ = AsyncMock(return_value=None)
 
     with patch("flow.interfaces.http.routes.graph.FlowRepository") as MockRepo:
         instance = MockRepo.return_value
-        instance.list_workspaces_for_user = AsyncMock(
-            return_value=[{"id": _WS_ID}]
-        )
+        instance.list_workspaces_for_user = AsyncMock(return_value=[{"id": _WS_ID}])
         app = _make_app(pool)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             with patch("flow.interfaces.http.routes.graph._fetch_workspace_graph") as mock_fetch:
@@ -100,9 +113,7 @@ async def test_entity_graph_returns_one_hop():
 
     with patch("flow.interfaces.http.routes.graph.FlowRepository") as MockRepo:
         instance = MockRepo.return_value
-        instance.list_workspaces_for_user = AsyncMock(
-            return_value=[{"id": _WS_ID}]
-        )
+        instance.list_workspaces_for_user = AsyncMock(return_value=[{"id": _WS_ID}])
         app = _make_app(pool)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             with patch("flow.interfaces.http.routes.graph._fetch_entity_graph") as mock_fetch:
@@ -129,9 +140,7 @@ async def test_position_patch_persists():
 
     with patch("flow.interfaces.http.routes.graph.FlowRepository") as MockRepo:
         instance = MockRepo.return_value
-        instance.list_workspaces_for_user = AsyncMock(
-            return_value=[{"id": _WS_ID}]
-        )
+        instance.list_workspaces_for_user = AsyncMock(return_value=[{"id": _WS_ID}])
         app = _make_app(pool)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             with patch("flow.interfaces.http.routes.graph._update_node_position") as mock_patch:

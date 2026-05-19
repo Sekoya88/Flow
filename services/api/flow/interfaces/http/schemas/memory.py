@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
+
 class MemoryCreateIn(BaseModel):
     workspace_id: UUID
     agent_id: UUID
@@ -14,6 +15,7 @@ class MemoryCreateIn(BaseModel):
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
+
 
 class MemoryCreateOut(BaseModel):
     id: UUID

@@ -16,9 +16,7 @@ target_metadata = None
 def get_url() -> str:
     raw = os.environ.get("FLOW_DATABASE_URL", "")
     # asyncpg URLs use postgresql+asyncpg:// — convert to psycopg for Alembic
-    url = raw.replace("postgresql+asyncpg://", "postgresql+psycopg://").replace(
-        "asyncpg://", "postgresql+psycopg://"
-    )
+    url = raw.replace("postgresql+asyncpg://", "postgresql+psycopg://").replace("asyncpg://", "postgresql+psycopg://")
     if not url:
         url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/flow")
     # Bare postgresql:// makes SQLAlchemy use psycopg2; this project ships psycopg v3 only.

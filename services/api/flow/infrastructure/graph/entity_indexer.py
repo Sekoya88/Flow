@@ -3,6 +3,7 @@
 All functions are idempotent — safe to call on create and update.
 Uses ON CONFLICT on (workspace_id, ref_type, ref_id) unique index.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -32,7 +33,13 @@ async def _upsert_node(
             updated_at = now()
         RETURNING id
         """,
-        uuid.uuid4(), workspace_id, node_type, ref_id, node_type, label, metadata,
+        uuid.uuid4(),
+        workspace_id,
+        node_type,
+        ref_id,
+        node_type,
+        label,
+        metadata,
     )
     return row["id"] if row is not None else None
 
@@ -51,7 +58,11 @@ async def _upsert_edge(
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
         """,
-        uuid.uuid4(), workspace_id, source_id, target_id, edge_type,
+        uuid.uuid4(),
+        workspace_id,
+        source_id,
+        target_id,
+        edge_type,
     )
 
 
@@ -88,7 +99,8 @@ async def index_skill(
     async with pool.acquire() as conn:
         agent_node = await conn.fetchrow(
             "SELECT id FROM kg_nodes WHERE workspace_id=$1 AND ref_type='agent' AND ref_id=$2",
-            workspace_id, str(agent_id),
+            workspace_id,
+            str(agent_id),
         )
         skill_node_id = await _upsert_node(
             conn,
@@ -124,7 +136,8 @@ async def index_genome(
     async with pool.acquire() as conn:
         agent_node = await conn.fetchrow(
             "SELECT id FROM kg_nodes WHERE workspace_id=$1 AND ref_type='agent' AND ref_id=$2",
-            workspace_id, str(agent_id),
+            workspace_id,
+            str(agent_id),
         )
         genome_node_id = await _upsert_node(
             conn,
@@ -161,9 +174,9 @@ async def index_genome(
                 )
         if prev_genome_id and genome_node_id is not None:
             prev_node = await conn.fetchrow(
-                "SELECT id FROM kg_nodes "
-                "WHERE workspace_id=$1 AND ref_type='genome_version' AND ref_id=$2",
-                workspace_id, str(prev_genome_id),
+                "SELECT id FROM kg_nodes WHERE workspace_id=$1 AND ref_type='genome_version' AND ref_id=$2",
+                workspace_id,
+                str(prev_genome_id),
             )
             if prev_node:
                 await _upsert_edge(
@@ -187,7 +200,8 @@ async def index_execution(
     async with pool.acquire() as conn:
         agent_node = await conn.fetchrow(
             "SELECT id FROM kg_nodes WHERE workspace_id=$1 AND ref_type='agent' AND ref_id=$2",
-            workspace_id, str(agent_id),
+            workspace_id,
+            str(agent_id),
         )
         exec_node_id = await _upsert_node(
             conn,
@@ -207,9 +221,9 @@ async def index_execution(
             )
         for skill_id in skill_ids:
             skill_node = await conn.fetchrow(
-                "SELECT id FROM kg_nodes "
-                "WHERE workspace_id=$1 AND ref_type='skill' AND ref_id=$2",
-                workspace_id, str(skill_id),
+                "SELECT id FROM kg_nodes WHERE workspace_id=$1 AND ref_type='skill' AND ref_id=$2",
+                workspace_id,
+                str(skill_id),
             )
             if skill_node and exec_node_id is not None:
                 await _upsert_edge(

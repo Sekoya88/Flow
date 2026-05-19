@@ -1,4 +1,5 @@
 """Golden sets CRUD + evaluation API."""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -108,8 +109,7 @@ _SAMPLE_SETS = [
     {
         "name": "Lucis — Sleep Protocol Evaluation",
         "description": (
-            "Tests sleep assessment protocol: question sequencing, apnea triad detection, "
-            "insomnia flagging, and non-diagnostic language."
+            "Tests sleep assessment protocol: question sequencing, apnea triad detection, insomnia flagging, and non-diagnostic language."
         ),
         "items": [
             {
@@ -167,10 +167,7 @@ _SAMPLE_SETS = [
     },
     {
         "name": "Lucis — Mental Health Screening Evaluation",
-        "description": (
-            "Tests empathetic tone, non-diagnostic language, proper stress/mood assessment, "
-            "and protocol compliance detection."
-        ),
+        "description": ("Tests empathetic tone, non-diagnostic language, proper stress/mood assessment, and protocol compliance detection."),
         "items": [
             {
                 "input_text": (
@@ -230,8 +227,7 @@ _SAMPLE_SETS = [
     {
         "name": "Lucis — Pain OPQRST Evaluation",
         "description": (
-            "Tests OPQRST pain characterization, red flag escalation (chest pain, cauda equina), "
-            "and non-prescriptive language in pain assessment."
+            "Tests OPQRST pain characterization, red flag escalation (chest pain, cauda equina), and non-prescriptive language in pain assessment."
         ),
         "items": [
             {
@@ -297,6 +293,7 @@ router = APIRouter(prefix="/api/v1/golden-sets", tags=["golden-sets"])
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+
 async def _get_workspace(repo: FlowRepository, user_id: UUID) -> UUID:
     ws = await repo.list_workspaces_for_user(user_id)
     if ws:
@@ -311,13 +308,15 @@ async def _get_workspace(repo: FlowRepository, user_id: UUID) -> UUID:
 async def _assert_set_access(pool, set_id: UUID, workspace_id: UUID):
     row = await pool.fetchrow(
         "SELECT id FROM golden_sets WHERE id=$1 AND workspace_id=$2",
-        set_id, workspace_id,
+        set_id,
+        workspace_id,
     )
     if not row:
         raise HTTPException(status_code=404, detail="golden set not found")
 
 
 # ── Routes ───────────────────────────────────────────────────────────
+
 
 @router.post("/seed-samples")
 async def seed_sample_datasets(
@@ -330,18 +329,24 @@ async def seed_sample_datasets(
     for sample in _SAMPLE_SETS:
         exists = await repo._pool.fetchval(
             "SELECT id FROM golden_sets WHERE workspace_id=$1 AND name=$2",
-            ws_id, sample["name"],
+            ws_id,
+            sample["name"],
         )
         if exists:
             continue
         set_id = await repo._pool.fetchval(
             "INSERT INTO golden_sets (workspace_id, name, description) VALUES ($1,$2,$3) RETURNING id",
-            ws_id, sample["name"], sample["description"],
+            ws_id,
+            sample["name"],
+            sample["description"],
         )
         for item in sample["items"]:
             await repo._pool.execute(
                 "INSERT INTO golden_items (set_id, input_text, expected_output, scoring_criteria) VALUES ($1,$2,$3,$4)",
-                set_id, item["input_text"], item["expected_output"], item["scoring_criteria"],
+                set_id,
+                item["input_text"],
+                item["expected_output"],
+                item["scoring_criteria"],
             )
         created += 1
     return {"created": created, "skipped": len(_SAMPLE_SETS) - created}
@@ -356,7 +361,9 @@ async def create_golden_set(
     ws_id = await _get_workspace(repo, user_id)
     sid = await repo._pool.fetchval(
         "INSERT INTO golden_sets (workspace_id, name, description) VALUES ($1,$2,$3) RETURNING id",
-        ws_id, body.name.strip(), body.description.strip(),
+        ws_id,
+        body.name.strip(),
+        body.description.strip(),
     )
     return {"id": str(sid), "name": body.name.strip()}
 
@@ -433,7 +440,10 @@ async def add_golden_item(
         INSERT INTO golden_items (set_id, input_text, expected_output, scoring_criteria)
         VALUES ($1,$2,$3,$4) RETURNING id
         """,
-        set_id, body.input_text.strip(), body.expected_output.strip(), body.scoring_criteria.strip(),
+        set_id,
+        body.input_text.strip(),
+        body.expected_output.strip(),
+        body.scoring_criteria.strip(),
     )
     return {"id": str(iid)}
 
@@ -478,18 +488,21 @@ async def get_results(
         *params,
     )
 
-    items_rows = [{
-        "id": str(r["id"]),
-        "item_id": str(r["item_id"]),
-        "agent_id": str(r["agent_id"]),
-        "agent_version_label": r["agent_version_label"],
-        "score": r["score"],
-        "rationale": r["grading_rationale"],
-        "actual_output": r["actual_output"],
-        "input_text": r["input_text"],
-        "expected_output": r["expected_output"],
-        "created_at": r["created_at"].isoformat(),
-    } for r in rows]
+    items_rows = [
+        {
+            "id": str(r["id"]),
+            "item_id": str(r["item_id"]),
+            "agent_id": str(r["agent_id"]),
+            "agent_version_label": r["agent_version_label"],
+            "score": r["score"],
+            "rationale": r["grading_rationale"],
+            "actual_output": r["actual_output"],
+            "input_text": r["input_text"],
+            "expected_output": r["expected_output"],
+            "created_at": r["created_at"].isoformat(),
+        }
+        for r in rows
+    ]
 
     scores = [r["score"] for r in rows if r["score"] is not None]
     return {

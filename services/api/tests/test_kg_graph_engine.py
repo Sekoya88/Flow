@@ -7,6 +7,7 @@ import pytest
 
 def _make_engine():
     from flow.infrastructure.kg.graph_engine import KGGraphEngine
+
     pool = MagicMock()
     return KGGraphEngine(pool)
 
@@ -47,6 +48,7 @@ def test_find_shortest_path_indirect():
 def test_find_path_raises_when_disconnected():
     """should raise NetworkXNoPath when nodes not connected"""
     import networkx as nx
+
     engine = _make_engine()
     G, nodes = _make_graph()
     # D has no path back to A (only incoming)

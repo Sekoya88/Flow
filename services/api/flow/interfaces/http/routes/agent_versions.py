@@ -85,7 +85,7 @@ async def restore_version(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Restore an agent to a previous config version.
-    
+
     The current config is auto-saved as a new version before restoring,
     so the operation is non-destructive.
     """
@@ -95,7 +95,8 @@ async def restore_version(
     # Get target version
     target = await repo._pool.fetchrow(
         "SELECT config_snapshot, template, version_label FROM agent_versions WHERE id = $1 AND agent_id = $2",
-        version_id, agent_id,
+        version_id,
+        agent_id,
     )
     if not target:
         raise HTTPException(status_code=404, detail="version not found")
@@ -135,11 +136,13 @@ async def diff_versions(
 
     v1 = await repo._pool.fetchrow(
         "SELECT version_label, config_snapshot, template, created_at FROM agent_versions WHERE id=$1 AND agent_id=$2",
-        v1_id, agent_id,
+        v1_id,
+        agent_id,
     )
     v2 = await repo._pool.fetchrow(
         "SELECT version_label, config_snapshot, template, created_at FROM agent_versions WHERE id=$1 AND agent_id=$2",
-        v2_id, agent_id,
+        v2_id,
+        agent_id,
     )
     if not v1 or not v2:
         raise HTTPException(status_code=404, detail="version not found")
@@ -176,6 +179,7 @@ async def diff_versions(
 
 
 # ── helpers ──
+
 
 async def _get_agent(repo: FlowRepository, agent_id: UUID, user_id: UUID):
     ws_rows = await repo.list_workspaces_for_user(user_id)

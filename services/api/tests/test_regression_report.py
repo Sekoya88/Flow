@@ -3,6 +3,7 @@
 These tests validate the item-level regression detection that compares
 consecutive eval runs to identify which items improved vs regressed.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -90,14 +91,14 @@ class TestRegressionDetection:
         items = [str(uuid4()) for _ in range(4)]
 
         prev = {
-            items[0]: {"score": 0.5},   # will improve
-            items[1]: {"score": 0.9},   # will regress
-            items[2]: {"score": 0.7},   # will stay stable
-            items[3]: {"score": 0.6},   # will stay stable
+            items[0]: {"score": 0.5},  # will improve
+            items[1]: {"score": 0.9},  # will regress
+            items[2]: {"score": 0.7},  # will stay stable
+            items[3]: {"score": 0.6},  # will stay stable
         }
         curr = {
-            items[0]: {"score": 0.8},   # improved (+0.3)
-            items[1]: {"score": 0.4},   # regressed (-0.5)
+            items[0]: {"score": 0.8},  # improved (+0.3)
+            items[1]: {"score": 0.4},  # regressed (-0.5)
             items[2]: {"score": 0.72},  # stable (+0.02)
             items[3]: {"score": 0.58},  # stable (-0.02)
         }
@@ -189,26 +190,32 @@ class TestVersionComparison:
             {"version_label": "v2-improved", "avg_score": 0.78},
             {"version_label": "v3-auto", "avg_score": 0.82},
         ]
-        
+
         # Each run should maintain its version label
         for run in runs:
             assert run["version_label"] is not None
 
         # Score should improve across versions
         for i in range(1, len(runs)):
-            assert runs[i]["avg_score"] > runs[i-1]["avg_score"]
+            assert runs[i]["avg_score"] > runs[i - 1]["avg_score"]
 
     def test_candidate_vs_active_comparison(self):
         """should correctly compare candidate and active version scores"""
         from flow.application.ab_runner import VersionScore
 
         active = VersionScore(
-            version_id=uuid4(), version_label="v1-active",
-            avg_score=0.72, pass_rate=0.70, item_count=10,
+            version_id=uuid4(),
+            version_label="v1-active",
+            avg_score=0.72,
+            pass_rate=0.70,
+            item_count=10,
         )
         candidate = VersionScore(
-            version_id=uuid4(), version_label="auto-eval-2026-05-11",
-            avg_score=0.85, pass_rate=0.80, item_count=10,
+            version_id=uuid4(),
+            version_label="auto-eval-2026-05-11",
+            avg_score=0.85,
+            pass_rate=0.80,
+            item_count=10,
         )
 
         delta = candidate.avg_score - active.avg_score
