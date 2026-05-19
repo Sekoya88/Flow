@@ -10,13 +10,13 @@ Usage:
 
 import asyncio
 import os
-import uuid
-import asyncpg
 from pprint import pprint
+
+import asyncpg
 from openai import AsyncOpenAI
 
-from flow.config import get_settings
 from flow.application.golden_evaluator import evaluate_golden_set
+from flow.config import get_settings
 from flow.infrastructure.observability.logging import configure_logging, get_logger
 
 logger = get_logger("auto_eval")
