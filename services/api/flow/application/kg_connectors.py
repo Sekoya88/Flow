@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import mimetypes
 from datetime import datetime
 from pathlib import Path
 

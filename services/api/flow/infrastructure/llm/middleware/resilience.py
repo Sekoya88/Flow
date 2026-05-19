@@ -10,7 +10,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from flow.infrastructure.llm.middleware.base import AgentMiddleware, HarnessRuntime
+from flow.infrastructure.llm.middleware.base import AgentMiddleware
 from flow.infrastructure.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,12 +19,13 @@ logger = get_logger(__name__)
 def _retryable_exceptions():
     excs = []
     try:
-        from openai import RateLimitError, APIStatusError, APITimeoutError
+        from openai import APIStatusError, APITimeoutError, RateLimitError
         excs += [RateLimitError, APIStatusError, APITimeoutError]
     except ImportError:
         pass
     try:
-        from anthropic import RateLimitError as AnthRLE, APIStatusError as AnthASE
+        from anthropic import APIStatusError as AnthASE
+        from anthropic import RateLimitError as AnthRLE
         excs += [AnthRLE, AnthASE]
     except ImportError:
         pass
@@ -71,7 +72,6 @@ class FlowResilienceMiddleware(AgentMiddleware):
         llm._agenerate = _retried
 
     async def wrap_tool_call(self, invoke: Callable, args: dict) -> Any:
-        from tenacity import RetryError
 
         # Tools may also fail with network/OS errors not covered by provider SDKs
         retryable = _retryable_exceptions() + (OSError, ConnectionError, TimeoutError)

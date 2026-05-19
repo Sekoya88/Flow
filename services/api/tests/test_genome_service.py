@@ -1,9 +1,10 @@
 """Tests for genome_service functions."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
 from uuid import uuid4
+
+import pytest
 
 from flow.application.genome_service import get_active_genome
 

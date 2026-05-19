@@ -60,7 +60,7 @@ def _patch_llm_for_middleware(llm: Any, middleware: list, runtime: Any) -> None:
     llm._agenerate = _chained
 
 
-def _get_llm_for_judge(ctx: "GraphContext") -> Any | None:
+def _get_llm_for_judge(ctx: GraphContext) -> Any | None:
     settings = getattr(ctx, "settings", None)
     api_key = settings.openai_api_key if settings else getattr(ctx, "openai_api_key", None)
     if not api_key:
@@ -72,7 +72,7 @@ def _get_llm_for_judge(ctx: "GraphContext") -> Any | None:
         return None
 
 
-def _make_embed_fn(ctx: "GraphContext"):
+def _make_embed_fn(ctx: GraphContext):
     async def _embed(text: str) -> list[float]:
         settings = getattr(ctx, "settings", None)
         api_key = settings.openai_api_key if settings else getattr(ctx, "openai_api_key", None)
@@ -87,7 +87,7 @@ def _make_embed_fn(ctx: "GraphContext"):
     return _embed
 
 
-def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
+def _build_middleware(ctx: GraphContext, runtime: Any) -> list:
     from flow.infrastructure.llm.middleware import (
         FlowCostMiddleware,
         FlowMemoryMiddleware,
@@ -123,7 +123,7 @@ def _build_middleware(ctx: "GraphContext", runtime: Any) -> list:
     return middleware
 
 
-def build_agent_from_ctx(ctx: "GraphContext", checkpointer: Any | None = None) -> Any:
+def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> Any:
     """Route to the correct graph builder; wrap react-agent in FlowMiddlewareHarness.
 
     - react-agent → FlowMiddlewareHarness wrapping create_react_agent(...)

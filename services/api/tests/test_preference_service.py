@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from flow.application.preference_service import (
-    effective_score,
     auto_graduate,
+    effective_score,
     extract_preferences,
     extract_preferences_from_cv,
     merge_facets,
@@ -17,7 +17,7 @@ from flow.application.preference_service import (
 
 
 def dt(days_ago: int) -> datetime:
-    return datetime.now(tz=timezone.utc) - timedelta(days=days_ago)
+    return datetime.now(tz=UTC) - timedelta(days=days_ago)
 
 
 class TestEffectiveScore:

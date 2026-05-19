@@ -9,9 +9,9 @@ from uuid import UUID
 import arq
 
 from flow.application.execution_runner import run_deer_execution
-from flow.application.scheduler import scheduler_tick
 from flow.application.golden_evaluator import auto_eval_tick, auto_safety_eval_tick, skill_decay_tick
 from flow.application.persona_freshness import persona_freshness_tick
+from flow.application.scheduler import scheduler_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub

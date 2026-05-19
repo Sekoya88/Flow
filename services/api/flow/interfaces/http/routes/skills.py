@@ -213,8 +213,8 @@ async def improve_skill(
 ) -> SkillImproveOut:
     """Run the skill rewriter: fetch linked golden items, rewrite the skill body,
     create an inactive candidate version, and post a proposal for human review."""
-    from flow.application.skill_rewriter import rewrite_skill, SkillRewriteResult
     from flow.application.prompt_rewriter import FailedItem
+    from flow.application.skill_rewriter import SkillRewriteResult, rewrite_skill
 
     skill = await repo.get_skill_by_id(skill_id)
     if skill is None:
@@ -286,7 +286,6 @@ async def improve_skill(
     )
 
     # Post proposal with embedded skill_candidate_id for approval routing
-    changelog_md = "\n".join(f"- {c}" for c in result.changelog)
     proposal_body = json.dumps({
         "skill_candidate_id": str(candidate_id),
         "failure_analysis": result.failure_analysis,

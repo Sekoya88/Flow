@@ -1,11 +1,12 @@
 """Integration tests for Loop B: eval pass → genome snapshot → A/B test → proposal."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from flow.application.ab_runner import ABTestRunner, SIGNIFICANCE_THRESHOLD
+import pytest
+
+from flow.application.ab_runner import SIGNIFICANCE_THRESHOLD, ABTestRunner
 
 
 @pytest.mark.asyncio
@@ -148,7 +149,6 @@ def test_ab_summary_no_winner_when_delta_below_threshold():
 @pytest.mark.asyncio
 async def test_ab_runner_run_returns_summary_with_correct_winner():
     """should return ABTestSummary identifying version_b as winner when scores differ"""
-    from flow.application.ab_runner import ABTestRunner
 
     test_id = uuid4()
     golden_set_id = uuid4()

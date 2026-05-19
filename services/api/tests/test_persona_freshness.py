@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -25,7 +25,7 @@ def _make_persona(*, stale: bool = False):
     row["id"] = uuid4()
     row["workspace_id"] = uuid4()
     row["user_id"] = uuid4()
-    row["updated_at"] = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    row["updated_at"] = datetime(2026, 1, 1, tzinfo=UTC)
     row["derived_from"] = json.dumps({"stale_since": "2026-01-02T00:00:00+00:00"} if stale else {})
     return row
 

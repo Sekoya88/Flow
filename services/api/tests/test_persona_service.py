@@ -1,13 +1,12 @@
 """Tests for persona_service: template fallback + LLM path + middleware injection."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
-
 
 # ── synthesize_persona ────────────────────────────────────────────────────────
 
@@ -87,7 +86,7 @@ async def test_regenerate_persona_upserts_and_returns_row():
         {"class": "style", "value": "concise", "status": "active", "score": 0.9},
         {"class": "tooling", "value": "python", "status": "active", "score": 0.8},
     ]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     upsert_row = {
         "id": uuid4(),
         "workspace_id": workspace_id,

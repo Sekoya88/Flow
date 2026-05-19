@@ -121,7 +121,7 @@ async def ingest_obsidian(
     try:
         docs = await fetch_from_obsidian_api(body.base_url, body.api_key, body.vault_path)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Obsidian API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Obsidian API error: {e}") from e
 
     engine = KGGraphEngine(request.app.state.pool)
     config = IngestionConfig(workspace_id=body.workspace_id, repo=repo, openai_api_key=s.openai_api_key)
@@ -146,7 +146,7 @@ async def sync_vault(
     try:
         docs = await sync_from_path(body.vault_path)
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     engine = KGGraphEngine(request.app.state.pool)
     config = IngestionConfig(workspace_id=body.workspace_id, repo=repo, openai_api_key=s.openai_api_key)

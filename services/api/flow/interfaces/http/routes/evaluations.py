@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 
-from flow.application.genome_service import get_active_genome, _maybe_snapshot_eval_pass
-from flow.application.golden_evaluator import judge_single, run_agent_on_item
 from flow.application.curator import check_regression_and_propose
+from flow.application.genome_service import _maybe_snapshot_eval_pass, get_active_genome
+from flow.application.golden_evaluator import judge_single, run_agent_on_item
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
 

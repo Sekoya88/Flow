@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -46,9 +45,9 @@ def effective_score(
 ) -> float:
     if pinned:
         return score
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     if last_reinforced_at.tzinfo is None:
-        last_reinforced_at = last_reinforced_at.replace(tzinfo=timezone.utc)
+        last_reinforced_at = last_reinforced_at.replace(tzinfo=UTC)
     days_since = (now - last_reinforced_at).total_seconds() / 86400
     return score * (0.5 ** (days_since / decay_half_life_days))
 

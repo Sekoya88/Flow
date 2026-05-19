@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from flow.infrastructure.llm.stub import StubChatModel
 
@@ -8,7 +9,7 @@ from flow.infrastructure.llm.stub import StubChatModel
 @pytest.mark.asyncio
 async def test_query_agent_returns_answer():
     """should produce an answer string from a factual question"""
-    from flow.application.kg_query_graph import build_kg_query_graph, QueryConfig
+    from flow.application.kg_query_graph import QueryConfig, build_kg_query_graph
 
     workspace_id = uuid4()
     mock_repo = AsyncMock()
@@ -36,7 +37,7 @@ async def test_query_agent_returns_answer():
 @pytest.mark.asyncio
 async def test_query_agent_records_tool_calls():
     """should record tool_calls for frontend tracing"""
-    from flow.application.kg_query_graph import build_kg_query_graph, QueryConfig
+    from flow.application.kg_query_graph import QueryConfig, build_kg_query_graph
 
     workspace_id = uuid4()
     mock_repo = AsyncMock()

@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
+
+import pytest
 
 from flow.infrastructure.llm.stub import StubChatModel
 
@@ -8,7 +9,7 @@ from flow.infrastructure.llm.stub import StubChatModel
 @pytest.mark.asyncio
 async def test_full_ingestion_creates_note_node():
     """should upsert a NOTE node after ingesting a document"""
-    from flow.application.kg_ingestion_graph import build_kg_ingestion_graph, IngestionConfig
+    from flow.application.kg_ingestion_graph import IngestionConfig, build_kg_ingestion_graph
     from flow.application.kg_parser import ObsidianDocument
 
     workspace_id = uuid4()
@@ -51,9 +52,10 @@ async def test_full_ingestion_creates_note_node():
 @pytest.mark.asyncio
 async def test_duplicate_detection_skips_processing():
     """should skip extraction when content_hash already exists"""
-    from flow.application.kg_ingestion_graph import build_kg_ingestion_graph, IngestionConfig
-    from flow.application.kg_parser import ObsidianDocument
     import hashlib
+
+    from flow.application.kg_ingestion_graph import IngestionConfig, build_kg_ingestion_graph
+    from flow.application.kg_parser import ObsidianDocument
 
     workspace_id = uuid4()
     content = "# Test\nSame content"

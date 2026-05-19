@@ -1,7 +1,8 @@
-import pytest
-import networkx as nx
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import uuid4
+
+import networkx as nx
+import pytest
 
 
 def _make_engine():
@@ -88,6 +89,6 @@ def test_spring_positions_are_in_range():
     engine = _make_engine()
     G, nodes = _make_graph()
     positions = engine.spring_positions(G)
-    for nid, (x, y) in positions.items():
+    for _, (x, y) in positions.items():
         assert 0 <= x <= 1000, f"x={x} out of range"
         assert 0 <= y <= 1000, f"y={y} out of range"

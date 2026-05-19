@@ -55,11 +55,11 @@ class KGGraphEngine:
         src = label_to_id.get(source_label)
         tgt = label_to_id.get(target_label)
         if src is None or tgt is None:
-            raise nx.NetworkXNoPath(f"Node not found")
+            raise nx.NetworkXNoPath("Node not found")
         id_path = nx.shortest_path(G, src, tgt)
         labels = [G.nodes[nid]["label"] for nid in id_path]
         edge_types: list[str] = []
-        for a, b in zip(id_path, id_path[1:]):
+        for a, b in zip(id_path, id_path[1:], strict=False):
             edge_types.append(G.edges[a, b].get("edge_type", "links_to"))
         return labels, edge_types
 

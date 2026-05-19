@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from flow.interfaces.http.deps import get_current_user_id, get_pool
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.interfaces.http.deps import get_current_user_id, get_pool
 from flow.interfaces.http.schemas import PositionUpdateIn
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
@@ -142,14 +142,14 @@ async def _update_node_position(
 @router.get("/workspace/{workspace_id}")
 async def get_workspace_graph(
     workspace_id: uuid.UUID,
-    types: Optional[str] = Query(None),
+    types: str | None = Query(None),
     since: str = Query("30d"),
     user_id: uuid.UUID = Depends(get_current_user_id),
     pool: asyncpg.Pool = Depends(get_pool),
 ) -> dict[str, Any]:
     await _check_workspace_access(workspace_id, user_id, pool)
     days = int(since.rstrip("d")) if since.endswith("d") else 30
-    since_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    since_dt = datetime.now(UTC) - timedelta(days=days)
     type_list = types.split(",") if types else None
     return await _fetch_workspace_graph(pool, workspace_id, type_list, since_dt)
 

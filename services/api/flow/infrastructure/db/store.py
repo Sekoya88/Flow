@@ -1,8 +1,8 @@
 """AsyncPostgresStore factory for cross-thread LangGraph memory."""
 from __future__ import annotations
 
-from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
 
 def build_memory_store_pool(database_url: str) -> AsyncConnectionPool:

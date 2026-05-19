@@ -36,6 +36,7 @@ async def test_patch_llm_adds_retry_to_agenerate():
 @pytest.mark.asyncio
 async def test_patch_llm_retries_on_rate_limit():
     from openai import RateLimitError
+
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
     call_count = 0
@@ -60,6 +61,7 @@ async def test_patch_llm_retries_on_rate_limit():
 @pytest.mark.asyncio
 async def test_patch_llm_raises_after_exhaustion():
     from openai import RateLimitError
+
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
     call_count = 0

@@ -36,7 +36,7 @@ def _fake_record(**kw) -> dict:
 
 def _make_pool_mock(ws_id=_WS_ID, set_id=_SET_ID, item_id=_ITEM_ID) -> MagicMock:
     pool = MagicMock()
-    ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
+    ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
 
     # _get_workspace: list_workspaces_for_user falls back to pool.fetchrow
     pool.fetchrow = AsyncMock(
@@ -113,7 +113,7 @@ async def test_create_golden_set_returns_id(app):
 
 @pytest.mark.asyncio
 async def test_get_golden_set_items(app):
-    ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
+    ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC)
     repo = _make_repo_mock()
     # _assert_set_access returns the set row; fetchrow after list_workspaces
     repo._pool.fetch = AsyncMock(
@@ -155,7 +155,6 @@ async def test_get_golden_set_404_when_no_access(app):
 
 @pytest.mark.asyncio
 async def test_add_golden_item_returns_id(app):
-    ts = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
     repo = _make_repo_mock()
     repo._pool.fetchrow = AsyncMock(
         return_value=_fake_record(id=_SET_ID, workspace_id=_WS_ID)

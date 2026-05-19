@@ -1,8 +1,6 @@
 """File-handling tools: file_read, pdf_extract."""
 from __future__ import annotations
 
-import io
-
 
 async def run_file_read(path: str, encoding: str = "utf-8") -> str:
     """Read a local file by path and return its text content (truncated to 32KB)."""

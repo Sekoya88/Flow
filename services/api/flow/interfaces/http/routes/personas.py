@@ -9,7 +9,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from flow.application.persona_service import regenerate_persona, synthesize_from_questionnaire
-from flow.config import Settings, get_settings
+from flow.config import Settings
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_pool, get_repo, get_settings_dep
 from flow.interfaces.http.schemas import (

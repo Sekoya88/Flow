@@ -44,7 +44,7 @@ def _make_repo_mock() -> FlowRepository:
                 "delivery_target": None,
                 "enabled": True,
                 "last_run_at": None,
-                "created_at": datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+                "created_at": datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC),
             }
         ]
     )

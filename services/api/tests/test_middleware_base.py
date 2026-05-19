@@ -1,9 +1,7 @@
 """Tests for AgentMiddleware base class and FlowMiddlewareHarness."""
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

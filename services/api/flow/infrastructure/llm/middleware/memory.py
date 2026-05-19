@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage

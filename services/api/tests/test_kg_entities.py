@@ -1,5 +1,5 @@
+from datetime import UTC, datetime
 from uuid import uuid4
-from datetime import datetime, timezone
 
 
 def test_kg_node_roundtrip():
@@ -20,8 +20,8 @@ def test_kg_node_roundtrip():
         pagerank=0.75,
         pos_x=100.0,
         pos_y=200.0,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     data = node.model_dump()
     restored = KGNode(**data)

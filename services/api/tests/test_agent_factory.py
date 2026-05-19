@@ -20,7 +20,6 @@ def test_build_agent_returns_none_for_anthropic_without_key():
 
 def test_build_agent_returns_compiled_graph_with_stub(monkeypatch):
     """With stub provider + test env, build_agent returns a compiled graph."""
-    import os
     monkeypatch.setenv("FLOW_ENV", "test")
 
     mock_graph = MagicMock()
@@ -41,7 +40,6 @@ def test_build_agent_returns_compiled_graph_with_stub(monkeypatch):
 
 
 def test_build_agent_passes_checkpointer_and_store(monkeypatch):
-    import os
     monkeypatch.setenv("FLOW_ENV", "test")
 
     mock_graph = MagicMock()
@@ -62,7 +60,6 @@ def test_build_agent_passes_checkpointer_and_store(monkeypatch):
 
 
 def test_build_agent_omits_prompt_when_none(monkeypatch):
-    import os
     monkeypatch.setenv("FLOW_ENV", "test")
 
     mock_graph = MagicMock()
@@ -78,6 +75,7 @@ def test_build_agent_omits_prompt_when_none(monkeypatch):
 def _make_ctx(template: str = "linear-3", provider: str = "openai", system_prompt: str | None = None):
     from unittest.mock import AsyncMock
     from uuid import uuid4
+
     from flow.infrastructure.graph.deer_graph import GraphContext
     return GraphContext(
         pool=AsyncMock(),
@@ -148,8 +146,6 @@ def test_build_agent_from_ctx_wraps_anthropic_prompt_with_cache_control(monkeypa
     ctx = _make_ctx(template="react-agent", provider="anthropic", system_prompt="Be helpful.")
     captured = {}
     mock_graph = MagicMock()
-
-    original_build = None
 
     def fake_build_agent(**kwargs):
         captured.update(kwargs)

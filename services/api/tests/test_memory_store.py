@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 def test_build_memory_store_pool_returns_async_connection_pool():
     """build_memory_store_pool returns an AsyncConnectionPool (not yet opened)."""
     from psycopg_pool import AsyncConnectionPool
+
     from flow.infrastructure.db.store import build_memory_store_pool
     pool = build_memory_store_pool("postgresql://flow:flow@localhost:55432/flow")
     assert pool is not None

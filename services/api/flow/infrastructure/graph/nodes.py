@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 def _emit_tool_call(
-    ctx: "GraphContext",
+    ctx: GraphContext,
     tool: str,
     input_data: dict,
     output: Any,
@@ -237,7 +237,7 @@ def make_planner(ctx: GraphContext):
 
                     if matched_skills:
                         skill_lines = []
-                        for s_row, parsed in matched_skills:
+                        for _, parsed in matched_skills:
                             skill_lines.append(
                                 f"[Skill: {parsed.name} v{parsed.version}]\n"
                                 f"Description: {parsed.description}\n"
@@ -266,7 +266,7 @@ def make_planner(ctx: GraphContext):
                     if store_results:
                         lines = [r.value.get("content", "") for r in store_results if r.value.get("content")]
                         if lines:
-                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {l}" for l in lines)
+                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {fact}" for fact in lines)
                 except Exception:
                     pass  # store read is best-effort
 
@@ -723,7 +723,7 @@ def make_human_gate(ctx: GraphContext):
 # Tool-agent: LangChain function-calling node with web + workspace tools
 # ---------------------------------------------------------------------------
 
-def _check_tool_prereqs(tool_name: str, ctx: "GraphContext") -> str | None:
+def _check_tool_prereqs(tool_name: str, ctx: GraphContext) -> str | None:
     """Return an error string if tool requirements are not met, else None."""
     settings = ctx.settings
     PREREQS: dict[str, tuple[str, str]] = {
@@ -741,8 +741,8 @@ def _check_tool_prereqs(tool_name: str, ctx: "GraphContext") -> str | None:
 
 def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
-    from pydantic import BaseModel, Field
     from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
 
     enabled: dict = ctx.agent_config.get("tools") or {}
     settings = ctx.settings
@@ -875,8 +875,9 @@ def _build_context_tools(ctx: GraphContext) -> list:
                 pass
 
         try:
+            from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx
+            from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
             from flow.infrastructure.persistence.repo import FlowRepository as _Repo
-            from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx, build_deer_flow_graph
             _repo = _Repo(ctx.pool)
             # Find agent by name in workspace
             agents = await _repo.list_agents(ctx.workspace_id)
@@ -969,8 +970,9 @@ def _build_context_tools(ctx: GraphContext) -> list:
 
 def make_tool_agent(ctx: GraphContext):
     """ReAct-style node: LLM with bound tools, emits tool_call SSE per invocation."""
-    from flow.infrastructure.observability.tracing import get_tracer
     from langchain_core.messages import ToolMessage
+
+    from flow.infrastructure.observability.tracing import get_tracer
     tracer = get_tracer()
 
     @_traceable(name="flow.tool_agent", run_type="chain")
@@ -1061,7 +1063,7 @@ def gate_approved(state: FlowGraphState) -> str:
     return "approved" if state.get("approved") else "waiting"
 
 
-async def _tool_update_skill(ctx: "GraphContext", repo: FlowRepository, skill_name: str, content: str) -> str:
+async def _tool_update_skill(ctx: GraphContext, repo: FlowRepository, skill_name: str, content: str) -> str:
     """Create or update an agent skill. Returns confirmation."""
     try:
         await repo.upsert_agent_skill(

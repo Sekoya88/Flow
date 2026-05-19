@@ -32,6 +32,7 @@ from flow.interfaces.http.routes import (
     analytics,
     auth,
     dashboard,
+    evaluations,
     executions,
     feedback,
     golden_sets,
@@ -50,7 +51,6 @@ from flow.interfaces.http.routes import (
     tools,
     trace,
     workspaces,
-    evaluations,
 )
 
 logger = get_logger(__name__)

@@ -103,9 +103,10 @@ async def _auto_activate_candidate(
     body: str,
 ) -> None:
     """Directly activate a CANDIDATE genome and write an audit-trail proposal."""
-    from uuid import UUID as _UUID
-    from flow.application.genome_service import activate_genome
     import datetime
+    from uuid import UUID as _UUID
+
+    from flow.application.genome_service import activate_genome
 
     cid = _UUID(candidate_id)
     await activate_genome(pool, cid, agent_id, workspace_id)
@@ -113,7 +114,7 @@ async def _auto_activate_candidate(
     # Mark auto_promoted_at on the now-active version
     await pool.execute(
         "UPDATE agent_versions SET auto_promoted_at = $1 WHERE id = $2",
-        datetime.datetime.now(datetime.timezone.utc),
+        datetime.datetime.now(datetime.UTC),
         cid,
     )
 
@@ -176,8 +177,8 @@ async def check_regression_and_propose(
 
     # 2. Autonomous Prompt Rewrite (the self-improvement loop)
     if failed_items and openai_api_key:
-        from flow.application.prompt_rewriter import FailedItem, rewrite_and_snapshot
         from flow.application.genome_service import get_active_genome
+        from flow.application.prompt_rewriter import FailedItem, rewrite_and_snapshot
 
         active_genome = await get_active_genome(pool, agent_id)
         current_prompt = active_genome.system_prompt if active_genome else ""
@@ -244,8 +245,9 @@ async def check_regression_and_propose(
                     )
                 else:
                     # Manual mode: create a human-approval proposal
-                    from flow.application.genome_service import _create_genome_proposal
                     from uuid import UUID as _UUID
+
+                    from flow.application.genome_service import _create_genome_proposal
                     await _create_genome_proposal(
                         pool=pool,
                         workspace_id=workspace_id,

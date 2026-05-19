@@ -6,7 +6,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
 
 from flow.config import Settings
 from flow.infrastructure.auth.jwt_utils import create_stream_token

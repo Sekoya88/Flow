@@ -1,9 +1,10 @@
 """Integration tests for Loop A: reflector skill creation → genome snapshot → proposal."""
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+
+import pytest
 
 
 def _make_pool(agent_config=None, skill_rows=None):

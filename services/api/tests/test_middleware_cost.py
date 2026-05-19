@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 
 
 def _make_runtime():
@@ -59,7 +59,7 @@ async def test_before_model_summarizes_when_over_token_limit():
     )
 
     messages = [HumanMessage(content="q" * 200)] * 10 + [HumanMessage(content="latest")]
-    token_counter = lambda msgs: len(msgs) * 100  # 11 msgs = 1100 tokens
+    def token_counter(msgs): return len(msgs) * 100  # 11 msgs = 1100 tokens
 
     mw = FlowCostMiddleware(
         token_limit=500,

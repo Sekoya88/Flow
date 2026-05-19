@@ -1,17 +1,19 @@
 """Tests that graph nodes read from and write to AsyncPostgresStore via ctx.store."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_planner_reads_store_facts_when_store_present():
     """Planner node calls store.asearch when ctx.store is set."""
+    from langchain_core.messages import HumanMessage
+
     from flow.infrastructure.graph.deer_graph import GraphContext
     from flow.infrastructure.graph.nodes import make_planner
-    from langchain_core.messages import HumanMessage
 
     mock_store = AsyncMock()
     mock_store.asearch = AsyncMock(return_value=[
@@ -40,9 +42,10 @@ async def test_planner_reads_store_facts_when_store_present():
 @pytest.mark.asyncio
 async def test_planner_skips_store_when_store_is_none():
     """Planner does not fail when ctx.store is None."""
+    from langchain_core.messages import HumanMessage
+
     from flow.infrastructure.graph.deer_graph import GraphContext
     from flow.infrastructure.graph.nodes import make_planner
-    from langchain_core.messages import HumanMessage
 
     ctx = GraphContext(
         pool=AsyncMock(),
@@ -63,9 +66,11 @@ async def test_planner_skips_store_when_store_is_none():
 async def test_synthesizer_writes_store_facts_when_store_present():
     """Synthesizer node calls store.aput when ctx.store is set and LLM returns an answer."""
     from unittest.mock import patch
+
+    from langchain_core.messages import AIMessage, HumanMessage
+
     from flow.infrastructure.graph.deer_graph import GraphContext
     from flow.infrastructure.graph.nodes import make_synthesizer
-    from langchain_core.messages import HumanMessage, AIMessage
 
     mock_store = AsyncMock()
     mock_store.aput = AsyncMock()
@@ -102,9 +107,10 @@ async def test_synthesizer_writes_store_facts_when_store_present():
 @pytest.mark.asyncio
 async def test_synthesizer_skips_store_when_store_is_none():
     """Synthesizer does not fail when ctx.store is None."""
+    from langchain_core.messages import HumanMessage
+
     from flow.infrastructure.graph.deer_graph import GraphContext
     from flow.infrastructure.graph.nodes import make_synthesizer
-    from langchain_core.messages import HumanMessage
 
     ctx = GraphContext(
         pool=AsyncMock(),

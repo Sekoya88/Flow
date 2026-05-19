@@ -45,6 +45,7 @@ from flow.interfaces.http.schemas.golden_sets import (
     GoldenSetListOut,
     GoldenSetOut,
 )
+from flow.interfaces.http.schemas.graph import PositionUpdateIn
 from flow.interfaces.http.schemas.kg import (
     KGEdgeOut,
     KGGraphOut,
@@ -92,7 +93,6 @@ from flow.interfaces.http.schemas.preferences import (
     PreferenceUpsertIn,
 )
 from flow.interfaces.http.schemas.proposals import ProposalActionIn, ProposalActionOut, ProposalListOut, ProposalOut
-from flow.interfaces.http.schemas.graph import PositionUpdateIn
 from flow.interfaces.http.schemas.schedules import (
     CronJobListOut,
     CronJobOut,

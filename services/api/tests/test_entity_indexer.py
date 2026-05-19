@@ -1,13 +1,13 @@
 import uuid
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-import asyncpg
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from flow.infrastructure.graph.entity_indexer import (
     index_agent,
-    index_skill,
-    index_genome,
     index_execution,
+    index_genome,
+    index_skill,
 )
 
 

@@ -191,8 +191,7 @@ async def rewrite_and_snapshot(
 
     Returns dict with candidate_version_id, rewrite result, or None if no rewrite needed.
     """
-    from uuid import uuid4
-    from flow.application.genome_service import snapshot_genome, get_active_genome
+    from flow.application.genome_service import snapshot_genome
     from flow.domain.genome import VersionStatus, VersionTrigger
 
     if not failed_items:

@@ -27,9 +27,10 @@ def test_deer_graph_compiles_with_openai_disabled() -> None:
 
 def test_graph_context_has_store_field():
     """GraphContext accepts a store field."""
-    from flow.infrastructure.graph.deer_graph import GraphContext
     from unittest.mock import MagicMock
     from uuid import uuid4
+
+    from flow.infrastructure.graph.deer_graph import GraphContext
 
     ctx = GraphContext(
         pool=MagicMock(),

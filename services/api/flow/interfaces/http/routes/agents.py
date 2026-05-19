@@ -333,7 +333,7 @@ async def agent_stats(
     avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
     confidence_trend = [
         {"confidence": c, "created_at": r["created_at"].isoformat(), "execution_id": str(r["execution_id"])}
-        for c, r in zip(confidences[:20], conf_rows[:20])
+        for c, r in zip(confidences[:20], conf_rows[:20], strict=False)
     ]
 
     # Grade distribution from metacog KG nodes

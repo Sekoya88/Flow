@@ -8,7 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from flow.infrastructure.auth.jwt_utils import create_access_token
-from flow.interfaces.http.deps import get_current_user_id, get_pool
+from flow.interfaces.http.deps import get_pool
 from flow.interfaces.http.main import create_app
 
 _SECRET = "g" * 32

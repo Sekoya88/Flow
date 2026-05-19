@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+
 import pytest
 
 
@@ -39,8 +40,9 @@ def test_extract_docx_returns_text():
 
 
 def test_extract_pdf_empty_returns_empty():
-    from flow.infrastructure.ingestion.extractors import extract_pdf
     import pymupdf
+
+    from flow.infrastructure.ingestion.extractors import extract_pdf
     doc = pymupdf.open()
     doc.new_page()
     buf = io.BytesIO()
@@ -75,6 +77,7 @@ def test_extract_url_strips_nav(monkeypatch):
 
 def test_extract_url_raises_on_http_error(monkeypatch):
     import httpx
+
     from flow.infrastructure.ingestion.extractors import extract_url_content
 
     class FakeErrorResp:

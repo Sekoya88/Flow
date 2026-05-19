@@ -75,12 +75,16 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.ruff]
-line-length = 120
+line-length = 150
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = [
+  "E501",   # line too long — enforced by formatter, not linter
+  "B008",   # do not perform function calls in default args — FastAPI Depends() pattern
+  "E402",   # module-level import not at top — lazy imports are intentional
+]
 
 [tool.ruff.lint.per-file-ignores]
-# LangSmith must run before any LangChain/LangGraph import chain (arq/worker imports).
 "flow/infrastructure/queue/worker.py" = ["E402"]

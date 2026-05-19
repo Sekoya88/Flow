@@ -5,9 +5,10 @@ This validates the entire autonomous self-improvement feedback loop.
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from flow.application.prompt_rewriter import FailedItem, RewriteResult
 
@@ -228,7 +229,7 @@ async def test_genome_candidate_to_proposal_to_activate():
 @pytest.mark.asyncio
 async def test_ab_test_winner_triggers_proposal():
     """Test that when AB test candidate wins, a proposal is created"""
-    from flow.application.ab_runner import ABTestSummary, VersionScore, SIGNIFICANCE_THRESHOLD
+    from flow.application.ab_runner import SIGNIFICANCE_THRESHOLD, ABTestSummary, VersionScore
 
     version_a_id = uuid4()
     version_b_id = uuid4()  # candidate

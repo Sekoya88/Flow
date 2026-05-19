@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import asyncpg
 
@@ -38,7 +38,7 @@ async def mark_stale_personas(pool: asyncpg.Pool) -> int:
     )
 
     flagged = 0
-    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    now_iso = datetime.now(tz=UTC).isoformat()
 
     for row in personas:
         workspace_id = row["workspace_id"]

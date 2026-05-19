@@ -5,17 +5,17 @@ consecutive eval runs to identify which items improved vs regressed.
 """
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
 from uuid import uuid4
-from datetime import datetime, timezone
+
+import pytest
 
 
 def _make_eval_run(items: list[dict], run_id=None, version_label="v1"):
     """Helper: build mock data for one eval run."""
     return {
         "eval_run_id": run_id or uuid4(),
-        "run_at": datetime.now(timezone.utc),
+        "run_at": datetime.now(UTC),
         "agent_version_label": version_label,
         "items": items,
     }

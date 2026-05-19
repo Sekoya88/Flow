@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from urllib.parse import urlparse
 from typing import Annotated
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status

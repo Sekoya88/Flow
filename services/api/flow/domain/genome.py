@@ -1,18 +1,19 @@
 from __future__ import annotations
+
+import datetime
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
-import datetime
 
 
-class VersionStatus(str, Enum):
+class VersionStatus(StrEnum):
     CANDIDATE = "candidate"   # auto-triggered, awaiting proposal approval
     ACTIVE    = "active"      # the live version for this agent
     ARCHIVED  = "archived"    # superseded by a newer active version
 
 
-class VersionTrigger(str, Enum):
+class VersionTrigger(StrEnum):
     MANUAL        = "manual"
     CONFIG_PATCH  = "config_patch"
     SKILL_CREATED = "skill_created"
@@ -78,7 +79,7 @@ class AgentGenome:
         }
 
     @classmethod
-    def from_row(cls, row: dict) -> "AgentGenome":
+    def from_row(cls, row: dict) -> AgentGenome:
         """Reconstruct from a DB row dict (asyncpg Record or plain dict)."""
         llm_raw = row.get("llm_config") or row.get("model_config") or {}
         return cls(

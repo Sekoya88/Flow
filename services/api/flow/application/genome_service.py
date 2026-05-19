@@ -16,7 +16,7 @@ _SCORE_EPSILON = 1e-9
 
 def _auto_label(trigger: VersionTrigger) -> str:
     """Generate a human-readable version label from a trigger type."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     if trigger == VersionTrigger.SKILL_CREATED:
         return f"auto-skill-{now.strftime('%Y-%m-%dT%H:%M')}"
     elif trigger == VersionTrigger.EVAL_PASS:
@@ -342,7 +342,7 @@ async def _create_genome_proposal(
 def _row_to_genome(row: asyncpg.Record) -> AgentGenome:
     """Convert a raw agent_versions DB row to an AgentGenome dataclass."""
     import json
-    from flow.domain.genome import ModelConfig
+
 
     config = row["config_snapshot"]
     if isinstance(config, str):

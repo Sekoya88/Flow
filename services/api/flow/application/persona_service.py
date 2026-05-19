@@ -13,7 +13,6 @@ from uuid import UUID
 
 from langchain_core.messages import HumanMessage
 
-
 _PERSONA_PROMPT = """\
 You are writing a SOUL.md — a durable identity sheet for an AI assistant.
 It will be injected as the FIRST block of the assistant's system prompt for

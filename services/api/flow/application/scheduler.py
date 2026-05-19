@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ def is_schedule_due(cron_expr: str, last_run_at: datetime | None) -> bool:
     """Return True if this schedule should fire on the current tick."""
     try:
         from croniter import croniter
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if last_run_at is None:
             return True
         it = croniter(cron_expr, last_run_at)

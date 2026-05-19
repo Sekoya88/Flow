@@ -17,8 +17,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-
 from openai import AsyncOpenAI
+
 from flow.application.curator import check_regression_and_propose
 from flow.application.genome_service import (
     _create_genome_proposal,
@@ -97,8 +97,9 @@ async def run_agent_on_item(
     Runs the LLM directly (no tools/graph) for fast, reproducible evals.
     Returns the model text response.
     """
-    from flow.infrastructure.llm.providers import get_chat_model
     from langchain_core.messages import HumanMessage, SystemMessage
+
+    from flow.infrastructure.llm.providers import get_chat_model
 
     llm = get_chat_model(
         llm_config,
@@ -303,6 +304,7 @@ async def auto_eval_tick(ctx: dict) -> None:
             candidate_id_str = result.get("candidate_version_id")
             if candidate_id_str and user_id:
                 from uuid import UUID as _UUID
+
                 from flow.application.ab_runner import ABTestRunner
                 candidate_id = _UUID(candidate_id_str)
                 prev_genome = await get_active_genome(pool, agent["id"])
@@ -395,7 +397,7 @@ async def auto_safety_eval_tick(ctx: dict) -> None:
     settings = ctx.get("settings")
     log = structlog.get_logger()
 
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=36)
 
     # Find genomes that were auto-promoted and haven't been safety-checked yet
     pending = await pool.fetch(
@@ -515,8 +517,9 @@ async def auto_safety_eval_tick(ctx: dict) -> None:
                     baseline_score=baseline_score,
                     delta=baseline_score - new_avg,
                 )
-                from flow.application.genome_service import rollback_genome
                 from uuid import uuid4 as _uuid4
+
+                from flow.application.genome_service import rollback_genome
 
                 # Find workspace owner for audit proposal
                 ws_user = await pool.fetchrow(
