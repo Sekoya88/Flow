@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from flow.infrastructure.llm.middleware.base import AgentMiddleware, HarnessRuntime
+from flow.infrastructure.llm.middleware.base import AgentMiddleware
 from flow.infrastructure.observability.logging import get_logger
 
 _default_logger = get_logger(__name__)

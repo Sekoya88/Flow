@@ -29,9 +29,7 @@ def decode_token(secret: str, token: str) -> UUID:
         raise ValueError("invalid token") from exc
 
 
-def create_stream_token(
-    *, secret: str, sub: UUID, execution_id: UUID, ttl_seconds: int = 120
-) -> str:
+def create_stream_token(*, secret: str, sub: UUID, execution_id: UUID, ttl_seconds: int = 120) -> str:
     """Short-lived JWT for browser SSE (EventSource cannot send Authorization)."""
     now = datetime.now(tz=UTC)
     payload: dict[str, Any] = {

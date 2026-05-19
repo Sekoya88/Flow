@@ -94,7 +94,7 @@ export function ExecutionTimeline({ trace }: { trace: ExecutionTrace }) {
 
       {/* Tool calls */}
       {tool_calls.length > 0 && (
-        <div className="space-y-1.5 pt-2 border-t border-border/40">
+        <div className="space-y-1.5 pt-2 border-t border-flow-800">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             Tool calls ({tool_calls.length})
           </p>

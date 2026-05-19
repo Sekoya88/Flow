@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage
 from flow.config import Settings
 from flow.infrastructure.execution_streams import ExecutionStreamHub
 from flow.infrastructure.graph.deer_graph import GraphContext
+from flow.infrastructure.graph.entity_indexer import index_execution as _index_execution
 from flow.infrastructure.llm.agent_factory import build_agent_from_ctx
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
@@ -27,6 +28,7 @@ async def _get_schedule_delivery(pool, schedule_id: str) -> dict | None:
     """Fetch delivery config for a schedule. Returns None on any failure."""
     try:
         from uuid import UUID as _UUID
+
         row = await pool.fetchrow(
             "SELECT delivery_type, delivery_target FROM agent_schedules WHERE id = $1",
             _UUID(schedule_id),
@@ -42,12 +44,16 @@ async def _fire_webhook(url: str, execution_id: str, agent_id: str, answer: str)
     """POST execution result to webhook URL. Best-effort."""
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={
-                "execution_id": execution_id,
-                "agent_id": agent_id,
-                "answer": answer,
-            })
+            await client.post(
+                url,
+                json={
+                    "execution_id": execution_id,
+                    "agent_id": agent_id,
+                    "answer": answer,
+                },
+            )
     except Exception as exc:
         logger.warning("webhook delivery failed: %s", exc)
 
@@ -106,6 +112,7 @@ async def run_deer_execution(
     repo = FlowRepository(pool)
     cfg = dict(agent_config) if isinstance(agent_config, dict) else {}
     _template = cfg.get("template") or (cfg.get("graph") or {}).get("template", "unknown") or "unknown"
+    thread_id = await repo.get_thread_id(execution_id) or execution_id
     ctx = GraphContext(
         pool=pool,
         workspace_id=workspace_id,
@@ -121,7 +128,7 @@ async def run_deer_execution(
     )
     graph = build_agent_from_ctx(ctx, checkpointer=checkpointer)
     config: dict[str, Any] = {
-        "configurable": {"thread_id": str(execution_id)},
+        "configurable": {"thread_id": str(thread_id)},
         "metadata": {
             "execution_id": str(execution_id),
             "agent_id": str(agent_id),
@@ -136,6 +143,7 @@ async def run_deer_execution(
 
     debug_chunks = settings.log_level.strip().upper() == "DEBUG"
     _t_start = _time.monotonic()
+    _exec_status = "completed"
     try:
         _log_banner(
             logger,
@@ -194,6 +202,23 @@ async def run_deer_execution(
 
         await repo.complete_execution(execution_id, "completed", None)
 
+        # Auto-trigger curator on low-confidence runs (skip scheduled deliveries)
+        if confidence < 0.7 and not schedule_id:
+            try:
+                from flow.application.curator import maybe_spawn_proposal
+
+                await maybe_spawn_proposal(
+                    repo=repo,
+                    workspace_id=workspace_id,
+                    agent_id=agent_id,
+                    user_id=user_id,
+                    execution_id=execution_id,
+                    score=confidence,
+                    openai_api_key=settings.openai_api_key,
+                )
+            except Exception:
+                pass
+
         # Webhook delivery for scheduled runs
         if schedule_id:
             _delivery = await _get_schedule_delivery(pool, schedule_id)
@@ -226,6 +251,24 @@ async def run_deer_execution(
         )
         await repo.insert_event(execution_id, "error", {"message": str(exc)})
         stream_hub.publish(execution_id, {"kind": "error", "message": str(exc)})
+        _exec_status = "failed"
         await repo.complete_execution(execution_id, "failed", str(exc))
     finally:
+        try:
+            async with pool.acquire() as conn:
+                skill_rows = await conn.fetch(
+                    "SELECT payload->>'skill_id' AS skill_id FROM execution_events WHERE execution_id=$1 AND kind='skill_invoked'",
+                    execution_id,
+                )
+            skill_ids = [UUID(r["skill_id"]) for r in skill_rows if r["skill_id"]]
+            await _index_execution(
+                pool,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                execution_id=execution_id,
+                status=_exec_status,
+                skill_ids=skill_ids,
+            )
+        except Exception:
+            pass
         stream_hub.publish(execution_id, {"kind": "done"})

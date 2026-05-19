@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from urllib.parse import urlparse
 from typing import Annotated
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
@@ -31,9 +31,11 @@ def _extract_text(raw: bytes, filename: str) -> str:
     lower = filename.lower()
     if lower.endswith(".pdf"):
         from flow.infrastructure.ingestion.extractors import extract_pdf
+
         return extract_pdf(raw)
     if lower.endswith(".docx"):
         from flow.infrastructure.ingestion.extractors import extract_docx
+
         return extract_docx(raw)
     return raw.decode("utf-8", errors="replace")
 
@@ -111,6 +113,7 @@ async def crawl_url(
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="url must start with http:// or https://")
     from flow.infrastructure.ingestion.extractors import extract_url_content
+
     try:
         text = await asyncio.to_thread(extract_url_content, url)
     except Exception as exc:
@@ -138,12 +141,7 @@ async def list_chunks(
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
     rows = await repo.list_chunks_for_source(source_id, workspace_id)
-    return {
-        "chunks": [
-            {"id": str(r["id"]), "index": r["chunk_index"], "content": r["content"]}
-            for r in rows
-        ]
-    }
+    return {"chunks": [{"id": str(r["id"]), "index": r["chunk_index"], "content": r["content"]} for r in rows]}
 
 
 @router.get("")
@@ -162,12 +160,22 @@ async def list_knowledge(
                 "created_at": r["created_at"].isoformat(),
                 "chunk_count": int(r["chunk_count"] or 0),
                 "ingest_status": r["ingest_status"] if "ingest_status" in r else "indexed",
-                **(
-                    {"ingest_error": r["ingest_error"]}
-                    if "ingest_error" in r and r["ingest_error"]
-                    else {}
-                ),
+                **({"ingest_error": r["ingest_error"]} if "ingest_error" in r and r["ingest_error"] else {}),
             }
             for r in rows
         ]
     }
+
+
+@router.delete("/{source_id}", status_code=204)
+async def delete_knowledge_source(
+    source_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> None:
+    # Resolve workspace server-side — don't trust client-supplied workspace_id
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM knowledge_sources WHERE id = $1", source_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="source not found")
+    await _assert_workspace(user_id, row["workspace_id"], repo)
+    await repo._pool.execute("DELETE FROM knowledge_sources WHERE id = $1", source_id)

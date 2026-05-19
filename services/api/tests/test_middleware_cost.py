@@ -1,24 +1,30 @@
 """Tests for FlowCostMiddleware."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 
 
 def _make_runtime():
     from flow.infrastructure.llm.middleware.base import HarnessRuntime
+
     return HarnessRuntime(
-        workspace_id=uuid4(), agent_id=uuid4(),
-        user_id=uuid4(), execution_id=uuid4(), thread_id="t1",
+        workspace_id=uuid4(),
+        agent_id=uuid4(),
+        user_id=uuid4(),
+        execution_id=uuid4(),
+        thread_id="t1",
     )
 
 
 @pytest.mark.asyncio
 async def test_before_model_increments_call_count():
     from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+
     mw = FlowCostMiddleware(
         token_limit=999_999,
         call_limit=10,
@@ -35,6 +41,7 @@ async def test_before_model_increments_call_count():
 @pytest.mark.asyncio
 async def test_before_model_returns_jump_to_end_at_limit():
     from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+
     mw = FlowCostMiddleware(
         token_limit=999_999,
         call_limit=2,
@@ -52,14 +59,15 @@ async def test_before_model_returns_jump_to_end_at_limit():
 @pytest.mark.asyncio
 async def test_before_model_summarizes_when_over_token_limit():
     from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+
     summarized = "Summary of earlier conversation."
     summarize_model = AsyncMock()
-    summarize_model.ainvoke = AsyncMock(
-        return_value=MagicMock(content=summarized)
-    )
+    summarize_model.ainvoke = AsyncMock(return_value=MagicMock(content=summarized))
 
     messages = [HumanMessage(content="q" * 200)] * 10 + [HumanMessage(content="latest")]
-    token_counter = lambda msgs: len(msgs) * 100  # 11 msgs = 1100 tokens
+
+    def token_counter(msgs):
+        return len(msgs) * 100  # 11 msgs = 1100 tokens
 
     mw = FlowCostMiddleware(
         token_limit=500,
@@ -79,6 +87,7 @@ async def test_before_model_summarizes_when_over_token_limit():
 @pytest.mark.asyncio
 async def test_before_model_noop_when_under_limit():
     from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+
     mw = FlowCostMiddleware(
         token_limit=999_999,
         call_limit=100,
@@ -95,6 +104,7 @@ async def test_before_model_noop_when_under_limit():
 async def test_before_model_noop_when_over_limit_but_too_few_messages():
     """Should not summarize when over token limit but <= 4 messages (not enough to summarize)."""
     from flow.infrastructure.llm.middleware.cost import FlowCostMiddleware
+
     summarize_model = AsyncMock()
     mw = FlowCostMiddleware(
         token_limit=10,

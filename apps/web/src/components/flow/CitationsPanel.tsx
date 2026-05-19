@@ -31,7 +31,7 @@ export function CitationsPanel({ citations }: { citations: CitationSource[] }) {
                 "w-full flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
                 expanded === i
                   ? "border-primary/40 bg-primary/5"
-                  : "border-border/60 bg-muted/5 hover:bg-muted/20",
+                  : "border-flow-800 bg-muted/5 hover:bg-muted/20",
               )}
             >
               <span className="shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
@@ -44,7 +44,7 @@ export function CitationsPanel({ citations }: { citations: CitationSource[] }) {
                   <span className="text-muted-foreground text-xs shrink-0">§{c.chunk_index + 1}</span>
                 </div>
                 {expanded === i && (
-                  <p className="mt-2 whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80 border-t border-border/40 pt-2">
+                  <p className="mt-2 whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80 border-t border-flow-800 pt-2">
                     {c.preview}
                   </p>
                 )}

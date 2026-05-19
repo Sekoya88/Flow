@@ -13,8 +13,8 @@ from flow.infrastructure.llm.embeddings import embed_texts
 @dataclass
 class QueryConfig:
     workspace_id: UUID
-    repo: Any          # FlowRepository
-    engine: Any        # KGGraphEngine
+    repo: Any  # FlowRepository
+    engine: Any  # KGGraphEngine
     openai_api_key: str
 
 
@@ -78,7 +78,9 @@ def build_kg_query_graph(config: QueryConfig):
         try:
             sub = engine.get_subgraph(G, node_label, depth=depth)
             nodes = [{"label": sub.nodes[n]["label"], "pagerank": sub.nodes[n].get("pagerank", 0)} for n in sub.nodes]
-            edges = [{"source": sub.nodes[e[0]]["label"], "target": sub.nodes[e[1]]["label"], "type": sub.edges[e].get("edge_type")} for e in sub.edges]
+            edges = [
+                {"source": sub.nodes[e[0]]["label"], "target": sub.nodes[e[1]]["label"], "type": sub.edges[e].get("edge_type")} for e in sub.edges
+            ]
             return {"nodes": nodes[:20], "edges": edges[:30]}
         except Exception:
             return {"nodes": [], "edges": []}
@@ -112,7 +114,8 @@ def build_kg_query_graph(config: QueryConfig):
         if any(kw in lower for kw in ["relate", "connect", "path", "between", "link"]):
             # Try to find two capitalized terms as source/target
             import re
-            caps = re.findall(r'\b[A-Z][a-zA-Z]+\b', question)
+
+            caps = re.findall(r"\b[A-Z][a-zA-Z]+\b", question)
             if len(caps) >= 2:
                 try:
                     G = await engine.load_graph(workspace_id)
@@ -157,7 +160,7 @@ def build_kg_query_graph(config: QueryConfig):
         prompt = f"""You are a knowledge graph assistant. Answer the user's question using their personal notes.
 Be specific and cite which notes you're drawing from.
 
-Question: {state['question']}
+Question: {state["question"]}
 
 Context from notes:
 {context}{path_info}

@@ -5,10 +5,10 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import ScheduleCreateIn, ScheduleToggleIn
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
 
@@ -26,6 +26,18 @@ _SYSTEM_CRON_JOBS = [
         "human_readable": "Every day at 3:00 AM UTC",
         "description": "Runs nightly golden set evaluation across all workspaces",
     },
+    {
+        "name": "skill_decay_tick",
+        "cron_expr": "0 4 * * *",
+        "human_readable": "Every day at 4:00 AM UTC",
+        "description": "Decays active skill scores; prunes skills with low score and sufficient usage",
+    },
+    {
+        "name": "persona_freshness_tick",
+        "cron_expr": "30 3 * * *",
+        "human_readable": "Every day at 3:30 AM UTC",
+        "description": "Flags SOUL.md personas as stale when user preferences have changed since last regeneration",
+    },
 ]
 
 
@@ -33,8 +45,10 @@ def _next_run_for(cron_expr: str) -> str:
     now = datetime.datetime.utcnow().replace(second=0, microsecond=0)
     if cron_expr == "* * * * *":
         nxt = now + datetime.timedelta(minutes=1)
-    elif cron_expr == "0 3 * * *":
-        candidate = now.replace(hour=3, minute=0)
+    elif cron_expr in ("0 3 * * *", "0 4 * * *", "30 3 * * *"):
+        hour = 3 if cron_expr in ("0 3 * * *", "30 3 * * *") else 4
+        minute = 30 if cron_expr == "30 3 * * *" else 0
+        candidate = now.replace(hour=hour, minute=minute)
         if candidate <= now:
             candidate += datetime.timedelta(days=1)
         nxt = candidate
@@ -43,33 +57,12 @@ def _next_run_for(cron_expr: str) -> str:
     return nxt.isoformat() + "Z"
 
 
-class ScheduleCreateIn(BaseModel):
-    workspace_id: UUID
-    agent_id: UUID
-    cron_expr: str = Field(default="0 8 * * *", max_length=100)
-    prompt_template: str = Field(
-        default="Summarize the latest AI research papers from today.",
-        max_length=4000,
-    )
-    delivery_type: str = Field(default="none")
-    delivery_target: str | None = None
-
-
-class ScheduleToggleIn(BaseModel):
-    enabled: bool
-
-
 @router.get("/cron-jobs")
 async def list_cron_jobs(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
 ) -> dict:
     """List system ARQ cron jobs with next scheduled run time."""
-    return {
-        "cron_jobs": [
-            {**job, "next_run": _next_run_for(job["cron_expr"])}
-            for job in _SYSTEM_CRON_JOBS
-        ]
-    }
+    return {"cron_jobs": [{**job, "next_run": _next_run_for(job["cron_expr"])} for job in _SYSTEM_CRON_JOBS]}
 
 
 @router.post("")

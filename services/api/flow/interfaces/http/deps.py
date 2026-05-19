@@ -54,13 +54,9 @@ async def get_stream_sse_user(
         try:
             uid, eid = decode_stream_token(settings.jwt_secret, stream_jwt)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid stream token"
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid stream token") from exc
         if eid != execution_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="stream token execution mismatch"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="stream token execution mismatch")
         return uid
     token: str | None = None
     if creds and creds.scheme.lower() == "bearer":

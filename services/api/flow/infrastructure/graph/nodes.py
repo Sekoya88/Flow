@@ -3,6 +3,7 @@
 Each node is a factory that captures GraphContext and returns an async callable
 matching LangGraph's `(state) -> dict` signature.
 """
+
 from __future__ import annotations
 
 import time
@@ -15,10 +16,13 @@ _node_logger = _get_node_logger("flow.graph.node")
 try:
     from langsmith import traceable as _traceable
 except ImportError:
+
     def _traceable(**_kw):  # type: ignore[misc]
         def _wrap(fn):
             return fn
+
         return _wrap
+
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import NodeInterrupt
@@ -33,7 +37,7 @@ if TYPE_CHECKING:
 
 
 def _emit_tool_call(
-    ctx: "GraphContext",
+    ctx: GraphContext,
     tool: str,
     input_data: dict,
     output: Any,
@@ -60,14 +64,16 @@ def _emit_tool_call(
 
     try:
         repo = FlowRepository(ctx.pool)
-        asyncio.ensure_future(repo.insert_tool_call_node(
-            workspace_id=ctx.workspace_id,
-            execution_id=ctx.execution_id,
-            tool_name=tool,
-            input_preview=str(input_data)[:200],
-            output_preview=str(output)[:200],
-            duration_ms=duration_ms,
-        ))
+        asyncio.ensure_future(
+            repo.insert_tool_call_node(
+                workspace_id=ctx.workspace_id,
+                execution_id=ctx.execution_id,
+                tool_name=tool,
+                input_preview=str(input_data)[:200],
+                output_preview=str(output)[:200],
+                duration_ms=duration_ms,
+            )
+        )
     except Exception:
         pass
 
@@ -94,6 +100,7 @@ def _resolved_tools(cfg: dict[str, Any]) -> dict[str, bool]:
 
 def _get_llm(ctx: GraphContext):
     from flow.infrastructure.llm.providers import get_chat_model
+
     cfg = ctx.agent_config or {}
     model_config = cfg.get("llm_config") or cfg.get("model") or {}
     if not model_config:
@@ -117,12 +124,7 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
     mem_bits: list[str] = []
     settings = ctx.settings
     use_agentic = bool(
-        tools["retrieve"]
-        and ctx.openai_api_key
-        and settings
-        and settings.agentic_rag_enabled
-        and settings.qdrant_url
-        and settings.qdrant_url.strip()
+        tools["retrieve"] and ctx.openai_api_key and settings and settings.agentic_rag_enabled and settings.qdrant_url and settings.qdrant_url.strip()
     )
     if ctx.openai_api_key and (tools["retrieve"] or tools["long_term_memory"]):
         try:
@@ -132,6 +134,7 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
                 try:
                     if use_agentic:
                         from flow.infrastructure.agentic_rag.pipeline import run_agentic_retrieval
+
                         rag_bits = (await run_agentic_retrieval(ctx, user_text))[0]
                     else:
                         rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=8)
@@ -158,13 +161,13 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
                         }
                         for r in rows
                     ]
-                    _emit_tool_call(ctx, "knowledge_search", {"query": user_text}, f"{len(rag_bits)} chunks (fallback)", int((time.time() - t0) * 1000))
+                    _emit_tool_call(
+                        ctx, "knowledge_search", {"query": user_text}, f"{len(rag_bits)} chunks (fallback)", int((time.time() - t0) * 1000)
+                    )
             if tools["long_term_memory"]:
                 t0 = time.time()
                 try:
-                    mrows = await repo.search_memories(
-                        ctx.workspace_id, ctx.agent_id, ctx.user_id, q_emb, limit=4
-                    )
+                    mrows = await repo.search_memories(ctx.workspace_id, ctx.agent_id, ctx.user_id, q_emb, limit=4)
                     mem_bits = [r["content"] for r in mrows]
                     _emit_tool_call(ctx, "long_term_memory", {"query": user_text}, f"{len(mem_bits)} memories", int((time.time() - t0) * 1000))
                 except Exception:
@@ -178,9 +181,11 @@ async def _rag_and_memory(ctx: GraphContext, user_text: str, tools: dict[str, bo
 # linear-3 / deer_flow nodes
 # ---------------------------------------------------------------------------
 
+
 def make_planner(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
     from flow.infrastructure.persistence.repo import FlowRepository
+
     tracer = get_tracer()
     repo = FlowRepository(ctx.pool)
 
@@ -197,20 +202,13 @@ def make_planner(ctx: GraphContext):
             if ctx.openai_api_key:
                 try:
                     from flow.infrastructure.llm import embeddings as emb_svc
-                    q_emb = (await emb_svc.embed_texts(
-                        api_key=ctx.openai_api_key, texts=[user_text]
-                    ))[0]
-                    patterns = await repo.search_reasoning_patterns(
-                        ctx.workspace_id, ctx.agent_id, q_emb, limit=3
-                    )
+
+                    q_emb = (await emb_svc.embed_texts(api_key=ctx.openai_api_key, texts=[user_text]))[0]
+                    patterns = await repo.search_reasoning_patterns(ctx.workspace_id, ctx.agent_id, q_emb, limit=3)
                     if patterns:
                         lines = []
                         for p in patterns:
-                            lines.append(
-                                f"[Pattern score={p['score']:.2f}]\n"
-                                f"Problem: {p['problem_summary']}\n"
-                                f"Solution: {p['solution_steps']}"
-                            )
+                            lines.append(f"[Pattern score={p['score']:.2f}]\nProblem: {p['problem_summary']}\nSolution: {p['solution_steps']}")
                             await repo.increment_pattern_use(p["id"])
                         pattern_block = "\n\n".join(lines)
                 except Exception:
@@ -220,6 +218,7 @@ def make_planner(ctx: GraphContext):
             skills_block = ""
             try:
                 from flow.application.skill_parser import parse_skill_md, skill_matches_query
+
                 skills = await repo.list_active_skills(ctx.agent_id, ctx.workspace_id)
                 if skills:
                     matched_skills = []
@@ -228,10 +227,16 @@ def make_planner(ctx: GraphContext):
                         if skill_matches_query(parsed, user_text):
                             matched_skills.append((s, parsed))
                             await repo.increment_skill_use(s["id"])
+                            await repo.log_skill_match(
+                                skill_id=s["id"],
+                                workspace_id=ctx.workspace_id,
+                                execution_id=ctx.execution_id,
+                                matched_text=user_text[:500] if user_text else None,
+                            )
 
                     if matched_skills:
                         skill_lines = []
-                        for s_row, parsed in matched_skills:
+                        for _, parsed in matched_skills:
                             skill_lines.append(
                                 f"[Skill: {parsed.name} v{parsed.version}]\n"
                                 f"Description: {parsed.description}\n"
@@ -260,7 +265,7 @@ def make_planner(ctx: GraphContext):
                     if store_results:
                         lines = [r.value.get("content", "") for r in store_results if r.value.get("content")]
                         if lines:
-                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {l}" for l in lines)
+                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {fact}" for fact in lines)
                 except Exception:
                     pass  # store read is best-effort
 
@@ -275,17 +280,18 @@ def make_planner(ctx: GraphContext):
                 if pattern_block:
                     system = (
                         "You are a planning node. Output a short numbered plan (max 5 bullets).\n\n"
-                        "PAST SUCCESSFUL PATTERNS (use as inspiration, don't copy verbatim):\n"
-                        + pattern_block
+                        "PAST SUCCESSFUL PATTERNS (use as inspiration, don't copy verbatim):\n" + pattern_block
                     )
                 if skills_block:
                     system += f"\n\nAGENT SKILLS (apply these guidelines):\n{skills_block}"
                 if prediction_hint:
                     system += prediction_hint
-                out = await llm.ainvoke([
-                    SystemMessage(content=system),
-                    HumanMessage(content=user_text),
-                ])
+                out = await llm.ainvoke(
+                    [
+                        SystemMessage(content=system),
+                        HumanMessage(content=user_text),
+                    ]
+                )
                 plan = str(out.content)
             _node_logger.info("node.done", node="planner", duration_ms=int((time.monotonic() - _t0) * 1000))
             return {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
@@ -295,6 +301,7 @@ def make_planner(ctx: GraphContext):
 
 def make_worker(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
     tools = _resolved_tools(ctx.agent_config)
     repo = FlowRepository(ctx.pool)
@@ -307,15 +314,16 @@ def make_worker(ctx: GraphContext):
             plan = state.get("plan") or ""
             user_text = _last_human_text(state)
             rag_bits, rag_sources, mem_bits = await _rag_and_memory(ctx, user_text, tools)
-            prefs = await repo.get_preferences(ctx.user_id)
-            pref_lines = [f"{r['key']}: {r['value']}" for r in prefs[:20]]
+            try:
+                prefs = await repo.load_profile(ctx.workspace_id, ctx.user_id, ctx.agent_id)
+            except Exception:
+                prefs = []
+            pref_lines = [f"{r['class']}: {r['value']}" for r in prefs[:20]]
 
             neg_rows = await repo.list_agent_negatives(ctx.workspace_id, ctx.agent_id, limit=5)
             neg_bits = [r["content"] for r in neg_rows]
 
-            numbered_snippets = "\n\n".join(
-                f"[{i + 1}] {chunk}" for i, chunk in enumerate(rag_bits)
-            ) or "(knowledge RAG disabled or no hits)"
+            numbered_snippets = "\n\n".join(f"[{i + 1}] {chunk}" for i, chunk in enumerate(rag_bits)) or "(knowledge RAG disabled or no hits)"
             mem_block = "\n---\n".join(mem_bits) or "(long-term memory off or no hits)"
             pref_block = "\n".join(pref_lines) or "(no user preferences)"
             neg_block = "\n".join(f"- {n}" for n in neg_bits) or "(none)"
@@ -330,20 +338,26 @@ def make_worker(ctx: GraphContext):
                     "messages": [AIMessage(content=f"[worker]\n{body[:4000]}")],
                 }
 
-            out = await llm.ainvoke([
-                SystemMessage(content=(
-                    "You are a worker node. Use the plan, user message, retrieved snippets, "
-                    "long-term memories, and preferences. Produce structured research notes. "
-                    "Reference knowledge snippets by their [N] number when relevant. "
-                    "If user asks to run code, output a single fenced python block.\n\n"
-                    f"Known mistakes to avoid:\n{neg_block}"
-                )),
-                HumanMessage(content=(
-                    f"User message:\n{user_text}\n\nPlan:\n{plan}\n\n"
-                    f"Preferences:\n{pref_block}\n\nRetrieved knowledge (cite as [N]):\n{numbered_snippets}\n\n"
-                    f"Long-term memories:\n{mem_block}"
-                )),
-            ])
+            out = await llm.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "You are a worker node. Use the plan, user message, retrieved snippets, "
+                            "long-term memories, and preferences. Produce structured research notes. "
+                            "Reference knowledge snippets by their [N] number when relevant. "
+                            "If user asks to run code, output a single fenced python block.\n\n"
+                            f"Known mistakes to avoid:\n{neg_block}"
+                        )
+                    ),
+                    HumanMessage(
+                        content=(
+                            f"User message:\n{user_text}\n\nPlan:\n{plan}\n\n"
+                            f"Preferences:\n{pref_block}\n\nRetrieved knowledge (cite as [N]):\n{numbered_snippets}\n\n"
+                            f"Long-term memories:\n{mem_block}"
+                        )
+                    ),
+                ]
+            )
             text = str(out.content)
             if tools["sandbox"] and "```python" in text:
                 start = text.index("```python") + len("```python")
@@ -368,6 +382,7 @@ def make_worker(ctx: GraphContext):
 
 def make_synthesizer(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
 
     @_traceable(name="flow.synthesizer", run_type="chain")
@@ -380,10 +395,7 @@ def make_synthesizer(ctx: GraphContext):
             rag_sources = state.get("rag_sources") or []
             llm = _get_llm(ctx)
             if llm is None:
-                answer = (
-                    "Flow is running without OPENAI_API_KEY. "
-                    f"Configure the key to enable full LLM. Plan (stub): {plan[:500]}"
-                )
+                answer = f"Flow is running without OPENAI_API_KEY. Configure the key to enable full LLM. Plan (stub): {plan[:500]}"
                 _node_logger.info("node.done", node="synthesizer", duration_ms=int((time.monotonic() - _t0) * 1000))
                 return {"answer": answer, "confidence": 0.5, "messages": [AIMessage(content=answer)]}
 
@@ -395,15 +407,18 @@ def make_synthesizer(ctx: GraphContext):
                     "worker received, numbered starting from 1."
                 )
 
-            out = await llm.ainvoke([
-                SystemMessage(content=(
-                    "You are the synthesizer. Write the final concise answer. "
-                    "Then on a new line write exactly: CONFIDENCE: <float 0.0-1.0> "
-                    "where the float reflects how confident you are in the answer completeness."
-                    + citation_instruction
-                )),
-                HumanMessage(content=f"Plan:\n{plan}\n\nWorker notes:\n{notes}"),
-            ])
+            out = await llm.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "You are the synthesizer. Write the final concise answer. "
+                            "Then on a new line write exactly: CONFIDENCE: <float 0.0-1.0> "
+                            "where the float reflects how confident you are in the answer completeness." + citation_instruction
+                        )
+                    ),
+                    HumanMessage(content=f"Plan:\n{plan}\n\nWorker notes:\n{notes}"),
+                ]
+            )
             raw = str(out.content)
             confidence = 0.8
             answer = raw
@@ -418,6 +433,7 @@ def make_synthesizer(ctx: GraphContext):
             if ctx.store is not None and answer:
                 try:
                     import uuid as _uuid
+
                     namespace = (str(ctx.workspace_id), str(ctx.agent_id), "facts")
                     await ctx.store.aput(
                         namespace,
@@ -440,6 +456,7 @@ def make_synthesizer(ctx: GraphContext):
 def make_reflector(ctx: GraphContext):
     """Self-reflection node: grades answer quality and optionally creates/updates skills."""
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
     repo = FlowRepository(ctx.pool)
 
@@ -475,10 +492,13 @@ Output ONLY valid JSON:
 
             try:
                 import json as _json
-                out = await llm.ainvoke([
-                    SystemMessage(content=_REFLECTION_PROMPT),
-                    HumanMessage(content=f"Question: {user_text[:500]}\n\nPlan: {plan[:500]}\n\nAnswer: {str(answer)[:2000]}"),
-                ])
+
+                out = await llm.ainvoke(
+                    [
+                        SystemMessage(content=_REFLECTION_PROMPT),
+                        HumanMessage(content=f"Question: {user_text[:500]}\n\nPlan: {plan[:500]}\n\nAnswer: {str(answer)[:2000]}"),
+                    ]
+                )
                 raw = str(out.content).strip()
                 if "```" in raw:
                     raw = raw.split("```")[1].removeprefix("json").strip()
@@ -493,6 +513,7 @@ Output ONLY valid JSON:
                     sbody = skill_sug.get("body", "").strip()
                     if sname and sbody:
                         from flow.application.skill_parser import ParsedSkill
+
                         skill = ParsedSkill(
                             name=sname,
                             description=sdesc,
@@ -518,6 +539,7 @@ Output ONLY valid JSON:
                                     snapshot_genome,
                                 )
                                 from flow.domain.genome import VersionStatus, VersionTrigger
+
                                 candidate_id = await snapshot_genome(
                                     pool=ctx.pool,
                                     agent_id=ctx.agent_id,
@@ -533,9 +555,7 @@ Output ONLY valid JSON:
                                     candidate_version_id=candidate_id,
                                     title=f"New skill learned: {sname}",
                                     body=(
-                                        f"Reflector grade {grade}/5. "
-                                        f"Skill '{sname}' auto-created. "
-                                        "Approve to promote this genome version to active."
+                                        f"Reflector grade {grade}/5. Skill '{sname}' auto-created. Approve to promote this genome version to active."
                                     ),
                                 )
                             except Exception:
@@ -584,8 +604,10 @@ Output ONLY valid JSON:
 # researcher-critic-writer nodes
 # ---------------------------------------------------------------------------
 
+
 def make_researcher(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
     tools = _resolved_tools(ctx.agent_config)
 
@@ -601,10 +623,7 @@ def make_researcher(ctx: GraphContext):
             rag_block = "\n---\n".join(rag_bits) or "(no knowledge hits)"
             mem_block = "\n---\n".join(mem_bits) or "(no memory hits)"
 
-            system = (
-                "You are a researcher. Gather facts to answer the user's question. "
-                "Be thorough. Cite sources when available."
-            )
+            system = "You are a researcher. Gather facts to answer the user's question. Be thorough. Cite sources when available."
             context_parts = [f"User question:\n{user_text}"]
             if prior:
                 context_parts.append(f"Prior research notes:\n{prior}")
@@ -616,10 +635,12 @@ def make_researcher(ctx: GraphContext):
             if llm is None:
                 notes = f"Offline research: {user_text}\nKnowledge: {rag_block}"
             else:
-                out = await llm.ainvoke([
-                    SystemMessage(content=system),
-                    HumanMessage(content="\n\n".join(context_parts)),
-                ])
+                out = await llm.ainvoke(
+                    [
+                        SystemMessage(content=system),
+                        HumanMessage(content="\n\n".join(context_parts)),
+                    ]
+                )
                 notes = str(out.content)
 
             return {
@@ -633,6 +654,7 @@ def make_researcher(ctx: GraphContext):
 
 def make_critic(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
 
     async def critic(state: FlowGraphState) -> dict:
@@ -650,14 +672,18 @@ def make_critic(ctx: GraphContext):
                     "messages": [AIMessage(content="[critic] Research looks sufficient.")],
                 }
 
-            out = await llm.ainvoke([
-                SystemMessage(content=(
-                    "You are a critic. Review the research notes for completeness and accuracy. "
-                    "If the research is sufficient to answer the question, respond with exactly: SUFFICIENT. "
-                    "Otherwise, respond with: NEEDS_MORE: <specific gap to address>"
-                )),
-                HumanMessage(content=f"Question:\n{user_text}\n\nResearch notes:\n{notes}"),
-            ])
+            out = await llm.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "You are a critic. Review the research notes for completeness and accuracy. "
+                            "If the research is sufficient to answer the question, respond with exactly: SUFFICIENT. "
+                            "Otherwise, respond with: NEEDS_MORE: <specific gap to address>"
+                        )
+                    ),
+                    HumanMessage(content=f"Question:\n{user_text}\n\nResearch notes:\n{notes}"),
+                ]
+            )
             verdict = str(out.content).strip()
             needs_more = verdict.startswith("NEEDS_MORE") and iterations < 2
             critique = verdict.removeprefix("NEEDS_MORE:").strip() if needs_more else ""
@@ -672,6 +698,7 @@ def make_critic(ctx: GraphContext):
 
 def make_writer(ctx: GraphContext):
     from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
 
     async def writer(state: FlowGraphState) -> dict:
@@ -683,10 +710,12 @@ def make_writer(ctx: GraphContext):
             if llm is None:
                 answer = f"Research summary:\n{notes[:2000]}"
             else:
-                out = await llm.ainvoke([
-                    SystemMessage(content="You are a writer. Compose a polished, well-structured final answer based on the research."),
-                    HumanMessage(content=f"Question:\n{user_text}\n\nResearch:\n{notes}"),
-                ])
+                out = await llm.ainvoke(
+                    [
+                        SystemMessage(content="You are a writer. Compose a polished, well-structured final answer based on the research."),
+                        HumanMessage(content=f"Question:\n{user_text}\n\nResearch:\n{notes}"),
+                    ]
+                )
                 answer = str(out.content)
             return {"answer": answer, "messages": [AIMessage(content=answer)]}
 
@@ -697,14 +726,12 @@ def make_writer(ctx: GraphContext):
 # human-in-loop nodes
 # ---------------------------------------------------------------------------
 
+
 def make_human_gate(ctx: GraphContext):
     async def human_gate(state: FlowGraphState) -> dict:
         approved = state.get("approved", False)
         if not approved:
-            raise NodeInterrupt(
-                "Waiting for human approval. "
-                "Resume the execution via POST /executions/{id}/approve"
-            )
+            raise NodeInterrupt("Waiting for human approval. Resume the execution via POST /executions/{id}/approve")
         return {"requires_approval": True}
 
     return human_gate
@@ -714,7 +741,8 @@ def make_human_gate(ctx: GraphContext):
 # Tool-agent: LangChain function-calling node with web + workspace tools
 # ---------------------------------------------------------------------------
 
-def _check_tool_prereqs(tool_name: str, ctx: "GraphContext") -> str | None:
+
+def _check_tool_prereqs(tool_name: str, ctx: GraphContext) -> str | None:
     """Return an error string if tool requirements are not met, else None."""
     settings = ctx.settings
     PREREQS: dict[str, tuple[str, str]] = {
@@ -732,8 +760,8 @@ def _check_tool_prereqs(tool_name: str, ctx: "GraphContext") -> str | None:
 
 def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
-    from pydantic import BaseModel, Field
     from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
 
     enabled: dict = ctx.agent_config.get("tools") or {}
     settings = ctx.settings
@@ -761,10 +789,21 @@ def _build_context_tools(ctx: GraphContext) -> list:
             max_results: int = Field(default=5, description="Number of results")
 
         async def _tavily(query: str, max_results: int = 5) -> str:
-            r = await _emit_wrap("tavily_search", run_tavily_search(query, max_results, (settings.tavily_api_key or "") if settings else ""), {"query": query, "max_results": max_results})
+            r = await _emit_wrap(
+                "tavily_search",
+                run_tavily_search(query, max_results, (settings.tavily_api_key or "") if settings else ""),
+                {"query": query, "max_results": max_results},
+            )
             return str(r)
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_tavily, name="tavily_search", description="Search the web using Tavily. Use for current events, news, and factual queries.", args_schema=TavilyArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_tavily,
+                name="tavily_search",
+                description="Search the web using Tavily. Use for current events, news, and factual queries.",
+                args_schema=TavilyArgs,
+            )
+        )
 
     if enabled.get("fetch_webpage"):
         from flow.infrastructure.tools.web import run_fetch_webpage
@@ -776,7 +815,11 @@ def _build_context_tools(ctx: GraphContext) -> list:
             r = await _emit_wrap("fetch_webpage", run_fetch_webpage(url), {"url": url})
             return str(r)
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_fetch, name="fetch_webpage", description="Fetch and extract readable text from any URL.", args_schema=FetchArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_fetch, name="fetch_webpage", description="Fetch and extract readable text from any URL.", args_schema=FetchArgs
+            )
+        )
 
     if enabled.get("arxiv_search"):
         from flow.infrastructure.tools.web import run_arxiv_search
@@ -789,7 +832,14 @@ def _build_context_tools(ctx: GraphContext) -> list:
             r = await _emit_wrap("arxiv_search", run_arxiv_search(query, max_results), {"query": query, "max_results": max_results})
             return str(r)
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_arxiv, name="arxiv_search", description="Search ArXiv for academic papers. Returns title, abstract, URL, publish date.", args_schema=ArxivArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_arxiv,
+                name="arxiv_search",
+                description="Search ArXiv for academic papers. Returns title, abstract, URL, publish date.",
+                args_schema=ArxivArgs,
+            )
+        )
 
     if enabled.get("hf_papers"):
         from flow.infrastructure.tools.web import run_hf_papers
@@ -801,9 +851,17 @@ def _build_context_tools(ctx: GraphContext) -> list:
             r = await _emit_wrap("hf_papers", run_hf_papers(date), {"date": date or "today"})
             return str(r)
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_hf, name="hf_papers", description="Get HuggingFace Daily Papers with upvotes. Best for trending AI/ML research.", args_schema=HFPapersArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_hf,
+                name="hf_papers",
+                description="Get HuggingFace Daily Papers with upvotes. Best for trending AI/ML research.",
+                args_schema=HFPapersArgs,
+            )
+        )
 
     if enabled.get("sandbox"):
+
         class SandboxArgs(BaseModel):
             code: str = Field(description="Python code to execute")
 
@@ -814,7 +872,11 @@ def _build_context_tools(ctx: GraphContext) -> list:
             _emit_tool_call(ctx, "sandbox", {"code": code[:300]}, result[:1000], int((time.time() - t0) * 1000))
             return result
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_sandbox, name="sandbox", description="Execute Python code and return stdout/stderr.", args_schema=SandboxArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_sandbox, name="sandbox", description="Execute Python code and return stdout/stderr.", args_schema=SandboxArgs
+            )
+        )
 
     if enabled.get("retrieve"):
         repo = FlowRepository(ctx.pool)
@@ -832,7 +894,14 @@ def _build_context_tools(ctx: GraphContext) -> list:
             _emit_tool_call(ctx, "knowledge_search", {"query": query}, f"{len(chunks)} chunks", int((time.time() - t0) * 1000))
             return "\n\n---\n\n".join(chunks) or "(no results)"
 
-        lc_tools.append(StructuredTool.from_function(coroutine=_knowledge, name="knowledge_search", description="Search workspace knowledge base (uploaded PDFs, docs, URLs).", args_schema=KnowledgeArgs))
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_knowledge,
+                name="knowledge_search",
+                description="Search workspace knowledge base (uploaded PDFs, docs, URLs).",
+                args_schema=KnowledgeArgs,
+            )
+        )
 
     # subagent_call — inline sub-graph execution
     class SubagentArgs(BaseModel):
@@ -841,15 +910,61 @@ def _build_context_tools(ctx: GraphContext) -> list:
 
     async def _subagent_call(agent_name: str, message: str) -> str:
         t0 = time.time()
+        # Emit start event so the parent run UI can render the inline card immediately
+        hub = getattr(ctx, "stream_hub", None)
+        parent_exec_id = getattr(ctx, "execution_id", None)
+        if hub is not None and parent_exec_id is not None:
+            try:
+                hub.publish(
+                    parent_exec_id,
+                    {
+                        "kind": "subagent_start",
+                        "agent_name": agent_name,
+                        "message": message[:500],
+                    },
+                )
+            except Exception:
+                pass
+        # Also persist a start row so a reload can replay it
+        if parent_exec_id is not None and ctx.pool is not None:
+            try:
+                from flow.infrastructure.persistence.repo import FlowRepository as _RepoStart
+
+                _rs = _RepoStart(ctx.pool)
+                await _rs.insert_event(
+                    parent_exec_id,
+                    "subagent_start",
+                    {
+                        "agent_name": agent_name,
+                        "message": message[:500],
+                    },
+                )
+            except Exception:
+                pass
+
         try:
+            from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx
+            from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
             from flow.infrastructure.persistence.repo import FlowRepository as _Repo
-            from flow.infrastructure.graph.deer_graph import GraphContext as _GCtx, build_deer_flow_graph
+
             _repo = _Repo(ctx.pool)
             # Find agent by name in workspace
             agents = await _repo.list_agents(ctx.workspace_id)
             target = next((a for a in agents if a["name"].lower() == agent_name.lower()), None)
             if target is None:
-                return f"[subagent_call] Agent '{agent_name}' not found in workspace."
+                err = f"[subagent_call] Agent '{agent_name}' not found in workspace."
+                if hub is not None and parent_exec_id is not None:
+                    hub.publish(
+                        parent_exec_id,
+                        {
+                            "kind": "subagent_done",
+                            "agent_name": agent_name,
+                            "answer": err,
+                            "duration_ms": int((time.time() - t0) * 1000),
+                            "status": "error",
+                        },
+                    )
+                return err
             sub_config = target["config"] if isinstance(target["config"], dict) else {}
             sub_ctx = _GCtx(
                 pool=ctx.pool,
@@ -865,31 +980,86 @@ def _build_context_tools(ctx: GraphContext) -> list:
             )
             graph = build_deer_flow_graph(sub_ctx)
             from langchain_core.messages import HumanMessage as _HM
+
             result_state = await graph.ainvoke({"messages": [_HM(content=message)]})
             answer = result_state.get("answer") or result_state.get("worker_output") or ""
             if not answer:
                 msgs = result_state.get("messages") or []
                 answer = str(msgs[-1].content) if msgs else "(no answer)"
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], int((time.time() - t0) * 1000))
+            duration_ms = int((time.time() - t0) * 1000)
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms)
+            # Stream done event + persist
+            if hub is not None and parent_exec_id is not None:
+                try:
+                    hub.publish(
+                        parent_exec_id,
+                        {
+                            "kind": "subagent_done",
+                            "agent_name": agent_name,
+                            "message": message[:500],
+                            "answer": str(answer)[:4000],
+                            "duration_ms": duration_ms,
+                            "status": "success",
+                        },
+                    )
+                except Exception:
+                    pass
+            if parent_exec_id is not None and ctx.pool is not None:
+                try:
+                    from flow.infrastructure.persistence.repo import FlowRepository as _RepoDone
+
+                    _rd = _RepoDone(ctx.pool)
+                    await _rd.insert_event(
+                        parent_exec_id,
+                        "subagent_done",
+                        {
+                            "agent_name": agent_name,
+                            "message": message[:500],
+                            "answer": str(answer)[:4000],
+                            "duration_ms": duration_ms,
+                            "status": "success",
+                        },
+                    )
+                except Exception:
+                    pass
             return str(answer)[:4000]
         except Exception as exc:
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), int((time.time() - t0) * 1000), "error")
+            duration_ms = int((time.time() - t0) * 1000)
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error")
+            if hub is not None and parent_exec_id is not None:
+                try:
+                    hub.publish(
+                        parent_exec_id,
+                        {
+                            "kind": "subagent_done",
+                            "agent_name": agent_name,
+                            "answer": str(exc),
+                            "duration_ms": duration_ms,
+                            "status": "error",
+                        },
+                    )
+                except Exception:
+                    pass
             return f"[subagent_call] Error: {exc}"
 
-    lc_tools.append(StructuredTool.from_function(
-        coroutine=_subagent_call,
-        name="subagent_call",
-        description="Invoke another agent in this workspace as a subagent. Returns the subagent's answer. Use when you need to delegate a subtask to a specialized agent.",
-        args_schema=SubagentArgs,
-    ))
+    lc_tools.append(
+        StructuredTool.from_function(
+            coroutine=_subagent_call,
+            name="subagent_call",
+            description="Invoke another agent in this workspace as a subagent. Returns the subagent's answer. Use when you need to delegate a subtask to a specialized agent.",
+            args_schema=SubagentArgs,
+        )
+    )
 
     return lc_tools
 
 
 def make_tool_agent(ctx: GraphContext):
     """ReAct-style node: LLM with bound tools, emits tool_call SSE per invocation."""
-    from flow.infrastructure.observability.tracing import get_tracer
     from langchain_core.messages import ToolMessage
+
+    from flow.infrastructure.observability.tracing import get_tracer
+
     tracer = get_tracer()
 
     @_traceable(name="flow.tool_agent", run_type="chain")
@@ -948,6 +1118,7 @@ def make_tool_agent(ctx: GraphContext):
 # Node registry builder
 # ---------------------------------------------------------------------------
 
+
 def build_node_registry(ctx: GraphContext) -> dict:
     return {
         # linear-3 / deer_flow
@@ -970,6 +1141,7 @@ def build_node_registry(ctx: GraphContext) -> dict:
 # Condition registry
 # ---------------------------------------------------------------------------
 
+
 def should_continue_research(state: FlowGraphState) -> str:
     if state.get("needs_more_research") and state.get("research_iterations", 0) < 2:
         return "researcher"
@@ -980,7 +1152,7 @@ def gate_approved(state: FlowGraphState) -> str:
     return "approved" if state.get("approved") else "waiting"
 
 
-async def _tool_update_skill(ctx: "GraphContext", repo: FlowRepository, skill_name: str, content: str) -> str:
+async def _tool_update_skill(ctx: GraphContext, repo: FlowRepository, skill_name: str, content: str) -> str:
     """Create or update an agent skill. Returns confirmation."""
     try:
         await repo.upsert_agent_skill(

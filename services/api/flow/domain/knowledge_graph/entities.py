@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     NOTE = "note"
     CONCEPT = "concept"
     TOPIC = "topic"
     QUERY = "query"
 
 
-class EdgeType(str, Enum):
+class EdgeType(StrEnum):
     LINKS_TO = "links_to"
     TAGGED_WITH = "tagged_with"
     MENTIONS = "mentions"

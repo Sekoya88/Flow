@@ -19,6 +19,7 @@ metadata:
 ## Instructions
 ...actual skill content...
 """
+
 from __future__ import annotations
 
 import re
@@ -100,8 +101,6 @@ def skill_matches_query(skill: ParsedSkill, query: str) -> bool:
             return True
     if skill.name.lower() in query_lower:
         return True
-    if skill.description and any(
-        word in query_lower for word in skill.description.lower().split()[:5]
-    ):
+    if skill.description and any(word in query_lower for word in skill.description.lower().split()[:5]):
         return True
     return False

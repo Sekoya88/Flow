@@ -107,7 +107,7 @@ export function ConfidenceTrend({ data, className, height = 48 }: ConfidenceTren
         <path
           d={path}
           fill="none"
-          stroke="var(--color-flow-brand)"
+          stroke="var(--color-flow-violet)"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -124,7 +124,7 @@ export function ConfidenceTrend({ data, className, height = 48 }: ConfidenceTren
               cx={x}
               cy={y}
               r="3"
-              fill="var(--color-flow-brand)"
+              fill="var(--color-flow-violet)"
               opacity="0.8"
               className={cn(
                 "transition-all duration-200",
@@ -142,8 +142,8 @@ export function ConfidenceTrend({ data, className, height = 48 }: ConfidenceTren
         })}
         <defs>
           <linearGradient id="confidence-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-flow-brand)" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="var(--color-flow-brand)" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--color-flow-violet)" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="var(--color-flow-violet)" stopOpacity="0" />
           </linearGradient>
         </defs>
       </svg>

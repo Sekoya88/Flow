@@ -6,24 +6,20 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from flow.application.genome_service import snapshot_genome
 from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.schemas import SnapshotCreateIn
 
 router = APIRouter(prefix="/api/v1/agents/{agent_id}/versions", tags=["agent-versions"])
-
-
-class SnapshotRequest(BaseModel):
-    version_label: str
 
 
 @router.post("")
 async def create_version(
     agent_id: UUID,
-    body: SnapshotRequest,
+    body: SnapshotCreateIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
@@ -42,9 +38,9 @@ async def create_version(
             status=VersionStatus.ACTIVE,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to create version snapshot")
+        raise HTTPException(status_code=500, detail="Failed to create version snapshot") from e
     return {"id": str(version_id), "version_label": body.version_label.strip()}
 
 
@@ -59,7 +55,7 @@ async def list_versions(
 
     rows = await repo._pool.fetch(
         """
-        SELECT id, version_label, config_snapshot, template, created_at, created_by
+        SELECT id, version_label, config_snapshot, template, created_at, created_by, prompt_hash
         FROM agent_versions
         WHERE agent_id = $1
         ORDER BY created_at DESC
@@ -74,6 +70,7 @@ async def list_versions(
             "template": r["template"],
             "created_at": r["created_at"].isoformat(),
             "created_by": str(r["created_by"]) if r["created_by"] else None,
+            "prompt_hash": r["prompt_hash"],
         }
         for r in rows
     ]
@@ -88,7 +85,7 @@ async def restore_version(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Restore an agent to a previous config version.
-    
+
     The current config is auto-saved as a new version before restoring,
     so the operation is non-destructive.
     """
@@ -98,7 +95,8 @@ async def restore_version(
     # Get target version
     target = await repo._pool.fetchrow(
         "SELECT config_snapshot, template, version_label FROM agent_versions WHERE id = $1 AND agent_id = $2",
-        version_id, agent_id,
+        version_id,
+        agent_id,
     )
     if not target:
         raise HTTPException(status_code=404, detail="version not found")
@@ -138,11 +136,13 @@ async def diff_versions(
 
     v1 = await repo._pool.fetchrow(
         "SELECT version_label, config_snapshot, template, created_at FROM agent_versions WHERE id=$1 AND agent_id=$2",
-        v1_id, agent_id,
+        v1_id,
+        agent_id,
     )
     v2 = await repo._pool.fetchrow(
         "SELECT version_label, config_snapshot, template, created_at FROM agent_versions WHERE id=$1 AND agent_id=$2",
-        v2_id, agent_id,
+        v2_id,
+        agent_id,
     )
     if not v1 or not v2:
         raise HTTPException(status_code=404, detail="version not found")
@@ -179,6 +179,7 @@ async def diff_versions(
 
 
 # ── helpers ──
+
 
 async def _get_agent(repo: FlowRepository, agent_id: UUID, user_id: UUID):
     ws_rows = await repo.list_workspaces_for_user(user_id)

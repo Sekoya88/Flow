@@ -44,13 +44,15 @@ async def get_execution_trace(
             node_completions.append({"name": node_name, "ended_at": ts})
 
         elif kind == "tool_call":
-            tool_calls.append({
-                "tool": payload.get("tool", "unknown"),
-                "duration_ms": payload.get("duration_ms", 0),
-                "status": payload.get("status", "success"),
-                "input": str(payload.get("input", ""))[:500],
-                "output": str(payload.get("output", ""))[:500],
-            })
+            tool_calls.append(
+                {
+                    "tool": payload.get("tool", "unknown"),
+                    "duration_ms": payload.get("duration_ms", 0),
+                    "status": payload.get("status", "success"),
+                    "input": str(payload.get("input", ""))[:500],
+                    "output": str(payload.get("output", ""))[:500],
+                }
+            )
 
     # Build node spans: each node starts where the previous ended (first starts at first_ts)
     nodes = []
@@ -62,19 +64,17 @@ async def get_execution_trace(
             duration_ms = int((ended_at - started_at).total_seconds() * 1000)
         else:
             duration_ms = None
-        nodes.append({
-            "name": nc["name"],
-            "started_at": started_at.isoformat() if started_at else None,
-            "ended_at": ended_at.isoformat() if ended_at else None,
-            "duration_ms": duration_ms,
-        })
+        nodes.append(
+            {
+                "name": nc["name"],
+                "started_at": started_at.isoformat() if started_at else None,
+                "ended_at": ended_at.isoformat() if ended_at else None,
+                "duration_ms": duration_ms,
+            }
+        )
         prev_ts = ended_at
 
-    total_duration_ms = (
-        int((last_ts - first_ts).total_seconds() * 1000)
-        if first_ts and last_ts
-        else None
-    )
+    total_duration_ms = int((last_ts - first_ts).total_seconds() * 1000) if first_ts and last_ts else None
 
     return {
         "nodes": nodes,

@@ -239,7 +239,7 @@ export default function NewAgentPage() {
               <span
                 className={cn(
                   "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
-                  active ? "border-flow-brand bg-flow-brand/20 text-foreground" : done ? "border-flow-done bg-flow-done/20 text-foreground" : "border-border text-muted-foreground",
+                  active ? "border-flow-violet bg-flow-violet/20 text-foreground" : done ? "border-flow-done bg-flow-done/20 text-foreground" : "border-border text-muted-foreground",
                 )}
               >
                 {done ? <Check className="h-2.5 w-2.5" /> : n}
@@ -265,11 +265,11 @@ export default function NewAgentPage() {
                   onClick={() => applyTemplate(tpl)}
                   className={cn(
                     "group relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all",
-                    picked ? "border-flow-brand/60 bg-flow-brand/10 ring-1 ring-flow-brand/30" : tpl.accentClass,
+                    picked ? "border-flow-violet/60 bg-flow-violet/10 ring-1 ring-flow-violet/30" : tpl.accentClass,
                   )}
                 >
                   {picked && (
-                    <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-flow-brand">
+                    <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-flow-violet">
                       <Check className="h-2.5 w-2.5 text-white" />
                     </span>
                   )}
@@ -285,10 +285,10 @@ export default function NewAgentPage() {
           </div>
 
           {/* Vibe input */}
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-flow-800">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-flow-brand" aria-hidden />
+                <Sparkles className="h-4 w-4 text-flow-violet" aria-hidden />
                 <CardTitle className="text-base">Vibe code your agent</CardTitle>
               </div>
               <CardDescription className="text-[13px]">
@@ -328,7 +328,7 @@ export default function NewAgentPage() {
       {/* Step 2 — Configure */}
       {step === 2 && (
         <div className="space-y-6">
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-flow-800">
             <CardHeader>
               <CardTitle className="text-base">Agent identity</CardTitle>
             </CardHeader>
@@ -364,8 +364,8 @@ export default function NewAgentPage() {
                       className={cn(
                         "rounded-lg border px-3 py-1.5 font-mono text-[11px] transition-colors",
                         config.template === t
-                          ? "border-flow-brand/50 bg-flow-brand/10 text-foreground"
-                          : "border-border/60 text-muted-foreground hover:bg-muted/40",
+                          ? "border-flow-violet/50 bg-flow-violet/10 text-foreground"
+                          : "border-flow-800 text-muted-foreground hover:bg-muted/40",
                       )}
                     >
                       {t}
@@ -380,14 +380,14 @@ export default function NewAgentPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-flow-800">
             <CardHeader>
               <CardTitle className="text-base">Tools</CardTitle>
               <CardDescription className="text-[13px]">Enable the capabilities your agent needs.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {TOOL_LABELS.map(({ key, label, description, badge }) => (
-                <div key={key} className="flex items-center justify-between gap-4 rounded-lg border border-border/40 px-3 py-2.5">
+                <div key={key} className="flex items-center justify-between gap-4 rounded-lg border border-flow-800 px-3 py-2.5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground">{label}</span>
@@ -426,7 +426,7 @@ export default function NewAgentPage() {
       {/* Step 3 — Create */}
       {step === 3 && (
         <div className="space-y-6">
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-flow-800">
             <CardHeader>
               <CardTitle className="text-base">Review & create</CardTitle>
               <CardDescription className="text-[13px]">Confirm the configuration before creating your agent.</CardDescription>

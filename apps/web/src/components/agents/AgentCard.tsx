@@ -132,10 +132,10 @@ export function AgentCard({ agent, onClick, className }: AgentCardProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl",
-        "border border-border/60 bg-card/80 backdrop-blur-sm",
+        "group relative flex flex-col overflow-hidden rounded-[6px]",
+        "border border-flow-800 bg-card/80",
         "text-left transition-all duration-300 ease-out",
-        "hover:border-border hover:shadow-lg hover:shadow-flow-brand/5",
+        "hover:border-border hover:shadow-lg hover:shadow-none/5",
         "hover:-translate-y-0.5",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className,
@@ -156,7 +156,7 @@ export function AgentCard({ agent, onClick, className }: AgentCardProps) {
         {/* Header: name + template badge */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-flow-brand transition-colors">
+            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-flow-violet transition-colors">
               {agent.name || agent.template}
             </h3>
           </div>
@@ -185,9 +185,9 @@ export function AgentCard({ agent, onClick, className }: AgentCardProps) {
                   title={ti.label}
                   className={cn(
                     "inline-flex items-center gap-1 rounded-md",
-                    "border border-border/40 bg-muted/30 px-2 py-0.5",
+                    "border border-flow-800 bg-muted/30 px-2 py-0.5",
                     "text-[10px] font-medium text-muted-foreground",
-                    "transition-colors group-hover:border-border/60",
+                    "transition-colors group-hover:border-flow-800",
                   )}
                 >
                   <Icon className="h-3 w-3" aria-hidden />

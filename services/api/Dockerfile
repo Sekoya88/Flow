@@ -1,12 +1,11 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 WORKDIR /app
-RUN pip install --no-cache-dir --timeout 300 uv
 COPY pyproject.toml README.md uv.lock ./
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY flow ./flow
 COPY scripts ./scripts
-RUN uv sync --frozen --no-dev
+RUN UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

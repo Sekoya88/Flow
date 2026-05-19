@@ -17,9 +17,11 @@ def get_chat_model(model_config: dict[str, Any], fallback_api_keys: dict[str, st
 
     if provider == "stub":
         import os
+
         if os.environ.get("FLOW_ENV", "production") not in ("test", "development"):
             raise RuntimeError("StubChatModel is only available in test/development environments")
         from flow.infrastructure.llm.stub import StubChatModel
+
         return StubChatModel(responses=model_config.get("responses", []))
 
     if provider == "anthropic":
@@ -27,11 +29,13 @@ def get_chat_model(model_config: dict[str, Any], fallback_api_keys: dict[str, st
         if not api_key:
             return None
         from langchain_anthropic import ChatAnthropic
+
         return ChatAnthropic(api_key=api_key, model=model, temperature=temperature)
 
     if provider == "ollama":
         base_url = model_config.get("base_url") or "http://localhost:11434"
         from langchain_ollama import ChatOllama
+
         return ChatOllama(base_url=base_url, model=model, temperature=temperature)
 
     # default: openai
@@ -39,4 +43,5 @@ def get_chat_model(model_config: dict[str, Any], fallback_api_keys: dict[str, st
     if not api_key:
         return None
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(api_key=api_key, model=model, temperature=temperature)

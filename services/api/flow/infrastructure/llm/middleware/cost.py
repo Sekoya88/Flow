@@ -14,6 +14,7 @@ logger = get_logger(__name__)
 def _tiktoken_counter(messages: list[BaseMessage]) -> int:
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
         return sum(len(enc.encode(getattr(m, "content", "") or "")) for m in messages)
     except Exception:
@@ -36,9 +37,7 @@ class FlowCostMiddleware(AgentMiddleware):
         self._token_counter = token_counter
         self._call_count: int = 0
 
-    async def before_model(
-        self, messages: list[BaseMessage], runtime: HarnessRuntime
-    ) -> dict | list | None:
+    async def before_model(self, messages: list[BaseMessage], runtime: HarnessRuntime) -> dict | list | None:
         self._call_count += 1
 
         if self._call_count > self._call_limit:
@@ -64,13 +63,8 @@ class FlowCostMiddleware(AgentMiddleware):
         keep = messages[-4:]
 
         try:
-            summary_prompt = (
-                "Summarize the following conversation in 3-5 bullet points, "
-                "preserving key facts and decisions:\n\n"
-                + "\n".join(
-                    f"{type(m).__name__}: {getattr(m, 'content', '')[:500]}"
-                    for m in to_summarize
-                )
+            summary_prompt = "Summarize the following conversation in 3-5 bullet points, preserving key facts and decisions:\n\n" + "\n".join(
+                f"{type(m).__name__}: {getattr(m, 'content', '')[:500]}" for m in to_summarize
             )
             summary_resp = await self._summarize_model.ainvoke([HumanMessage(content=summary_prompt)])
             summary_text = getattr(summary_resp, "content", str(summary_resp))

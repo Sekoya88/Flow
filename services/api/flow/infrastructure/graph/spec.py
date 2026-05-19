@@ -4,10 +4,12 @@ GraphSpec describes nodes + edges as data. Templates ship as dicts stored in
 agents.config["graph"]. The compiler wires them into a StateGraph at execution
 time so new topologies need no code deploys — only an agent config update.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
@@ -87,7 +89,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="planner",
     ),
-
     "deer_flow": GraphSpec(  # alias kept for existing agents
         template="deer_flow",
         nodes=["planner", "worker", "synthesizer", "reflector"],
@@ -99,7 +100,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="planner",
     ),
-
     "researcher-critic-writer": GraphSpec(
         template="researcher-critic-writer",
         nodes=["researcher", "critic", "writer"],
@@ -118,7 +118,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="researcher",
     ),
-
     "tool-agent": GraphSpec(
         template="tool-agent",
         nodes=["planner", "tool_agent", "synthesizer"],
@@ -129,7 +128,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="planner",
     ),
-
     "human-in-loop": GraphSpec(
         template="human-in-loop",
         nodes=["planner", "human_gate", "worker", "synthesizer"],
@@ -150,7 +148,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="planner",
     ),
-
     "orchestrator": GraphSpec(
         template="orchestrator",
         nodes=["planner", "tool_agent", "synthesizer"],
@@ -161,7 +158,6 @@ TEMPLATES: dict[str, GraphSpec] = {
         ],
         entry="planner",
     ),
-
     "react-agent": GraphSpec(
         template="react-agent",
         nodes=["planner"],

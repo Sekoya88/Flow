@@ -37,9 +37,7 @@ async def ingest_document(
     body: str,
     settings: Settings | None = None,
 ) -> UUID:
-    source_id = await repo.insert_knowledge_source(
-        workspace_id, title, body, ingest_status="processing"
-    )
+    source_id = await repo.insert_knowledge_source(workspace_id, title, body, ingest_status="processing")
     try:
         chunks = chunk_text(body)
         if not chunks:
@@ -56,6 +54,7 @@ async def ingest_document(
                         sparse_encode_text,
                         upsert_knowledge_chunk_async,
                     )
+
                     base = settings.qdrant_url.strip().rstrip("/")
                     url = base if base.startswith("http") else f"http://{base}"
                     client = get_qdrant_client(url)

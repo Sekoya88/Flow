@@ -1,4 +1,5 @@
 """Integration tests for /api/v1/schedules routes."""
+
 from __future__ import annotations
 
 import datetime
@@ -44,7 +45,7 @@ def _make_repo_mock() -> FlowRepository:
                 "delivery_target": None,
                 "enabled": True,
                 "last_run_at": None,
-                "created_at": datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+                "created_at": datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC),
             }
         ]
     )
@@ -57,6 +58,7 @@ def _make_repo_mock() -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
 
     _app = create_app()
@@ -66,15 +68,15 @@ def app(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_cron_jobs_returns_two_system_jobs(app):
+async def test_list_cron_jobs_returns_system_jobs(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/api/v1/schedules/cron-jobs", headers=_auth())
     assert r.status_code == 200
     data = r.json()
     assert "cron_jobs" in data
-    assert len(data["cron_jobs"]) == 2
+    assert len(data["cron_jobs"]) == 4
     names = {j["name"] for j in data["cron_jobs"]}
-    assert names == {"scheduler_tick", "auto_eval_tick"}
+    assert names == {"scheduler_tick", "auto_eval_tick", "skill_decay_tick", "persona_freshness_tick"}
 
 
 @pytest.mark.asyncio

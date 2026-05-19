@@ -12,7 +12,7 @@ from flow.infrastructure.auth.jwt_utils import create_access_token
 from flow.infrastructure.auth.password import hash_password, verify_password
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
-from flow.interfaces.http.schemas import LoginIn, RegisterIn, TokenOut
+from flow.interfaces.http.schemas import ChangePasswordIn, LoginIn, RegisterIn, TokenOut
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ async def register(
     # Seed canonical agents + golden sets in background so registration returns immediately
     async def _seed():
         from scripts.seed_agents_and_datasets import seed_workspace
+
         try:
             await seed_workspace(repo._pool, ws)
         except Exception:
@@ -59,6 +60,25 @@ async def login(
     return TokenOut(access_token=token)
 
 
+@router.put("/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    body: ChangePasswordIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> None:
+    row = await repo.get_user(user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="user not found")
+    full = await repo.get_user_by_email(row["email"])
+    if not full or not verify_password(body.current_password, full["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="current password incorrect")
+    await repo._pool.execute(
+        "UPDATE users SET password_hash = $1 WHERE id = $2",
+        hash_password(body.new_password),
+        user_id,
+    )
+
+
 @router.get("/me")
 async def me(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
@@ -70,7 +90,5 @@ async def me(
     workspaces = await repo.list_workspaces_for_user(user_id)
     return {
         "user": {"id": str(user["id"]), "email": user["email"]},
-        "workspaces": [
-            {"id": str(w["id"]), "name": w["name"], "role": w["role"]} for w in workspaces
-        ],
+        "workspaces": [{"id": str(w["id"]), "name": w["name"], "role": w["role"]} for w in workspaces],
     }

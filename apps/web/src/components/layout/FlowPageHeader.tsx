@@ -30,12 +30,12 @@ export function FlowPageHeader({
   className,
 }: FlowPageHeaderProps) {
   return (
-    <header className={cn("space-y-4 border-b border-border/60 pb-6", className)}>
+    <header className={cn("space-y-4 border-b border-flow-800 pb-6", className)}>
       {eyebrow ? <div className="flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            {leading ? <span className="shrink-0 text-flow-brand">{leading}</span> : null}
+            {leading ? <span className="shrink-0 text-flow-violet">{leading}</span> : null}
             <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance">{title}</h1>
             {titleSuffix}
           </div>

@@ -13,7 +13,7 @@ from flow.application.kg_query_graph import QueryConfig, build_kg_query_graph
 from flow.infrastructure.kg.graph_engine import KGGraphEngine
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
-from flow.interfaces.http.schemas_kg import (
+from flow.interfaces.http.schemas import (
     KGEdgeOut,
     KGGraphOut,
     KGIngestObsidianIn,
@@ -21,6 +21,7 @@ from flow.interfaces.http.schemas_kg import (
     KGNodeOut,
     KGQueryIn,
     KGSyncIn,
+    SkillNodeDetail,
 )
 
 router = APIRouter(prefix="/api/v1/kg", tags=["knowledge-graph"])
@@ -120,7 +121,7 @@ async def ingest_obsidian(
     try:
         docs = await fetch_from_obsidian_api(body.base_url, body.api_key, body.vault_path)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Obsidian API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Obsidian API error: {e}") from e
 
     engine = KGGraphEngine(request.app.state.pool)
     config = IngestionConfig(workspace_id=body.workspace_id, repo=repo, openai_api_key=s.openai_api_key)
@@ -145,7 +146,7 @@ async def sync_vault(
     try:
         docs = await sync_from_path(body.vault_path)
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     engine = KGGraphEngine(request.app.state.pool)
     config = IngestionConfig(workspace_id=body.workspace_id, repo=repo, openai_api_key=s.openai_api_key)
@@ -189,10 +190,29 @@ async def get_node_detail(
     if node is None or node["workspace_id"] != workspace_id:
         raise HTTPException(status_code=404, detail="Node not found")
     neighbors, edges = await repo.get_kg_neighbors(node_id, workspace_id)
+
+    skill_detail = None
+    if node["node_type"] == "skill" and node.get("ref_id"):
+        try:
+            sk = await repo.get_skill_by_id(node["ref_id"])
+        except Exception:
+            sk = None
+        if sk is not None:
+            skill_detail = SkillNodeDetail(
+                content_md=sk["content_md"],
+                description=sk["description"],
+                allowed_tools=list(sk["allowed_tools"] or []),
+                triggers=list(sk["triggers"] or []),
+                score=float(sk["score"] or 0.0),
+                use_count=int(sk["use_count"] or 0),
+                version=int(sk["version"] or 1),
+            )
+
     return KGNodeDetailOut(
         node=_node_out(node),
         neighbors=[_node_out(n) for n in neighbors],
         edges=[_edge_out(e) for e in edges],
+        skill=skill_detail,
     )
 
 
@@ -238,11 +258,23 @@ async def seed_demo_graph(
         ("Skill: Deep Research", "skill", "Multi-hop search with source triangulation"),
     ]
     _DEMO_EDGES = [
-        (0, 1, "has_component"), (0, 2, "has_component"), (0, 3, "has_component"), (0, 4, "has_component"),
-        (1, 2, "delegates_to"), (2, 3, "feeds_into"), (3, 4, "triggers"),
-        (2, 5, "uses_tool"), (2, 6, "uses_tool"), (2, 7, "uses_tool"), (2, 8, "uses_tool"),
-        (9, 1, "triggers"), (3, 10, "produces"), (4, 11, "produces"), (4, 12, "produces"),
-        (13, 1, "configures"), (14, 2, "enhances"),
+        (0, 1, "has_component"),
+        (0, 2, "has_component"),
+        (0, 3, "has_component"),
+        (0, 4, "has_component"),
+        (1, 2, "delegates_to"),
+        (2, 3, "feeds_into"),
+        (3, 4, "triggers"),
+        (2, 5, "uses_tool"),
+        (2, 6, "uses_tool"),
+        (2, 7, "uses_tool"),
+        (2, 8, "uses_tool"),
+        (9, 1, "triggers"),
+        (3, 10, "produces"),
+        (4, 11, "produces"),
+        (4, 12, "produces"),
+        (13, 1, "configures"),
+        (14, 2, "enhances"),
     ]
 
     node_ids: list[UUID] = []
@@ -255,8 +287,13 @@ async def seed_demo_graph(
             VALUES ($1, $2, $3, $4, $5, '{}', $6, $7)
             ON CONFLICT (id) DO NOTHING
             """,
-            nid, workspace_id, label, ntype, summary,
-            float(hash(label) % 800), float(hash(summary) % 600),
+            nid,
+            workspace_id,
+            label,
+            ntype,
+            summary,
+            float(hash(label) % 800),
+            float(hash(summary) % 600),
         )
 
     for src_idx, tgt_idx, etype in _DEMO_EDGES:
@@ -267,7 +304,11 @@ async def seed_demo_graph(
             VALUES ($1, $2, $3, $4, $5, 1.0)
             ON CONFLICT (id) DO NOTHING
             """,
-            eid, workspace_id, node_ids[src_idx], node_ids[tgt_idx], etype,
+            eid,
+            workspace_id,
+            node_ids[src_idx],
+            node_ids[tgt_idx],
+            etype,
         )
 
     engine = KGGraphEngine(request.app.state.pool)
@@ -281,6 +322,118 @@ async def seed_demo_graph(
         await repo.bulk_update_kg_metrics(pageranks, clusters, pos_map)
 
     return {"seeded": len(_DEMO_NODES), "edges": len(_DEMO_EDGES)}
+
+
+@router.post("/sync-entities", status_code=201)
+async def sync_entities(
+    request: Request,
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Upsert all workspace agents + active skills into kg_nodes with ref linkage.
+
+    Idempotent — uses uuid5 deterministic node IDs and ON CONFLICT upserts.
+    Call this whenever new agents or skills are created to keep the graph in sync.
+    """
+    await _assert_workspace(user_id, workspace_id, repo)
+    import json as _json
+    import uuid as _uuid
+
+    from flow.application.skill_parser import parse_skill_md
+
+    pool = repo._pool
+    agents = await repo.list_agents(workspace_id)
+    skills = await repo.list_skills_catalog(workspace_id)
+
+    agent_kg_ids: dict[str, _uuid.UUID] = {}
+    upserted_agents = 0
+    upserted_skills = 0
+
+    for ag in agents:
+        nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-agent-{workspace_id}-{ag['id']}")
+        agent_kg_ids[str(ag["id"])] = nid
+        meta = _json.dumps({"template": ag.get("template") or ""})
+        await pool.execute(
+            """
+            INSERT INTO kg_nodes
+              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
+            VALUES ($1, $2, $3, 'agent', $4, $5::jsonb, $6, 'agent')
+            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
+            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
+                          metadata = EXCLUDED.metadata
+            """,
+            nid,
+            workspace_id,
+            ag["name"],
+            f"Agent: {ag['name']}",
+            meta,
+            str(ag["id"]),
+        )
+        upserted_agents += 1
+
+    for sk in skills:
+        parsed = parse_skill_md(sk["content_md"])
+        desc = parsed.description or sk.get("description") or ""
+        nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-skill-{workspace_id}-{sk['id']}")
+        meta = _json.dumps(
+            {
+                "description": desc,
+                "triggers": parsed.triggers,
+                "allowed_tools": parsed.allowed_tools,
+                "score": float(sk.get("score") or 0.0),
+                "use_count": int(sk.get("use_count") or 0),
+                "version": int(sk.get("version") or 1),
+            }
+        )
+        await pool.execute(
+            """
+            INSERT INTO kg_nodes
+              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
+            VALUES ($1, $2, $3, 'skill', $4, $5::jsonb, $6, 'skill')
+            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
+            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
+                          metadata = EXCLUDED.metadata
+            """,
+            nid,
+            workspace_id,
+            sk["name"],
+            desc or sk["name"],
+            meta,
+            str(sk["id"]),
+        )
+        upserted_skills += 1
+
+        agent_nid = agent_kg_ids.get(str(sk["agent_id"]))
+        if agent_nid:
+            eid = _uuid.uuid5(
+                _uuid.NAMESPACE_DNS,
+                f"entity-edge-{workspace_id}-{sk['agent_id']}-{sk['id']}",
+            )
+            await pool.execute(
+                """
+                INSERT INTO kg_edges
+                  (id, workspace_id, source_id, target_id, edge_type, weight)
+                VALUES ($1, $2, $3, $4, 'has_skill', 1.0)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                eid,
+                workspace_id,
+                agent_nid,
+                nid,
+            )
+
+    engine = KGGraphEngine(request.app.state.pool)
+    G = await engine.load_graph(workspace_id)
+    if G.number_of_nodes() > 0:
+        engine.compute_metrics(G)
+        positions = engine.spring_positions(G)
+        pageranks = {UUID(nid): G.nodes[nid]["pagerank"] for nid in G.nodes}
+        clusters = {UUID(nid): G.nodes[nid].get("cluster_id", 0) for nid in G.nodes}
+        pos_map = {UUID(nid): positions.get(nid, (0.0, 0.0)) for nid in G.nodes}
+        await repo.bulk_update_kg_metrics(pageranks, clusters, pos_map)
+
+    return {"agents": upserted_agents, "skills": upserted_skills}
 
 
 @router.post("/query")

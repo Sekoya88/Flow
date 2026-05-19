@@ -1,4 +1,5 @@
 """FastAPI entry — lifespan wires DB, LangGraph checkpointer, execution stream hub."""
+
 from __future__ import annotations
 
 import time
@@ -32,14 +33,18 @@ from flow.interfaces.http.routes import (
     analytics,
     auth,
     dashboard,
+    evaluations,
     executions,
     feedback,
     golden_sets,
+    graph,
     health,
     kg,
     knowledge,
+    logs,
     memory,
     meta,
+    personas,
     preferences,
     proposals,
     schedules,
@@ -47,7 +52,6 @@ from flow.interfaces.http.routes import (
     tools,
     trace,
     workspaces,
-    evaluations,
 )
 
 logger = get_logger(__name__)
@@ -77,6 +81,7 @@ async def lifespan(app: FastAPI):
     app.state.checkpointer = checkpointer
 
     from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+
     memory_store_pool = build_memory_store_pool(settings.database_url)
     await memory_store_pool.open()
     memory_store = create_memory_store(memory_store_pool)
@@ -139,17 +144,20 @@ def create_app() -> FastAPI:
     app.include_router(feedback.router)
     app.include_router(knowledge.router)
     app.include_router(preferences.router)
+    app.include_router(personas.router)
     app.include_router(proposals.router)
     app.include_router(memory.router)
     app.include_router(meta.router)
     app.include_router(schedules.router)
     app.include_router(tools.router)
     app.include_router(trace.router)
+    app.include_router(logs.router)
     app.include_router(kg.router)
     app.include_router(skills.router)
     app.include_router(golden_sets.router)
     app.include_router(ab_tests.router)
     app.include_router(evaluations.router)
+    app.include_router(graph.router)
     return app
 
 

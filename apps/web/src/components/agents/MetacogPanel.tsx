@@ -84,10 +84,10 @@ export function MetacogPanel({ agentId, className }: MetacogPanelProps) {
       {/* Confidence trend */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Target className="h-3.5 w-3.5 text-flow-brand" />
+          <Target className="h-3.5 w-3.5 text-flow-violet" />
           <span className="text-xs font-medium text-foreground">Confidence trend</span>
         </div>
-        <div className="rounded-xl border border-border/40 bg-muted/10 p-3">
+        <div className="rounded-xl border border-flow-800 bg-muted/10 p-3">
           <ConfidenceTrend data={data.confidence_trend} height={52} />
         </div>
       </div>
@@ -96,7 +96,7 @@ export function MetacogPanel({ agentId, className }: MetacogPanelProps) {
       {gradeEntries.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <BarChart3 className="h-3.5 w-3.5 text-flow-brand" />
+            <BarChart3 className="h-3.5 w-3.5 text-flow-violet" />
             <span className="text-xs font-medium text-foreground">Grade distribution</span>
             <span className="text-[10px] text-muted-foreground ml-auto">
               {gradeEntries.reduce((s, e) => s + e.count, 0)} graded

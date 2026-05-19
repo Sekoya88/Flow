@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BookOpen, FileUp, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, BookOpen, BookOpenCheck, FileUp, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -23,7 +24,6 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 
 type Me = { workspaces: { id: string }[] };
 
@@ -76,7 +76,7 @@ function SourceDetailDrawer({
   return (
     <Sheet open={source !== null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="flex w-[min(100vw-1rem,32rem)] flex-col gap-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border/60 pb-4 text-left">
+        <SheetHeader className="border-b border-flow-800 pb-4 text-left">
           <SheetTitle className="pr-8 line-clamp-2">{source?.title ?? "Source"}</SheetTitle>
           <SheetDescription>
             {source ? (
@@ -115,7 +115,7 @@ function SourceDetailDrawer({
               {chunks.map((c) => (
                 <div
                   key={c.id}
-                  className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2.5"
+                  className="rounded-lg border border-flow-800 bg-muted/10 px-3 py-2.5"
                 >
                   <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
                     Chunk {c.index + 1}
@@ -152,6 +152,7 @@ export default function KnowledgePage() {
   const [urlInput, setUrlInput] = useState("");
   const [crawling, setCrawling] = useState(false);
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSources = useCallback(async (id: string) => {
     setLoadingSources(true);
@@ -233,6 +234,21 @@ export default function KnowledgePage() {
     }
   }
 
+  async function deleteSource(sourceId: string, title: string) {
+    if (!wsId) return;
+    if (!confirm(`Delete source "${title}"? This cannot be undone.`)) return;
+    setDeletingId(sourceId);
+    try {
+      await apiFetch(`/api/v1/knowledge/${sourceId}`, { method: "DELETE" });
+      setSources((prev) => prev.filter((s) => s.id !== sourceId));
+      if (selectedSource?.id === sourceId) setSelectedSource(null);
+    } catch (e) {
+      alert(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function crawl() {
     if (!wsId || !urlInput.trim()) return;
     setCrawlMsg(null);
@@ -282,10 +298,22 @@ export default function KnowledgePage() {
         />
       )}
 
-      <FlowPageHeader
-        title="Knowledge"
-        description="Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content manually."
-        meta={
+      <header className="space-y-2 animate-fade-in">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
+            Knowledge
+          </span>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1.5">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Sources & retrieval corpus
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground leading-relaxed">
+              Sources are chunked and embedded for retrieval during runs. Upload small text files or paste content manually.
+            </p>
+          </div>
           <Link
             href="/run"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex w-fit items-center gap-1.5")}
@@ -293,8 +321,8 @@ export default function KnowledgePage() {
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
             Back to Run
           </Link>
-        }
-      />
+        </div>
+      </header>
 
       {listErr ? (
         <Alert variant="destructive">
@@ -311,7 +339,7 @@ export default function KnowledgePage() {
         </Alert>
       ) : null}
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Upload file</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -346,11 +374,23 @@ export default function KnowledgePage() {
               </>
             )}
           </Button>
-          {uploadMsg ? <p className="text-muted-foreground text-sm">{uploadMsg}</p> : null}
+          {uploadMsg ? (
+            <p
+              className={cn(
+                "rounded-lg px-3 py-2 text-xs animate-fade-in",
+                /fail|error|❌/i.test(uploadMsg)
+                  ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+              )}
+              role="status"
+            >
+              {uploadMsg}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Add from URL</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -384,11 +424,23 @@ export default function KnowledgePage() {
               )}
             </Button>
           </div>
-          {crawlMsg ? <p className="text-muted-foreground text-sm">{crawlMsg}</p> : null}
+          {crawlMsg ? (
+            <p
+              className={cn(
+                "rounded-lg px-3 py-2 text-xs animate-fade-in",
+                /fail|error|❌/i.test(crawlMsg)
+                  ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+              )}
+              role="status"
+            >
+              {crawlMsg}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Add from text</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -418,7 +470,7 @@ export default function KnowledgePage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-6 py-6 shadow-sm">
+      <Card className="gap-6 py-6">
         <CardHeader className="px-6">
           <CardTitle className="text-lg">Sources</CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
@@ -432,32 +484,37 @@ export default function KnowledgePage() {
               Loading sources…
             </div>
           ) : sources.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/80 bg-muted/10 px-4 py-8 text-center">
-              <p className="text-muted-foreground text-sm">
-                No sources yet. Upload a README or paste a short doc — then run an agent with{" "}
-                <strong className="text-foreground">Knowledge search</strong> enabled.
-              </p>
-              <Button type="button" className="mt-4" variant="secondary" onClick={() => router.push("/run")}>
-                Go to Run
-              </Button>
-            </div>
+            <EmptyState
+              icon={BookOpenCheck}
+              tone="brand"
+              title="No sources yet"
+              description="Upload a README or paste a short doc — then run an agent with Knowledge search enabled."
+              action={
+                <Button type="button" variant="secondary" onClick={() => router.push("/run")}>
+                  Go to Run
+                </Button>
+              }
+            />
           ) : (
             <>
               <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
               <ul className="space-y-2 text-sm">
               {sources.map((s, i) => (
-                <li key={s.id}>
+                <li
+                  key={s.id}
+                  className="flex items-center gap-2"
+                  style={{
+                    opacity: 0,
+                    animation: `fadeIn 280ms ease-out forwards`,
+                    animationDelay: `${i * 40}ms`,
+                  }}
+                >
                   <button
                     type="button"
                     className={cn(
-                      "w-full flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/5 px-3 py-3 text-left transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between",
-                      selectedSource?.id === s.id && "border-[var(--color-flow-brand)]/40 bg-[var(--color-flow-brand)]/5",
+                      "group flex-1 flex flex-col gap-2 rounded-xl border border-flow-800 bg-card px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-flow-violet/50 hover:bg-flow-violet/[0.04] hover:shadow-md sm:flex-row sm:items-center sm:justify-between",
+                      selectedSource?.id === s.id && "border-flow-violet/50 bg-flow-violet/[0.06]",
                     )}
-                    style={{
-                      opacity: 0,
-                      animation: `fadeIn 280ms ease-out forwards`,
-                      animationDelay: `${i * 40}ms`,
-                    }}
                     onClick={() => setSelectedSource(s)}
                     aria-label={`View chunks for ${s.title}`}
                   >
@@ -473,6 +530,19 @@ export default function KnowledgePage() {
                     <Badge variant={statusVariant(s.ingest_status)} className="w-fit shrink-0 capitalize">
                       {s.ingest_status ?? "indexed"}
                     </Badge>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingId === s.id}
+                    onClick={() => void deleteSource(s.id, s.title)}
+                    aria-label={`Delete ${s.title}`}
+                    className="flex-shrink-0 rounded-lg p-2 text-flow-600 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                  >
+                    {deletingId === s.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                   </button>
                 </li>
               ))}

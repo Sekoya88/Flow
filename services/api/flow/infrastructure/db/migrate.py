@@ -15,6 +15,4 @@ def run_migrations() -> None:
     )
     if result.returncode != 0:
         msg = result.stderr.strip() or result.stdout.strip() or "(no output)"
-        raise RuntimeError(
-            f"Alembic migration failed (exit {result.returncode}):\n{msg}"
-        )
+        raise RuntimeError(f"Alembic migration failed (exit {result.returncode}):\n{msg}")

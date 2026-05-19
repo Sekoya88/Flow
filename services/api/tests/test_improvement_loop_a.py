@@ -1,9 +1,11 @@
 """Integration tests for Loop A: reflector skill creation → genome snapshot → proposal."""
+
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+
+import pytest
 
 
 def _make_pool(agent_config=None, skill_rows=None):
@@ -15,10 +17,12 @@ def _make_pool(agent_config=None, skill_rows=None):
     agent_row.__getitem__ = lambda self, k: (agent_config or {})[k] if k in (agent_config or {}) else None
     agent_row.get = lambda k, default=None: (agent_config or {}).get(k, default)
 
-    conn.fetchrow = AsyncMock(side_effect=[
-        agent_row,  # SELECT config, template FROM agents
-        MagicMock(id=None),  # INSERT INTO agent_versions RETURNING id (will be replaced by execute)
-    ])
+    conn.fetchrow = AsyncMock(
+        side_effect=[
+            agent_row,  # SELECT config, template FROM agents
+            MagicMock(id=None),  # INSERT INTO agent_versions RETURNING id (will be replaced by execute)
+        ]
+    )
     conn.fetch = AsyncMock(return_value=skill_rows or [])
     conn.execute = AsyncMock()
 

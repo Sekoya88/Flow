@@ -24,7 +24,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("ALTER TABLE kg_nodes DROP CONSTRAINT IF EXISTS kg_nodes_node_type_check")
-    op.execute(
-        "ALTER TABLE kg_nodes ADD CONSTRAINT kg_nodes_node_type_check "
-        "CHECK (node_type IN ('note','concept','topic','query','trace'))"
-    )
+    op.execute("ALTER TABLE kg_nodes ADD CONSTRAINT kg_nodes_node_type_check CHECK (node_type IN ('note','concept','topic','query','trace'))")

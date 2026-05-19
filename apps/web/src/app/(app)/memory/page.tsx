@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Brain, Loader2, MessageSquare } from "lucide-react";
+import { AlertCircle, Brain, Clock, Loader2, MessageSquare, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -15,9 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -124,7 +125,7 @@ export default function MemoryPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <div className="mx-auto flex max-w-4xl items-center gap-2 px-4 py-16 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading memory…
       </div>
@@ -133,142 +134,219 @@ export default function MemoryPage() {
 
   if (err) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Memory unavailable</AlertTitle>
-        <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <span>{err}</span>
-          <Link href="/run" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-            Open Run
-          </Link>
-        </AlertDescription>
-      </Alert>
+      <div className="mx-auto max-w-4xl px-4 py-10">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Memory unavailable</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span>{err}</span>
+            <Link href="/run" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              Open Run
+            </Link>
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
-      <FlowPageHeader
-        leading={<Brain className="h-8 w-8 opacity-90" aria-hidden />}
-        title="Memory"
-        description="Episodic summaries are captured after successful runs. Semantic entries are stored vectors you add below (or promoted from high-quality feedback)."
-      />
+    <div className="mx-auto w-full max-w-4xl space-y-8 px-4 pb-12 pt-6 animate-fade-in">
+      {/* Brand header */}
+      <header className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-flow-violet" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
+            Memory
+          </span>
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          What your agents remember
+        </h1>
+        <p className="max-w-2xl text-sm text-muted-foreground leading-relaxed">
+          Episodic summaries are captured after successful runs. Semantic entries are stored
+          vectors you add below (or promoted from high-quality feedback).
+        </p>
+      </header>
 
-      <Card>
-        <CardHeader className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="space-y-2">
-              <Label>Agent</Label>
-              <Select value={agentId ?? undefined} onValueChange={(v) => v != null && setAgentId(v)}>
-                <SelectTrigger className="w-full sm:w-[280px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name || a.template}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Agent picker */}
+      <section className="flow-card flex flex-col gap-4 rounded-[6px] border border-flow-800 p-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+            <Sparkles className="h-3 w-3 text-flow-violet" />
+            Agent
+          </Label>
+          <Select value={agentId ?? undefined} onValueChange={(v) => v != null && setAgentId(v)}>
+            <SelectTrigger className="w-full bg-card sm:w-[280px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name || a.template}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Link
+          href="/run"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "inline-flex gap-1.5 self-start sm:self-end",
+          )}
+        >
+          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+          Run to add episodic
+        </Link>
+      </section>
+
+      {/* Tiers */}
+      <Tabs defaultValue="episodic">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="episodic">Episodic</TabsTrigger>
+          <TabsTrigger value="semantic">Semantic</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="episodic" className="mt-5 space-y-4">
+          {loadingMem ? (
+            <SkeletonGrid />
+          ) : episodic.length === 0 ? (
+            <EmptyState
+              icon={Brain}
+              tone="muted"
+              title="No episodic memories yet"
+              description="Episodic summaries are saved automatically when a Run pipeline finishes. Kick off one to populate this tier."
+              action={
+                <Link
+                  href="/run"
+                  className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Open Run
+                </Link>
+              }
+            />
+          ) : (
+            <AnimatedList className="space-y-3">
+              {episodic.map((m) => (
+                <MemoryCard key={m.id} entry={m} tier="episodic" />
+              ))}
+            </AnimatedList>
+          )}
+        </TabsContent>
+
+        <TabsContent value="semantic" className="mt-5 space-y-6">
+          {/* Add */}
+          <div className="flow-card space-y-3 rounded-[6px] border border-flow-800 p-5">
+            <Label htmlFor="mem-in" className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+              Add semantic memory
+            </Label>
+            <Textarea
+              id="mem-in"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              placeholder="Paste a fact or preference to embed for this agent…"
+              className="resize-none rounded-xl border-flow-800 bg-card text-sm focus-visible:border-flow-violet/50 focus-visible:ring-flow-violet/30"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-mono text-muted-foreground/60">
+                Stored as a vector for retrieval at planner-time
+              </p>
+              <Button
+                type="button"
+                disabled={saving || !draft.trim()}
+                onClick={() => void saveSemantic()}
+                className="gap-1.5 bg-flow-50 text-flow-950 hover:bg-flow-violet/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
             </div>
-            <Link
-              href="/run"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex gap-1.5")}
-            >
-              <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-              Run to add episodic
-            </Link>
+            {saveMsg && (
+              <p
+                className={cn(
+                  "rounded-lg px-3 py-2 text-xs animate-fade-in",
+                  saveMsg.startsWith("Saved")
+                    ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border border-destructive/30 bg-destructive/10 text-destructive",
+                )}
+                role="status"
+              >
+                {saveMsg}
+              </p>
+            )}
           </div>
-          <CardTitle className="text-lg">Tiers</CardTitle>
-          <CardDescription className="text-[13px]">Switch tabs to browse episodic vs semantic memories.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="episodic">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="episodic">Episodic</TabsTrigger>
-              <TabsTrigger value="semantic">Semantic</TabsTrigger>
-            </TabsList>
-            <TabsContent value="episodic" className="mt-4 space-y-3">
-              {loadingMem ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : episodic.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No episodic memories yet. Complete a run from Run — summaries are saved automatically when the
-                  pipeline finishes.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {episodic.map((m) => (
-                    <MemoryCard key={m.id} entry={m} tier="episodic" />
-                  ))}
-                </ul>
-              )}
-            </TabsContent>
-            <TabsContent value="semantic" className="mt-4 space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="mem-in">Add semantic memory</Label>
-                <Textarea
-                  id="mem-in"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={4}
-                  placeholder="Paste a fact or preference to embed for this agent…"
-                  className="text-sm"
-                />
-                <Button type="button" disabled={saving || !draft.trim()} onClick={() => void saveSemantic()}>
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-                {saveMsg ? (
-                  <p
-                    className={cn(
-                      "text-sm",
-                      saveMsg.startsWith("Saved") ? "text-muted-foreground" : "text-destructive",
-                    )}
-                    role="status"
-                  >
-                    {saveMsg}
-                  </p>
-                ) : null}
-              </div>
-              {loadingMem ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : semantic.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No semantic memories yet. Add text above to store one.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {semantic.map((m) => (
-                    <MemoryCard key={m.id} entry={m} tier="semantic" />
-                  ))}
-                </ul>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+
+          {/* List */}
+          {loadingMem ? (
+            <SkeletonGrid />
+          ) : semantic.length === 0 ? (
+            <EmptyState
+              icon={Sparkles}
+              tone="brand"
+              title="No semantic memories yet"
+              description="Add a fact above, or let the curator promote high-quality observations from completed runs."
+            />
+          ) : (
+            <AnimatedList className="space-y-3">
+              {semantic.map((m) => (
+                <MemoryCard key={m.id} entry={m} tier="semantic" />
+              ))}
+            </AnimatedList>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <div className="space-y-3">
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-20 w-full rounded-xl" />
+      ))}
     </div>
   );
 }
 
 function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "semantic" }) {
   return (
-    <li
+    <article
       className={cn(
-        "rounded-lg border p-4 text-sm leading-relaxed",
+        "flow-card group rounded-xl border p-4 text-sm leading-relaxed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         tier === "semantic"
-          ? "border-flow-done/30 bg-flow-done/5"
-          : "border-border/60 bg-muted/15",
+          ? "border-flow-violet/25 hover:border-flow-violet/50 hover:shadow-none/10"
+          : "border-flow-800 hover:border-flow-violet/30",
       )}
     >
       <p className="text-foreground/90">{entry.content}</p>
-      {entry.execution_id ? (
-        <p className="mt-2 font-mono text-[10px] text-muted-foreground">run {entry.execution_id.slice(0, 8)}…</p>
-      ) : null}
-      {entry.created_at ? (
-        <time dateTime={entry.created_at} className="mt-1 block text-[11px] text-muted-foreground">
-          {new Date(entry.created_at).toLocaleString()}
-        </time>
-      ) : null}
-    </li>
+      <div className="mt-3 flex items-center gap-3 text-[11px]">
+        {entry.execution_id && (
+          <span className="font-mono text-muted-foreground/70">
+            run {entry.execution_id.slice(0, 8)}…
+          </span>
+        )}
+        {entry.execution_id && entry.created_at && (
+          <span className="text-muted-foreground/30">·</span>
+        )}
+        {entry.created_at && (
+          <span className="flex items-center gap-1 text-muted-foreground/70">
+            <Clock className="h-3 w-3" />
+            {new Date(entry.created_at).toLocaleString()}
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-flow-violet/70">
+          {tier}
+        </span>
+      </div>
+    </article>
   );
 }

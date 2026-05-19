@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { SkillEditor } from "@/components/agents/SkillEditor";
 import { SkillDiffView } from "@/components/agents/SkillDiffView";
+import { EntityGraphButton } from "@/components/graph/EntityGraphButton";
 import { apiFetch } from "@/lib/api";
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,8 @@ export default function SkillsPage() {
   const [diffSkill, setDiffSkill] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionRow[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const [improving, setImproving] = useState<string | null>(null);
+  const [improveMessage, setImproveMessage] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,6 +147,54 @@ export default function SkillsPage() {
     }
   }, [load]);
 
+  const handleImprove = useCallback(async (skillId: string) => {
+    setImproving(skillId);
+    try {
+      const result = await apiFetch<{
+        improved: boolean;
+        proposal_id?: string;
+        candidate_skill_id?: string;
+        confidence?: number;
+        changelog?: string[];
+        failure_analysis?: string;
+        reason?: string;
+      }>(`/api/v1/skills/${skillId}/improve`, { method: "POST" });
+
+      if (result.improved) {
+        const pct = result.confidence !== undefined ? ` (${Math.round(result.confidence * 100)}% confidence)` : "";
+        const changes = result.changelog?.length ? ` — ${result.changelog[0]}` : "";
+        setImproveMessage((prev) => ({
+          ...prev,
+          [skillId]: `Improvement proposal created${pct}${changes}. Review it in Proposals.`,
+        }));
+      } else {
+        setImproveMessage((prev) => ({
+          ...prev,
+          [skillId]: result.reason ?? "No improvement found.",
+        }));
+      }
+      void load();
+    } catch (e) {
+      setImproveMessage((prev) => ({
+        ...prev,
+        [skillId]: "Failed to generate improvement proposal.",
+      }));
+      logger.warn("skill improve failed", { error: String(e) });
+    } finally {
+      setImproving(null);
+    }
+  }, [load]);
+
+  const handleActivateVersion = useCallback(async (versionId: string, skillName: string) => {
+    try {
+      await apiFetch(`/api/v1/skills/${versionId}/activate`, { method: "POST" });
+      void load();
+      void loadVersions(skillName);
+    } catch (e) {
+      logger.warn("activate version failed", { error: String(e) });
+    }
+  }, [load, loadVersions]);
+
   if (editing || creating) {
     return (
       <div className="mx-auto w-full max-w-4xl space-y-4 px-4 pb-10 animate-fade-in">
@@ -212,10 +263,19 @@ export default function SkillsPage() {
         title="Skills"
         description="Reusable instruction modules auto-created by the reflector or manually authored. Each skill is versioned — new saves create a new version."
         actions={
-          <Button onClick={() => setCreating(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            New skill
-          </Button>
+          <div className="flex items-center gap-2">
+            {wsId && (
+              <EntityGraphButton
+                workspaceId={wsId}
+                nodeType="agent"
+                refId={agentId}
+              />
+            )}
+            <Button onClick={() => setCreating(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New skill
+            </Button>
+          </div>
         }
       />
 
@@ -227,8 +287,8 @@ export default function SkillsPage() {
         </div>
       ) : skills.length === 0 ? (
         <div className="flex flex-col items-center gap-5 py-16">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-flow-brand/10 border border-flow-brand/20">
-            <Sparkles className="h-7 w-7 text-flow-brand/50" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-[6px] bg-flow-violet/10 border border-flow-violet/20">
+            <Sparkles className="h-7 w-7 text-flow-violet/50" />
           </div>
           <div className="text-center space-y-2 max-w-sm">
             <p className="font-semibold text-foreground">No skills yet</p>
@@ -250,7 +310,7 @@ export default function SkillsPage() {
             return (
               <div
                 key={skill.id}
-                className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden transition-all"
+                className="rounded-xl border border-flow-800 bg-card overflow-hidden transition-all"
               >
                 {/* Skill header */}
                 <button
@@ -264,7 +324,7 @@ export default function SkillsPage() {
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   )}
 
-                  <FileCode2 className="h-4 w-4 text-flow-brand shrink-0" />
+                  <FileCode2 className="h-4 w-4 text-flow-violet shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground">{skill.name}</span>
@@ -277,7 +337,7 @@ export default function SkillsPage() {
                       {isAuto && (
                         <Badge
                           variant="outline"
-                          className="h-4 rounded px-1.5 py-0 text-[9px] gap-0.5 border-flow-brand/30 bg-flow-brand/10"
+                          className="h-4 rounded px-1.5 py-0 text-[9px] gap-0.5 border-flow-violet/30 bg-flow-violet/10"
                         >
                           <Sparkles className="h-2 w-2" />
                           auto
@@ -304,7 +364,7 @@ export default function SkillsPage() {
 
                 {/* Expanded: triggers + actions */}
                 {isExpanded && (
-                  <div className="border-t border-border/40 px-4 py-3 space-y-3 animate-slide-up">
+                  <div className="border-t border-flow-800 px-4 py-3 space-y-3 animate-slide-up">
                     {skill.triggers.length > 0 && (
                       <div>
                         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Triggers</p>
@@ -341,7 +401,7 @@ export default function SkillsPage() {
                               key={v.id}
                               className={cn(
                                 "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs",
-                                v.active ? "bg-flow-brand/5 border border-flow-brand/10" : "border border-transparent",
+                                v.active ? "bg-flow-violet/5 border border-flow-violet/10" : "border border-transparent hover:bg-muted/20",
                               )}
                             >
                               <span className="font-mono tabular-nums font-medium w-8">v{v.version}</span>
@@ -349,10 +409,18 @@ export default function SkillsPage() {
                               <span className="text-muted-foreground">
                                 {new Date(v.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </span>
-                              {v.active && (
-                                <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-brand/30 bg-flow-brand/10">
+                              {v.active ? (
+                                <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5 border-flow-violet/30 bg-flow-violet/10">
                                   active
                                 </Badge>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="ml-auto font-mono text-[8px] uppercase tracking-wide text-muted-foreground hover:text-flow-violet transition-colors px-1.5 py-0.5 rounded border border-transparent hover:border-flow-violet/30"
+                                  onClick={() => void handleActivateVersion(v.id, skill.name)}
+                                >
+                                  Activate
+                                </button>
                               )}
                             </div>
                           ))}
@@ -361,7 +429,7 @@ export default function SkillsPage() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-1 flex-wrap">
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={() => setEditing(skill)}>
                         <FileCode2 className="h-3 w-3" />
                         Edit
@@ -380,6 +448,20 @@ export default function SkillsPage() {
                         </Button>
                       )}
                       <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs h-7 text-flow-violet border-flow-violet/30 hover:bg-flow-violet/10"
+                        disabled={improving === skill.id}
+                        onClick={() => void handleImprove(skill.id)}
+                      >
+                        {improving === skill.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3" />
+                        )}
+                        Improve
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         className="gap-1.5 text-xs h-7 text-destructive hover:text-destructive ml-auto"
@@ -388,6 +470,9 @@ export default function SkillsPage() {
                         Deactivate
                       </Button>
                     </div>
+                    {improveMessage[skill.id] && (
+                      <p className="text-[11px] text-flow-violet/80 mt-1">{improveMessage[skill.id]}</p>
+                    )}
                   </div>
                 )}
               </div>

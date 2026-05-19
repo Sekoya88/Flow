@@ -3,11 +3,13 @@
 
 This validates the entire autonomous self-improvement feedback loop.
 """
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from flow.application.prompt_rewriter import FailedItem, RewriteResult
 
@@ -66,23 +68,31 @@ async def test_full_loop_eval_to_candidate():
     active_genome.llm_config.model = "gpt-4o-mini"
     active_genome.llm_config.temperature = 0.3
 
-    with patch(
-        "flow.application.genome_service.get_active_genome",
-        return_value=active_genome,
-    ), patch(
-        "flow.application.prompt_rewriter.rewrite_and_snapshot",
-        return_value={
-            "candidate_version_id": str(candidate_id),
-            "rewrite": {
-                "changelog": ["Added detail requirements", "Added source citation rule"],
-                "failure_analysis": "Agent responses were too brief",
-                "confidence": 0.85,
-                "prompt_diff_len": 120,
+    with (
+        patch(
+            "flow.application.curator._get_agent_auto_threshold",
+            new=AsyncMock(return_value=(None, 0.15)),
+        ),
+        patch(
+            "flow.application.genome_service.get_active_genome",
+            return_value=active_genome,
+        ),
+        patch(
+            "flow.application.prompt_rewriter.rewrite_and_snapshot",
+            return_value={
+                "candidate_version_id": str(candidate_id),
+                "rewrite": {
+                    "changelog": ["Added detail requirements", "Added source citation rule"],
+                    "failure_analysis": "Agent responses were too brief",
+                    "confidence": 0.85,
+                    "prompt_diff_len": 120,
+                },
             },
-        },
-    ) as mock_rewrite, patch(
-        "flow.application.genome_service._create_genome_proposal",
-        return_value=uuid4(),
+        ) as mock_rewrite,
+        patch(
+            "flow.application.genome_service._create_genome_proposal",
+            return_value=uuid4(),
+        ),
     ):
         result = await check_regression_and_propose(
             pool=pool,
@@ -152,8 +162,7 @@ async def test_full_loop_regression_alert_created():
     pool.execute = AsyncMock()
 
     results = [
-        {"item_id": str(uuid4()), "input_text": "Q1", "score": 0.5, "rationale": "Bad",
-         "expected_output": "E1", "actual_output": "A1"},
+        {"item_id": str(uuid4()), "input_text": "Q1", "score": 0.5, "rationale": "Bad", "expected_output": "E1", "actual_output": "A1"},
     ]
 
     active_genome = MagicMock()
@@ -162,8 +171,11 @@ async def test_full_loop_regression_alert_created():
     active_genome.llm_config.model = "gpt-4o-mini"
     active_genome.llm_config.temperature = 0.3
 
-    with patch("flow.application.genome_service.get_active_genome", return_value=active_genome), \
-         patch("flow.application.prompt_rewriter.rewrite_and_snapshot", return_value=None):
+    with (
+        patch("flow.application.curator._get_agent_auto_threshold", new=AsyncMock(return_value=(None, 0.15))),
+        patch("flow.application.genome_service.get_active_genome", return_value=active_genome),
+        patch("flow.application.prompt_rewriter.rewrite_and_snapshot", return_value=None),
+    ):
         # Should still create the regression alert proposal even if rewrite fails
         await check_regression_and_propose(
             pool=pool,
@@ -228,18 +240,24 @@ async def test_genome_candidate_to_proposal_to_activate():
 @pytest.mark.asyncio
 async def test_ab_test_winner_triggers_proposal():
     """Test that when AB test candidate wins, a proposal is created"""
-    from flow.application.ab_runner import ABTestSummary, VersionScore, SIGNIFICANCE_THRESHOLD
+    from flow.application.ab_runner import SIGNIFICANCE_THRESHOLD, ABTestSummary, VersionScore
 
     version_a_id = uuid4()
     version_b_id = uuid4()  # candidate
 
     score_a = VersionScore(
-        version_id=version_a_id, version_label="v1",
-        avg_score=0.65, pass_rate=0.60, item_count=5,
+        version_id=version_a_id,
+        version_label="v1",
+        avg_score=0.65,
+        pass_rate=0.60,
+        item_count=5,
     )
     score_b = VersionScore(
-        version_id=version_b_id, version_label="auto-eval-2026-05-11",
-        avg_score=0.82, pass_rate=0.80, item_count=5,
+        version_id=version_b_id,
+        version_label="auto-eval-2026-05-11",
+        avg_score=0.82,
+        pass_rate=0.80,
+        item_count=5,
     )
 
     delta = score_b.avg_score - score_a.avg_score
@@ -303,9 +321,10 @@ async def test_full_loop_creates_candidate_and_restores_prompt():
     conn.execute = capture_execute
     pool = _make_pool_context(conn)
 
-    with patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite, \
-         patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid):
-
+    with (
+        patch("flow.application.prompt_rewriter.rewrite_prompt") as mock_rewrite,
+        patch("flow.application.genome_service.snapshot_genome", return_value=candidate_uuid),
+    ):
         mock_rewrite.return_value = RewriteResult(
             original_prompt=original_prompt,
             improved_prompt="You are a helpful, precise assistant. Always cite sources.",
@@ -375,17 +394,27 @@ async def test_eval_pass_snapshot_only_on_improvement():
 
     with patch("flow.application.genome_service.get_active_genome", return_value=active):
         result = await _maybe_snapshot_eval_pass(
-            pool=AsyncMock(), agent_id=uuid4(), workspace_id=uuid4(),
-            user_id=uuid4(), avg_score=0.75, pass_rate=0.70,
+            pool=AsyncMock(),
+            agent_id=uuid4(),
+            workspace_id=uuid4(),
+            user_id=uuid4(),
+            avg_score=0.75,
+            pass_rate=0.70,
         )
     assert result is None
 
     # Case 2: Improvement
-    with patch("flow.application.genome_service.get_active_genome", return_value=active), \
-         patch("flow.application.genome_service.snapshot_genome", return_value=uuid4()) as mock_snap:
+    with (
+        patch("flow.application.genome_service.get_active_genome", return_value=active),
+        patch("flow.application.genome_service.snapshot_genome", return_value=uuid4()) as mock_snap,
+    ):
         result = await _maybe_snapshot_eval_pass(
-            pool=AsyncMock(), agent_id=uuid4(), workspace_id=uuid4(),
-            user_id=uuid4(), avg_score=0.90, pass_rate=0.85,
+            pool=AsyncMock(),
+            agent_id=uuid4(),
+            workspace_id=uuid4(),
+            user_id=uuid4(),
+            avg_score=0.90,
+            pass_rate=0.85,
         )
     assert result is not None
     mock_snap.assert_called_once()

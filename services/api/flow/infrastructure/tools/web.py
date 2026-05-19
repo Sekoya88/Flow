@@ -1,4 +1,5 @@
 """Web-facing tools: Tavily search, webpage fetch, ArXiv search, HuggingFace papers."""
+
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
@@ -11,6 +12,7 @@ async def run_tavily_search(query: str, max_results: int = 5, api_key: str = "")
     if not api_key:
         return [{"error": "FLOW_TAVILY_API_KEY not configured"}]
     from tavily import AsyncTavilyClient  # type: ignore[import-untyped]
+
     client = AsyncTavilyClient(api_key=api_key)
     response = await client.search(query, max_results=max_results)
     return [
@@ -35,11 +37,7 @@ async def run_fetch_webpage(url: str) -> str:
 
 
 async def run_arxiv_search(query: str, max_results: int = 5) -> list[dict]:
-    url = (
-        f"https://export.arxiv.org/api/query"
-        f"?search_query=all:{query}&max_results={max_results}"
-        f"&sortBy=submittedDate&sortOrder=descending"
-    )
+    url = f"https://export.arxiv.org/api/query?search_query=all:{query}&max_results={max_results}&sortBy=submittedDate&sortOrder=descending"
     async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.get(url)
     root = ET.fromstring(resp.text)
@@ -55,6 +53,34 @@ async def run_arxiv_search(query: str, max_results: int = 5) -> list[dict]:
     ]
 
 
+async def run_http_post(
+    url: str,
+    json_body: dict | None = None,
+    headers: dict | None = None,
+    method: str = "POST",
+) -> dict:
+    """Perform an HTTP POST/PUT/PATCH/DELETE request and return the response.
+
+    Returns: {"status_code": int, "body": str (truncated to 8KB), "headers": dict}
+    """
+    allowed_methods = {"POST", "PUT", "PATCH", "DELETE"}
+    method = method.upper()
+    if method not in allowed_methods:
+        return {"error": f"Method must be one of {allowed_methods}"}
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        resp = await client.request(
+            method,
+            url,
+            json=json_body,
+            headers=headers or {},
+        )
+    return {
+        "status_code": resp.status_code,
+        "body": resp.text[:8192],
+        "headers": dict(resp.headers),
+    }
+
+
 async def run_hf_papers(date: str = "") -> list[dict]:
     url = "https://huggingface.co/api/daily_papers"
     if date:
@@ -65,11 +91,13 @@ async def run_hf_papers(date: str = "") -> list[dict]:
     papers = []
     for item in (data if isinstance(data, list) else [])[:20]:
         paper = item.get("paper", {})
-        papers.append({
-            "title": paper.get("title", ""),
-            "abstract": paper.get("summary", "")[:600],
-            "url": f"https://huggingface.co/papers/{paper.get('id', '')}",
-            "published": paper.get("publishedAt", ""),
-            "upvotes": item.get("totalVotes", 0),
-        })
+        papers.append(
+            {
+                "title": paper.get("title", ""),
+                "abstract": paper.get("summary", "")[:600],
+                "url": f"https://huggingface.co/papers/{paper.get('id', '')}",
+                "published": paper.get("publishedAt", ""),
+                "upvotes": item.get("totalVotes", 0),
+            }
+        )
     return papers

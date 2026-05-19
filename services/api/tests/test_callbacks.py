@@ -1,9 +1,8 @@
 """Tests for FlowCallbackHandler structured observability."""
+
 from __future__ import annotations
 
-import logging
 import time
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -13,6 +12,7 @@ from langchain_core.outputs import LLMResult
 @pytest.fixture
 def handler():
     from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+
     return FlowCallbackHandler(
         workspace_id="ws-1",
         agent_id="agent-1",
@@ -79,6 +79,7 @@ def test_elapsed_ms_returns_positive_float(handler):
 
 def test_context_fields_omitted_when_none():
     from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+
     h = FlowCallbackHandler()
     assert "workspace_id" not in h._ctx
     assert "agent_id" not in h._ctx

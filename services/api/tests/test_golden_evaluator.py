@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_auto_eval_tick_logs_structured_error_on_db_failure(monkeypatch):
     """auto_eval_tick must log structured error with exc_type when evaluation fails."""
-    import structlog.testing
-    from flow.application.golden_evaluator import auto_eval_tick
     from uuid import uuid4
+
+    import structlog.testing
+
+    from flow.application.golden_evaluator import auto_eval_tick
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
@@ -29,10 +32,10 @@ async def test_auto_eval_tick_logs_structured_error_on_db_failure(monkeypatch):
     # 4. get_active_genome -> agent_versions lookup (returns None = no active genome)
     pool.fetchrow = AsyncMock(
         side_effect=[
-            {"id": agent_id},          # agent
-            {"id": gset_id},           # golden set
-            {"user_id": user_id},      # workspace member
-            None,                      # get_active_genome -> no active genome
+            {"id": agent_id},  # agent
+            {"id": gset_id},  # golden set
+            {"user_id": user_id},  # workspace member
+            None,  # get_active_genome -> no active genome
         ]
     )
 
@@ -43,11 +46,11 @@ async def test_auto_eval_tick_logs_structured_error_on_db_failure(monkeypatch):
         with structlog.testing.capture_logs() as logs:
             await auto_eval_tick({"pool": pool})
 
-    error_logs = [l for l in logs if l.get("log_level") in ("error", "warning")]
+    error_logs = [entry for entry in logs if entry.get("log_level") in ("error", "warning")]
     assert len(error_logs) >= 1
-    assert any(l.get("event") == "cron.auto_eval_tick.agent_failed" for l in error_logs)
+    assert any(entry.get("event") == "cron.auto_eval_tick.agent_failed" for entry in error_logs)
 
-    err = next(l for l in logs if l.get("event") == "cron.auto_eval_tick.agent_failed")
+    err = next(entry for entry in logs if entry.get("event") == "cron.auto_eval_tick.agent_failed")
     assert err.get("exc_type") == "RuntimeError"
     assert err.get("workspace_id") is not None
 
@@ -59,11 +62,7 @@ def test_ab_test_insert_sql_uses_same_agent_for_both_sides():
     not two different agents. The agent_id is used for both agent_a_id and agent_b_id,
     while version_a_id and version_b_id are set later by ab_runner.py on completion.
     """
-    sql = (
-        "INSERT INTO ab_tests "
-        "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
-        "VALUES ($1, $2, $3, $4, $4, 'running')"
-    )
+    sql = "INSERT INTO ab_tests (id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) VALUES ($1, $2, $3, $4, $4, 'running')"
     # Both agent_a_id and agent_b_id use $4 = same agent (versions differ, not agents)
     assert sql.count("$4") == 2
     assert "agent_a_id" in sql

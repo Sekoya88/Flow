@@ -1,9 +1,7 @@
-import pytest
-
-
 def test_parses_frontmatter():
     """should extract YAML frontmatter as dict"""
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     doc = ObsidianDocument(
         filename="AI/Test.md",
         raw_content="---\ntags: [agents, llm]\ncreated: 2026-01-01\n---\n# Test\nBody text.",
@@ -16,7 +14,8 @@ def test_parses_frontmatter():
 
 def test_parses_wikilinks():
     """should extract [[wikilink]] targets"""
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     doc = ObsidianDocument(
         filename="note.md",
         raw_content="See [[LangChain]] and [[RAG Systems|RAG]] for more.",
@@ -29,7 +28,8 @@ def test_parses_wikilinks():
 
 def test_parses_tags():
     """should extract #tags from body (not inside code blocks)"""
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     doc = ObsidianDocument(
         filename="note.md",
         raw_content="Notes on #agents and #llm/prompting.\n```\n#not-a-tag\n```",
@@ -44,7 +44,9 @@ def test_parses_tags():
 def test_content_hash_is_sha256():
     """should produce stable SHA-256 hex digest"""
     import hashlib
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     content = "Hello world"
     doc = ObsidianDocument(filename="x.md", raw_content=content, source="upload")
     result = parse_obsidian_note(doc)
@@ -54,7 +56,8 @@ def test_content_hash_is_sha256():
 
 def test_title_from_h1():
     """should use H1 heading as title when present"""
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     doc = ObsidianDocument(
         filename="folder/note.md",
         raw_content="# My Note Title\nContent here.",
@@ -66,7 +69,8 @@ def test_title_from_h1():
 
 def test_title_fallback_to_filename():
     """should use filename stem as title when no H1"""
-    from flow.application.kg_parser import parse_obsidian_note, ObsidianDocument
+    from flow.application.kg_parser import ObsidianDocument, parse_obsidian_note
+
     doc = ObsidianDocument(
         filename="folder/my-note.md",
         raw_content="Some content without a heading.",

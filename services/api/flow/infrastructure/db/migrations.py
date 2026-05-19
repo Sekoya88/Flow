@@ -52,12 +52,8 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
         )
     logger.info("schema.agent_tools_defaulted")
     async with pool.acquire() as conn:
-        await conn.execute(
-            "ALTER TABLE knowledge_sources ADD COLUMN IF NOT EXISTS ingest_status TEXT NOT NULL DEFAULT 'indexed'"
-        )
-        await conn.execute(
-            "ALTER TABLE knowledge_sources ADD COLUMN IF NOT EXISTS ingest_error TEXT"
-        )
+        await conn.execute("ALTER TABLE knowledge_sources ADD COLUMN IF NOT EXISTS ingest_status TEXT NOT NULL DEFAULT 'indexed'")
+        await conn.execute("ALTER TABLE knowledge_sources ADD COLUMN IF NOT EXISTS ingest_error TEXT")
         await conn.execute(
             """
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS execution_id UUID

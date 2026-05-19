@@ -1,106 +1,43 @@
-import { forwardRef } from "react";
 import Link from "next/link";
 
-const LEMNISCATE_PATH = "M 8 32 C 8 12, 28 12, 32 32 C 36 52, 56 52, 56 32 C 56 12, 36 12, 32 32 C 28 52, 8 52, 8 32 Z";
-
-export function FlowMark({ size, className }: { size: number; className?: string }) {
+export function FlowMark({ size = 24, className }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
-      height={size}
-      viewBox="0 0 64 64"
+      height={Math.round(size * 0.6)}
+      viewBox="0 0 100 60"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={className ?? "shrink-0 text-foreground opacity-90 transition-opacity group-hover:opacity-100"}
+      className={className ?? "shrink-0 text-foreground"}
       aria-hidden
     >
-      <path
-        d={LEMNISCATE_PATH}
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        fill="none"
-        pathLength="100"
-      />
+      <path d="M50,30 C56.5,10 92,10 92,30 C92,50 56.5,50 50,30 C43.5,50 8,50 8,30 C8,10 43.5,10 50,30Z" fill="currentColor" />
+      <path d="M50,30 C55,19 82,19 82,30 C82,41 55,41 50,30 C45,41 18,41 18,30 C18,19 45,19 50,30Z" fill="var(--background)" />
+      <path d="M50,30 C52.8,22 70,22 70,30 C70,38 52.8,38 50,30 C47.2,38 30,38 30,30 C30,22 47.2,22 50,30Z" fill="currentColor" />
+      <path d="M50,30 C51.4,25.5 60,25.5 60,30 C60,34.5 51.4,34.5 50,30 C48.6,34.5 40,34.5 40,30 C40,25.5 48.6,25.5 50,30Z" fill="var(--background)" />
+      <path d="M50,30 C50.6,27.5 54,27.5 54,30 C54,32.5 50.6,32.5 50,30 C49.4,32.5 46,32.5 46,30 C46,27.5 49.4,27.5 50,30Z" fill="currentColor" />
     </svg>
   );
 }
 
-export const FlowMarkAnimated = forwardRef<SVGSVGElement, { className?: string; size?: number | string }>(
-  function FlowMarkAnimated({ className, size = 64 }, ref) {
-    return (
-      <svg
-        ref={ref}
-        width={size}
-        height={size}
-        viewBox="0 0 64 64"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className={className}
-        aria-hidden="true"
-      >
-          <path
-          d={LEMNISCATE_PATH}
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          fill="none"
-          pathLength="100"
-          strokeDasharray="100 0"
-          style={{ animation: "flow-reveal 1.6s ease-in-out forwards" }}
-        />
-        <path
-          d={LEMNISCATE_PATH}
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          fill="none"
-          pathLength="100"
-          strokeOpacity="0.4"
-          strokeDasharray="8 92"
-          style={{ animation: "flow-drift 6s linear 1.6s infinite" }}
-        />
-      </svg>
-    );
-  }
-);
-
 type FlowLogoProps = {
   href?: string;
-  size?: "sm" | "md";
   variant?: "inline" | "header";
-  subtitle?: string;
 };
 
-export function FlowLogo({
-  href = "/",
-  size = "md",
-  variant = "inline",
-  subtitle = "Agent platform · workspace",
-}: FlowLogoProps) {
-  const dim = size === "sm" ? 28 : 36;
+export function FlowLogo({ href = "/", variant = "inline" }: FlowLogoProps) {
+  const content = (
+    <span className="flex items-center gap-2 text-foreground">
+      <FlowMark size={variant === "header" ? 28 : 36} />
+      <span className="font-mono font-bold tracking-tight text-sm">Flow</span>
+    </span>
+  );
 
-  if (variant === "header") {
-    return (
-      <Link href={href} className="group flex min-w-0 items-center gap-3 text-foreground">
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border bg-card shadow-sm ring-1 ring-white/5">
-          <div className="flex h-full w-full items-center justify-center">
-            <FlowMark size={22} className="shrink-0 text-foreground opacity-95" />
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold leading-none tracking-tight">Flow</p>
-          <p className="mt-1 truncate text-[10.5px] text-muted-foreground">{subtitle}</p>
-        </div>
-      </Link>
-    );
-  }
-
-  const text = size === "sm" ? "text-base" : "text-lg";
-  return (
-    <Link href={href} className="group flex items-center gap-2.5 font-semibold tracking-tight text-foreground">
-      <FlowMark size={dim} />
-      <span className={text}>Flow</span>
+  return href ? (
+    <Link href={href} className="flex items-center">
+      {content}
     </Link>
+  ) : (
+    content
   );
 }

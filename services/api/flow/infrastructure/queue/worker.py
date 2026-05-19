@@ -9,8 +9,9 @@ from uuid import UUID
 import arq
 
 from flow.application.execution_runner import run_deer_execution
+from flow.application.golden_evaluator import auto_eval_tick, auto_safety_eval_tick, skill_decay_tick
+from flow.application.persona_freshness import persona_freshness_tick
 from flow.application.scheduler import scheduler_tick
-from flow.application.golden_evaluator import auto_eval_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
@@ -31,6 +32,7 @@ async def startup(ctx: dict) -> None:
     checkpoint_pool = build_checkpoint_pool(settings.database_url)
     await checkpoint_pool.open()
     from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+
     memory_store_pool = build_memory_store_pool(settings.database_url)
     await memory_store_pool.open()
     memory_store = create_memory_store(memory_store_pool)
@@ -69,11 +71,7 @@ async def task_run_deer_execution(
     import structlog
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    template = (
-        agent_config.get("template")
-        or (agent_config.get("graph") or {}).get("template", "unknown")
-        or "unknown"
-    )
+    template = agent_config.get("template") or (agent_config.get("graph") or {}).get("template", "unknown") or "unknown"
     structlog.contextvars.bind_contextvars(
         execution_id=execution_id,
         agent_id=agent_id,
@@ -97,16 +95,17 @@ async def task_run_deer_execution(
             store=ctx.get("memory_store"),
         )
     finally:
-        structlog.contextvars.unbind_contextvars(
-            "execution_id", "agent_id", "workspace_id", "template"
-        )
+        structlog.contextvars.unbind_contextvars("execution_id", "agent_id", "workspace_id", "template")
 
 
 class WorkerSettings:
     functions = [arq.func(task_run_deer_execution, name="run_deer_execution")]
     cron_jobs = [
         arq.cron(scheduler_tick, minute=set(range(60)), run_at_startup=False),
-        arq.cron(auto_eval_tick, hour=3, minute=0, run_at_startup=False)
+        arq.cron(auto_eval_tick, hour=3, minute=0, run_at_startup=False),
+        arq.cron(skill_decay_tick, hour=4, minute=0, run_at_startup=False),
+        arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
+        arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
     ]
     on_startup = startup
     on_shutdown = shutdown

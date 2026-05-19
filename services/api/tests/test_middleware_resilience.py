@@ -1,4 +1,5 @@
 """Tests for FlowResilienceMiddleware."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -9,9 +10,13 @@ import pytest
 
 def _make_runtime():
     from flow.infrastructure.llm.middleware.base import HarnessRuntime
+
     return HarnessRuntime(
-        workspace_id=uuid4(), agent_id=uuid4(),
-        user_id=uuid4(), execution_id=uuid4(), thread_id="t1",
+        workspace_id=uuid4(),
+        agent_id=uuid4(),
+        user_id=uuid4(),
+        execution_id=uuid4(),
+        thread_id="t1",
     )
 
 
@@ -25,6 +30,7 @@ def _make_fake_llm():
 @pytest.mark.asyncio
 async def test_patch_llm_adds_retry_to_agenerate():
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
+
     llm = _make_fake_llm()
     original = llm._agenerate
     mw = FlowResilienceMiddleware(model_retry=3)
@@ -36,6 +42,7 @@ async def test_patch_llm_adds_retry_to_agenerate():
 @pytest.mark.asyncio
 async def test_patch_llm_retries_on_rate_limit():
     from openai import RateLimitError
+
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
     call_count = 0
@@ -60,6 +67,7 @@ async def test_patch_llm_retries_on_rate_limit():
 @pytest.mark.asyncio
 async def test_patch_llm_raises_after_exhaustion():
     from openai import RateLimitError
+
     from flow.infrastructure.llm.middleware.resilience import FlowResilienceMiddleware
 
     call_count = 0

@@ -14,6 +14,5 @@ out/
 coverage/
 .DS_Store
 *.log
-uv.lock
 .superpowers/
 test.md

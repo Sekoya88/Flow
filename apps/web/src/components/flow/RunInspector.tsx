@@ -51,7 +51,7 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
       <div className={cn("flex flex-col items-center", className)}>
         <button
           onClick={() => setCollapsed(false)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-flow-800 bg-card/80 text-muted-foreground hover:text-foreground transition-colors"
           title="Open inspector"
         >
           <PanelRightOpen className="h-4 w-4" />
@@ -64,14 +64,14 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
     <div
       className={cn(
         "flex w-[380px] shrink-0 flex-col overflow-hidden",
-        "rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl",
+        "rounded-[6px] border border-flow-800 bg-card",
         "shadow-lg animate-slide-up",
         className,
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
-        <Layers className="h-3.5 w-3.5 text-flow-brand" aria-hidden />
+      <div className="flex items-center gap-2 border-b border-flow-800 px-4 py-3">
+        <Layers className="h-3.5 w-3.5 text-flow-violet" aria-hidden />
         <span className="flex-1 text-xs font-semibold text-foreground/80">
           Inspector
         </span>
@@ -94,7 +94,7 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-border/40">
+      <div className="flex border-b border-flow-800">
         {(
           [
             { key: "pipeline" as const, label: "Pipeline", icon: Layers, count: undefined as number | undefined },
@@ -108,7 +108,7 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium transition-colors",
               tab === key
-                ? "text-foreground border-b-2 border-flow-brand"
+                ? "text-foreground border-b-2 border-flow-violet"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

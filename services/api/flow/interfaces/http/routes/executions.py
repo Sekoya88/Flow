@@ -6,7 +6,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
 
 from flow.config import Settings
 from flow.infrastructure.auth.jwt_utils import create_stream_token
@@ -14,6 +13,80 @@ from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep, get_stream_sse_user
 
 router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
+
+
+@router.get("")
+async def list_executions(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    rows = await repo.list_executions_for_user(user_id)
+    return {
+        "executions": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"] or r["agent_template"],
+                "user_message": r["user_message"],
+                "answer": r["answer"],
+                "thread_id": str(r["thread_id"]) if r["thread_id"] else str(r["id"]),
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/threads/{thread_id}")
+async def get_thread(
+    thread_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    rows = await repo.list_executions_in_thread(thread_id, user_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="thread not found")
+    return {
+        "thread_id": str(thread_id),
+        "executions": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"] or r["agent_template"],
+                "user_message": r["user_message"],
+                "answer": r["answer"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/{execution_id}")
+async def get_execution(
+    execution_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    row = await repo.get_execution_for_user(execution_id, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="execution not found")
+    events = await repo.list_events(execution_id)
+    return {
+        "id": str(row["id"]),
+        "status": row["status"],
+        "agent_id": str(row["agent_id"]),
+        "agent_name": row["agent_name"] or row["agent_template"],
+        "user_message": row["user_message"],
+        "answer": row["answer"],
+        "thread_id": str(row["thread_id"]) if row["thread_id"] else str(row["id"]),
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "events": [{"id": e["id"], "kind": e["kind"], "payload": dict(e["payload"])} for e in events],
+    }
 
 
 @router.post("/{execution_id}/stream-token")
@@ -27,9 +100,7 @@ async def mint_stream_token(
     row = await repo.get_execution_for_user(execution_id, user_id)
     if not row:
         raise HTTPException(status_code=404, detail="execution not found")
-    token = create_stream_token(
-        secret=settings.jwt_secret, sub=user_id, execution_id=execution_id, ttl_seconds=120
-    )
+    token = create_stream_token(secret=settings.jwt_secret, sub=user_id, execution_id=execution_id, ttl_seconds=120)
     return {"stream_jwt": token}
 
 
@@ -92,6 +163,7 @@ async def approve_execution(
 
     # Re-enqueue so the worker picks up and resumes from the interrupt point
     from flow.infrastructure.queue.client import get_arq_pool
+
     arq = await get_arq_pool()
     await arq.enqueue_job(
         "task_run_deer_execution",

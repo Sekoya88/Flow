@@ -1,11 +1,13 @@
-import pytest
-import networkx as nx
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import uuid4
+
+import networkx as nx
+import pytest
 
 
 def _make_engine():
     from flow.infrastructure.kg.graph_engine import KGGraphEngine
+
     pool = MagicMock()
     return KGGraphEngine(pool)
 
@@ -46,6 +48,7 @@ def test_find_shortest_path_indirect():
 def test_find_path_raises_when_disconnected():
     """should raise NetworkXNoPath when nodes not connected"""
     import networkx as nx
+
     engine = _make_engine()
     G, nodes = _make_graph()
     # D has no path back to A (only incoming)
@@ -88,6 +91,6 @@ def test_spring_positions_are_in_range():
     engine = _make_engine()
     G, nodes = _make_graph()
     positions = engine.spring_positions(G)
-    for nid, (x, y) in positions.items():
+    for _, (x, y) in positions.items():
         assert 0 <= x <= 1000, f"x={x} out of range"
         assert 0 <= y <= 1000, f"y={y} out of range"

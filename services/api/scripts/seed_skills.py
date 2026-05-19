@@ -23,6 +23,656 @@ logger = get_logger("seed_skills")
 # Format: YAML frontmatter block + markdown body with <context>, <instructions>, <examples>
 
 SKILLS: dict[str, list[dict]] = {
+    "General Assistant": [
+        {
+            "name": "pdf-structured-extraction",
+            "content_md": """\
+---
+name: pdf-structured-extraction
+description: Extract tables, headings, metadata, and structured content from PDF or document text
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "extract from this PDF"
+  - "parse this document"
+  - "structured extraction"
+  - "get tables from"
+  - "document parsing"
+metadata:
+  author: flow-team
+  domain: documents
+  agent: General Assistant
+---
+
+# PDF Structured Extraction
+
+<context>
+Extract structured content from PDF or document text. Identify sections, tables, metadata, and key entities. Output must be structured JSON that downstream processes can consume without post-processing.
+</context>
+
+<instructions>
+## Extraction targets
+1. **Document metadata** — title, author, date, page count, language
+2. **Section headings** — hierarchical structure (H1 → H2 → H3)
+3. **Tables** — headers + rows as arrays of objects
+4. **Key entities** — PERSON, ORG, DATE, AMOUNT, LOCATION
+5. **Key facts** — numbered list of extractable factual claims
+
+## Table extraction rules
+- Align columns by header
+- Preserve numeric precision
+- Mark merged cells as [MERGED]
+- Flag illegible cells as [ILLEGIBLE]
+
+## Output schema
+{"metadata": {...}, "sections": [{"level": int, "title": str}], "tables": [{"caption": str, "headers": [str], "rows": [[str]]}], "entities": [...], "key_facts": [str]}
+</instructions>
+""",
+        },
+        {
+            "name": "named-entity-recognition",
+            "content_md": """\
+---
+name: named-entity-recognition
+description: Extract PERSON, ORG, LOCATION, MONEY, DATE, and PRODUCT entities from unstructured text
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "extract entities"
+  - "named entities"
+  - "find all people mentioned"
+  - "find organizations"
+  - "entity extraction"
+  - "who and what is mentioned"
+metadata:
+  author: flow-team
+  domain: nlp
+  agent: General Assistant
+---
+
+# Named Entity Recognition
+
+<context>
+Extract structured entities from text. Prioritize precision over recall — only extract entities you are confident about. Provide span information (start/end character) when possible.
+</context>
+
+<instructions>
+## Entity types
+- PERSON — individual human names
+- ORG — companies, institutions, government bodies
+- LOCATION — cities, countries, geographic features
+- MONEY — monetary values with currency
+- DATE — specific or relative dates/times
+- PRODUCT — named products, models, tools
+- EVENT — named events (conferences, incidents)
+
+## Per entity output
+{"text": str, "type": str, "start": int|null, "end": int|null, "confidence": float}
+
+## Confidence thresholds
+- ≥ 0.9: clear, unambiguous mention
+- 0.7-0.9: reasonable inference from context
+- < 0.7: flag as UNCERTAIN, include with caveat
+
+## Output
+{"entities": [...], "summary": {"total": int, "by_type": {type: count}}}
+</instructions>
+""",
+        },
+        {
+            "name": "abstractive-summarization",
+            "content_md": """\
+---
+name: abstractive-summarization
+description: Produce abstractive summaries of long documents — not extraction, but genuine synthesis and paraphrase
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "summarize this"
+  - "give me a summary"
+  - "TL;DR"
+  - "abstract this document"
+  - "condense this"
+metadata:
+  author: flow-team
+  domain: nlp
+  agent: General Assistant
+---
+
+# Abstractive Summarization
+
+<context>
+Produce genuine abstractive summaries — paraphrase and synthesize, don't just extract sentences. The summary should read as if written by a human expert who digested the content and re-explained it concisely.
+</context>
+
+<instructions>
+## Summarization levels
+- **Executive** (50-100 words) — what + so what. For senior decision-makers.
+- **Standard** (150-250 words) — key findings, methodology, implications.
+- **Detailed** (400-600 words) — full synthesis preserving nuance.
+
+Default to Standard unless user specifies.
+
+## Quality rules
+1. No lifted verbatim sentences longer than 10 words
+2. Preserve all quantitative claims with exact numbers
+3. Preserve uncertainty — don't state as fact what the source hedges
+4. Lead with the most important point (inverted pyramid)
+
+## Output
+{"level": str, "word_count": int, "summary": str, "key_numbers": [str], "caveats": [str]}
+</instructions>
+""",
+        },
+        {
+            "name": "text-sentiment-classifier",
+            "content_md": """\
+---
+name: text-sentiment-classifier
+description: Classify text sentiment (positive/negative/neutral/mixed) and detect emotion with confidence scores
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "sentiment analysis"
+  - "what is the tone"
+  - "positive or negative"
+  - "classify this text"
+  - "emotion detection"
+metadata:
+  author: flow-team
+  domain: nlp
+  agent: General Assistant
+---
+
+# Text Sentiment & Emotion Classification
+
+<context>
+Classify sentiment and detect emotional tone in text. Use a fine-grained model: report polarity (positive/negative/neutral/mixed) AND dominant emotion. Provide calibrated confidence scores.
+</context>
+
+<instructions>
+## Sentiment dimensions
+1. **Polarity** — positive / negative / neutral / mixed
+2. **Intensity** — strong / moderate / weak
+3. **Emotion** — joy / anger / sadness / fear / surprise / disgust / anticipation / trust (Plutchik wheel)
+4. **Subjectivity** — objective (factual) / subjective (opinion)
+
+## Granularity
+- Sentence-level sentiment when text is ≥ 3 sentences (identify which sentences drive the aggregate)
+- Document-level aggregate
+
+## Output
+{"polarity": str, "intensity": str, "confidence": float, "dominant_emotion": str, "emotion_scores": {emotion: float}, "subjectivity": str, "sentence_breakdown": [{"text": str, "polarity": str}]}
+</instructions>
+""",
+        },
+        {
+            "name": "table-to-json-converter",
+            "content_md": """\
+---
+name: table-to-json-converter
+description: Convert HTML tables, markdown tables, or plain-text tabular data to clean JSON or CSV
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "convert this table"
+  - "table to JSON"
+  - "table to CSV"
+  - "parse this table"
+  - "structured data from table"
+metadata:
+  author: flow-team
+  domain: data
+  agent: General Assistant
+---
+
+# Table to JSON/CSV Converter
+
+<context>
+Convert tabular data from any text format (HTML, markdown, plain text, pipe-delimited) to clean, consistently typed JSON or CSV. Infer data types and handle messy real-world tables gracefully.
+</context>
+
+<instructions>
+## Parsing steps
+1. Detect table format (HTML / markdown / plain text / pipe-delimited)
+2. Extract headers (row 0 or first non-empty row)
+3. Infer column types: int, float, date, boolean, string
+4. Cast values to inferred type; fallback to string on failure
+5. Handle merged cells: repeat value in each spanned cell
+
+## Data cleaning
+- Strip whitespace from values
+- Normalize date formats to ISO 8601
+- Normalize boolean strings: yes/no/true/false/1/0 → true/false
+- Replace empty strings with null
+
+## Output format
+```json
+{
+  "format_detected": str,
+  "headers": [str],
+  "types": {col: str},
+  "rows": [{col: value}],
+  "row_count": int,
+  "warnings": [str]
+}
+```
+</instructions>
+""",
+        },
+        {
+            "name": "semantic-text-similarity",
+            "content_md": """\
+---
+name: semantic-text-similarity
+description: Compute semantic similarity between a pair of texts and explain what makes them similar or different
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "how similar are these"
+  - "semantic similarity"
+  - "are these the same meaning"
+  - "compare these texts"
+  - "similarity score"
+metadata:
+  author: flow-team
+  domain: nlp
+  agent: General Assistant
+---
+
+# Semantic Text Similarity
+
+<context>
+Assess the semantic similarity between two texts. Go beyond surface-level lexical overlap to consider meaning, intent, and topic coverage. Provide an interpretable score and explanation.
+</context>
+
+<instructions>
+## Similarity scale (0.0 – 1.0)
+- 0.9-1.0: Near-identical meaning (paraphrases)
+- 0.7-0.9: Same topic, highly related
+- 0.5-0.7: Related but distinct perspectives
+- 0.3-0.5: Loosely related
+- 0.0-0.3: Unrelated
+
+## Analysis dimensions
+1. **Topic overlap** — shared concepts and entities
+2. **Intent alignment** — same communicative goal?
+3. **Factual consistency** — do they assert contradictory facts?
+4. **Perspective** — same/different viewpoint on shared topics
+
+## Output
+{"score": float, "interpretation": str, "shared_concepts": [str], "divergences": [str], "factual_conflict": bool, "recommendation": "use either" | "prefer text_a" | "prefer text_b" | "contradictory"}
+</instructions>
+""",
+        },
+        {
+            "name": "topic-clustering",
+            "content_md": """\
+---
+name: topic-clustering
+description: Cluster a list of documents, sentences, or items by topic and generate descriptive cluster labels
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "cluster these documents"
+  - "group by topic"
+  - "topic modeling"
+  - "find themes in"
+  - "categorize these items"
+metadata:
+  author: flow-team
+  domain: nlp
+  agent: General Assistant
+---
+
+# Topic Clustering
+
+<context>
+Group a list of texts or items into coherent topic clusters. Generate human-readable cluster labels and provide representative examples. Use semantic meaning, not just keywords.
+</context>
+
+<instructions>
+## Clustering approach
+1. Identify recurring themes, concepts, and entities
+2. Group items that share the same primary topic
+3. Allow items to belong to a secondary cluster (soft assignment)
+4. Generate a 2-5 word label for each cluster
+5. Identify singleton outliers (items that don't fit any cluster)
+
+## Cluster quality criteria
+- Each cluster should be internally coherent (members are about the same thing)
+- Clusters should be mutually distinguishable
+- Labels should be specific enough to be useful ("Machine Learning Safety" not "AI")
+
+## Output
+{"clusters": [{"id": int, "label": str, "size": int, "members": [int], "representative": str}], "outliers": [int], "summary": str}
+</instructions>
+""",
+        },
+        {
+            "name": "code-explanation-generator",
+            "content_md": """\
+---
+name: code-explanation-generator
+description: Generate plain-English explanations of code snippets at the right level for the target audience
+version: "1.0"
+allowed-tools: sandbox, retrieve
+triggers:
+  - "explain this code"
+  - "what does this code do"
+  - "code explanation"
+  - "walk me through this"
+  - "explain this function"
+metadata:
+  author: flow-team
+  domain: engineering
+  agent: General Assistant
+---
+
+# Code Explanation Generator
+
+<context>
+Explain code in plain English at the appropriate depth for the audience. Default to intermediate level (understands basic programming) unless specified. Never talk down; never over-assume.
+</context>
+
+<instructions>
+## Explanation levels
+- **Beginner** — explain concepts from scratch, use analogies
+- **Intermediate** — assume programming basics, explain patterns and intent
+- **Expert** — focus on non-obvious choices, tradeoffs, and edge cases
+
+Default: Intermediate.
+
+## Explanation structure
+1. **What it does** — 1-2 sentences: overall purpose
+2. **How it works** — step-by-step walkthrough of the logic
+3. **Key concepts** — any patterns, algorithms, or idioms worth naming
+4. **Gotchas** — edge cases, performance concerns, or footguns
+5. **Example** — concrete input/output if helpful
+
+## Rules
+- Never restate the code line-by-line — synthesize intent
+- Use analogies sparingly and only when genuinely clarifying
+- Flag any code that looks incorrect or dangerous
+</instructions>
+""",
+        },
+        {
+            "name": "prompt-engineering-assistant",
+            "content_md": """\
+---
+name: prompt-engineering-assistant
+description: Rewrite or improve a user prompt for clearer, more reliable LLM output — adding structure, constraints, and examples
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "improve this prompt"
+  - "rewrite this prompt"
+  - "prompt engineering"
+  - "make this prompt better"
+  - "optimize my prompt"
+metadata:
+  author: flow-team
+  domain: ai
+  agent: General Assistant
+---
+
+# Prompt Engineering Assistant
+
+<context>
+Improve user prompts to get better, more reliable LLM outputs. Apply prompt engineering best practices: add structure, constraints, output format specifications, and examples. Preserve the user's original intent.
+</context>
+
+<instructions>
+## Improvement dimensions
+1. **Clarity** — remove ambiguity; make the task concrete
+2. **Constraints** — add output format, length, and tone requirements
+3. **Role** — add a role prefix if it would help ("You are a...")
+4. **Examples** — add 1-2 few-shot examples if the task is complex
+5. **Chain of thought** — add "Think step by step" if reasoning is needed
+6. **Output schema** — specify exact output format (JSON, markdown, list)
+
+## What NOT to change
+- The user's core intent and subject matter
+- Domain-specific terminology they chose deliberately
+- Explicit constraints they've already set
+
+## Output
+Provide:
+1. **Improved prompt** — the rewritten version
+2. **Changes made** — bulleted list of what you changed and why
+3. **Confidence** — 0.0-1.0 that the improved prompt will yield better results
+</instructions>
+""",
+        },
+        {
+            "name": "json-schema-validation",
+            "content_md": """\
+---
+name: json-schema-validation
+description: Validate a JSON object against a schema, surface mismatches, and suggest fixes
+version: "1.0"
+allowed-tools: sandbox, retrieve
+triggers:
+  - "validate this JSON"
+  - "JSON schema validation"
+  - "check this against schema"
+  - "is this valid JSON"
+  - "schema mismatch"
+metadata:
+  author: flow-team
+  domain: data
+  agent: General Assistant
+---
+
+# JSON Schema Validation
+
+<context>
+Validate JSON objects against schemas (JSON Schema draft-07 or draft-2020-12). Surface all validation errors with clear explanations and concrete fix suggestions. Handle both schema inference (when no schema is provided) and explicit validation.
+</context>
+
+<instructions>
+## Validation modes
+1. **Explicit validation** — user provides both JSON and schema → validate and report errors
+2. **Schema inference** — user provides JSON only → infer the likely schema and validate for consistency
+3. **Schema generation** — user provides JSON → generate a JSON Schema that describes it
+
+## Error reporting (per error)
+- JSON path to the failing field
+- Expected type/value/constraint
+- Actual value found
+- Suggested fix (concrete, not vague)
+
+## Output
+{"valid": bool, "errors": [{"path": str, "rule": str, "expected": str, "actual": str, "fix": str}], "warnings": [str], "mode": str}
+</instructions>
+""",
+        },
+        {
+            "name": "creative-ideation-generator",
+            "content_md": """\
+---
+name: creative-ideation-generator
+description: Brainstorm N diverse, creative ideas around a theme — with scoring, feasibility notes, and a recommended top pick
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "brainstorm ideas"
+  - "generate ideas"
+  - "creative ideation"
+  - "give me ideas for"
+  - "what could we do about"
+metadata:
+  author: flow-team
+  domain: creativity
+  agent: General Assistant
+---
+
+# Creative Ideation Generator
+
+<context>
+Generate diverse, high-quality ideas on a given theme. Prioritize variety over quantity — ensure ideas span different approaches (incremental, radical, adjacent-domain). Always include a recommendation with reasoning.
+</context>
+
+<instructions>
+## Ideation process
+1. Generate ideas across 4 divergence axes:
+   - **Incremental** — improve the existing approach
+   - **Adjacent** — borrow from a related domain
+   - **Radical** — challenge the core assumption
+   - **Combinatorial** — combine two existing ideas
+
+2. Score each idea:
+   - **Impact** (1-5): potential value if it works
+   - **Feasibility** (1-5): effort/cost to execute
+   - **Novelty** (1-5): how fresh/differentiated
+
+3. Pick the top idea with rationale.
+
+## Output
+{"theme": str, "ideas": [{"id": int, "title": str, "description": str, "axis": str, "impact": int, "feasibility": int, "novelty": int}], "recommendation": {"id": int, "rationale": str}, "count": int}
+</instructions>
+""",
+        },
+        {
+            "name": "content-moderation-classifier",
+            "content_md": """\
+---
+name: content-moderation-classifier
+description: Classify text for toxicity, harassment, hate speech, or policy violations with confidence scores
+version: "1.0"
+allowed-tools: retrieve
+triggers:
+  - "moderate this content"
+  - "is this safe"
+  - "check for toxicity"
+  - "content policy check"
+  - "flag this text"
+metadata:
+  author: flow-team
+  domain: trust-safety
+  agent: General Assistant
+---
+
+# Content Moderation Classifier
+
+<context>
+Classify user-generated content against common content policy categories. Provide calibrated confidence scores and actionable decisions (allow / review / block). This is a decision support tool — final moderation decisions should involve human review for borderline cases.
+</context>
+
+<instructions>
+## Classification categories
+- **SAFE** — no policy violation
+- **SPAM** — unsolicited commercial content, repetitive noise
+- **HATE_SPEECH** — attacks based on race, religion, gender, sexual orientation
+- **HARASSMENT** — targeted personal attacks
+- **VIOLENCE** — graphic violence or threats
+- **SELF_HARM** — self-harm glorification or instructions
+- **SEXUALLY_EXPLICIT** — explicit sexual content
+- **MISINFORMATION** — demonstrably false claims presented as fact
+
+## Decision thresholds
+- confidence ≥ 0.85: auto-decision appropriate
+- 0.6-0.85: REVIEW (human moderator)
+- < 0.6: ALLOW with low-confidence flag
+
+## Output
+{"categories": {category: confidence}, "decision": "allow"|"review"|"block", "primary_concern": str|null, "confidence": float, "explanation": str}
+</instructions>
+""",
+        },
+        {
+            "name": "fact-check-claim-verifier",
+            "content_md": """\
+---
+name: fact-check-claim-verifier
+description: Assess the factual accuracy of a specific claim by identifying it as true, false, mixed, or unverifiable with evidence
+version: "1.0"
+allowed-tools: tavily_search, retrieve
+triggers:
+  - "fact check this"
+  - "is this true"
+  - "verify this claim"
+  - "is this accurate"
+  - "check this fact"
+metadata:
+  author: flow-team
+  domain: trust-safety
+  agent: General Assistant
+---
+
+# Fact-Check Claim Verifier
+
+<context>
+Assess the accuracy of specific factual claims. Search for corroborating and contradicting evidence. Never fabricate evidence — only report what you find. Distinguish between "false" (evidence against) and "unverifiable" (no reliable evidence either way).
+</context>
+
+<instructions>
+## Verdict taxonomy
+- **TRUE** — multiple reliable sources confirm the claim
+- **MOSTLY_TRUE** — core claim correct, minor inaccuracies or missing context
+- **MIXED** — partially correct, partially incorrect
+- **MOSTLY_FALSE** — core claim incorrect, minor elements accurate
+- **FALSE** — reliable sources directly contradict the claim
+- **UNVERIFIABLE** — insufficient evidence to assess
+
+## Evidence requirements
+- Minimum 2 independent sources for TRUE/FALSE verdict
+- Source quality: institutional > peer-reviewed > reputable outlet > general web
+- Flag conflicting sources explicitly
+
+## Output
+{"claim": str, "verdict": str, "confidence": float, "evidence": [{"source": str, "quote": str, "supports": bool}], "context": str, "caveats": [str]}
+</instructions>
+""",
+        },
+        {
+            "name": "citation-validity-checker",
+            "content_md": """\
+---
+name: citation-validity-checker
+description: Verify that cited URLs exist, are accessible, and that the cited content actually supports the claim being made
+version: "1.0"
+allowed-tools: fetch_webpage, tavily_search
+triggers:
+  - "check these citations"
+  - "verify this reference"
+  - "does this link work"
+  - "citation check"
+  - "source verification"
+metadata:
+  author: flow-team
+  domain: research
+  agent: General Assistant
+---
+
+# Citation Validity Checker
+
+<context>
+Verify citations for accessibility, relevance, and claim support. A citation that exists but doesn't support the claim it's attached to is worse than no citation — it creates false confidence.
+</context>
+
+<instructions>
+## Verification steps per citation
+1. **Reachability** — does the URL resolve (HTTP 200)?
+2. **Content match** — does the page content relate to the claim?
+3. **Claim support** — does the source actually assert what the citation claims?
+4. **Source quality** — credibility assessment (institutional / peer-reviewed / journalism / blog)
+5. **Recency** — is the source current enough for the claim?
+
+## Verdict per citation
+- VALID — accessible, relevant, supports claim
+- ACCESSIBLE_BUT_UNSUPPORTIVE — URL works but doesn't support the claim
+- DEAD_LINK — URL returns error or is unreachable
+- PAYWALL — accessible but content gated
+- MISLEADING — source actually contradicts the claim
+
+## Output
+{"citations": [{"url": str, "verdict": str, "claim": str, "quality": str, "notes": str}], "valid_count": int, "issues": [str]}
+</instructions>
+""",
+        },
+    ],
     "Research Analyst": [
         {
             "name": "structured-research-report",
@@ -139,7 +789,6 @@ Output: {"source": "LLaVA (2023)", "recency": 2, "authority": 3, "relevance": 3,
 """,
         },
     ],
-
     "Code Review Agent": [
         {
             "name": "security-vulnerability-scan",
@@ -261,7 +910,6 @@ Output: {"scores": {"correctness": 4, "readability": 4, "testability": 3, "perfo
 """,
         },
     ],
-
     "Daily AI Briefing": [
         {
             "name": "news-digest-synthesis",
@@ -361,7 +1009,6 @@ Output: [{"title": "Anthropic publishes safety evals methodology", "score": 8, "
 """,
         },
     ],
-
     "Knowledge Curator": [
         {
             "name": "knowledge-extraction",
@@ -476,7 +1123,6 @@ Output: {"action": "merge", "target_id": "existing-uuid", "merged_entity": {"nam
 """,
         },
     ],
-
     "Data Analyst": [
         {
             "name": "exploratory-data-analysis",
@@ -574,7 +1220,6 @@ Output: {"insights": [{"observation": "APAC revenue declined 18% in Q3 vs Q2", "
 """,
         },
     ],
-
     "Legal Document Analyzer": [
         {
             "name": "contract-risk-extraction",
@@ -679,7 +1324,6 @@ Output: {"obligations": [{"party": "Client", "obligation": "Pay invoice", "deadl
 """,
         },
     ],
-
     "Competitive Intelligence": [
         {
             "name": "competitor-profile",
@@ -783,7 +1427,6 @@ Output item: {"type": "Research", "description": "40% increase in arXiv papers o
 """,
         },
     ],
-
     "Meeting Summarizer": [
         {
             "name": "meeting-summary",
@@ -887,7 +1530,6 @@ Output: {"overall_tone": "tense", "alignment": {"level": "LOW", "evidence": "No 
 """,
         },
     ],
-
     "Bug Triage Assistant": [
         {
             "name": "bug-severity-classification",
@@ -996,7 +1638,6 @@ Output: {"symptom": "500 errors on user lookup", "proximate_cause": "Null pointe
 """,
         },
     ],
-
     "Financial Report Analyst": [
         {
             "name": "financial-metrics-extraction",
@@ -1102,7 +1743,6 @@ Takeaways: ["Revenue growth accelerating — 18% vs 14% last quarter", "Gross ma
 """,
         },
     ],
-
     "Content Strategist": [
         {
             "name": "content-brief-generation",
@@ -1213,6 +1853,7 @@ Persona: {"name": "Senior ML Engineer", "demographics": {"role": "ML Engineer L5
 
 # ── DB operations ─────────────────────────────────────────────────────────────
 
+
 async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
     logger.info("seeding_skills", workspace_id=str(workspace_id))
     seeded = 0
@@ -1220,7 +1861,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
     for agent_name, skills in SKILLS.items():
         agent_row = await pool.fetchrow(
             "SELECT id FROM agents WHERE workspace_id = $1 AND name = $2",
-            workspace_id, agent_name,
+            workspace_id,
+            agent_name,
         )
         if not agent_row:
             logger.warning("agent_not_found", name=agent_name)
@@ -1235,7 +1877,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
             # Get next version (append-only versioning, matching repo.upsert_agent_skill)
             row = await pool.fetchrow(
                 "SELECT COALESCE(MAX(version), 0) AS max_v FROM agent_skills WHERE agent_id=$1 AND name=$2",
-                agent_id, name,
+                agent_id,
+                name,
             )
             max_v = row["max_v"] if row else 0
 
@@ -1247,7 +1890,8 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
             # Deactivate old versions (none, but for correctness)
             await pool.execute(
                 "UPDATE agent_skills SET active = false WHERE agent_id=$1 AND name=$2",
-                agent_id, name,
+                agent_id,
+                name,
             )
 
             await pool.execute(
@@ -1255,7 +1899,11 @@ async def seed_skills_for_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID)
                 INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, active)
                 VALUES ($1, $2, $3, $4, $5, true)
                 """,
-                agent_id, workspace_id, name, 1, content_md,
+                agent_id,
+                workspace_id,
+                name,
+                1,
+                content_md,
             )
             logger.info("skill.seeded", agent=agent_name, skill=name)
             seeded += 1

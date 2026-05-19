@@ -8,6 +8,7 @@ Evaluation flow:
   3. INSERT a new golden_results row (never UPDATE) so history accumulates.
   4. Trigger regression/genome snapshot logic on the aggregate.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,8 +18,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-
 from openai import AsyncOpenAI
+
 from flow.application.curator import check_regression_and_propose
 from flow.application.genome_service import (
     _create_genome_proposal,
@@ -97,14 +98,15 @@ async def run_agent_on_item(
     Runs the LLM directly (no tools/graph) for fast, reproducible evals.
     Returns the model text response.
     """
-    from flow.infrastructure.llm.providers import get_chat_model
     from langchain_core.messages import HumanMessage, SystemMessage
+
+    from flow.infrastructure.llm.providers import get_chat_model
 
     llm = get_chat_model(
         llm_config,
         fallback_api_keys={
             "openai": openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY"),
-            "anthropic": anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY"),
+            "anthropic": anthropic_api_key or os.environ.get("FLOW_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"),
         },
     )
     if llm is None:
@@ -197,14 +199,16 @@ async def evaluate_golden_set(
         )
 
         scores.append(judgment["score"])
-        results.append({
-            "item_id": str(item["id"]),
-            "input_text": item["input_text"],
-            "expected_output": item["expected_output"],
-            "actual_output": actual_output,
-            "score": judgment["score"],
-            "rationale": judgment["rationale"],
-        })
+        results.append(
+            {
+                "item_id": str(item["id"]),
+                "input_text": item["input_text"],
+                "expected_output": item["expected_output"],
+                "actual_output": actual_output,
+                "score": judgment["score"],
+                "rationale": judgment["rationale"],
+            }
+        )
 
     total = len(results)
     scored = len(scores)
@@ -258,22 +262,16 @@ async def auto_eval_tick(ctx: dict) -> None:
     failed_count = 0
     for ws in workspaces:
         ws_id = ws["id"]
-        agent = await pool.fetchrow(
-            "SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        agent = await pool.fetchrow("SELECT id FROM agents WHERE workspace_id = $1 LIMIT 1", ws_id)
         if not agent:
             continue
 
-        gset = await pool.fetchrow(
-            "SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        gset = await pool.fetchrow("SELECT id FROM golden_sets WHERE workspace_id = $1 LIMIT 1", ws_id)
         if not gset:
             continue
 
         logger.info("cron.auto_eval_tick.running workspace_id=%s agent_id=%s", ws_id, agent["id"])
-        user = await pool.fetchrow(
-            "SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id
-        )
+        user = await pool.fetchrow("SELECT user_id FROM workspace_members WHERE workspace_id = $1 LIMIT 1", ws_id)
         user_id = user["user_id"] if user else None
 
         active_genome = await get_active_genome(pool, agent["id"])
@@ -303,7 +301,9 @@ async def auto_eval_tick(ctx: dict) -> None:
             candidate_id_str = result.get("candidate_version_id")
             if candidate_id_str and user_id:
                 from uuid import UUID as _UUID
+
                 from flow.application.ab_runner import ABTestRunner
+
                 candidate_id = _UUID(candidate_id_str)
                 prev_genome = await get_active_genome(pool, agent["id"])
                 if prev_genome and prev_genome.id:
@@ -312,7 +312,10 @@ async def auto_eval_tick(ctx: dict) -> None:
                         "INSERT INTO ab_tests "
                         "(id, workspace_id, golden_set_id, agent_a_id, agent_b_id, status) "
                         "VALUES ($1, $2, $3, $4, $4, 'running')",
-                        test_id, ws_id, gset["id"], agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
+                        test_id,
+                        ws_id,
+                        gset["id"],
+                        agent["id"],  # agent_a_id = agent_b_id: same agent, versions set on completion
                     )
                     summary = await ABTestRunner(pool, client).run(
                         test_id=test_id,
@@ -366,3 +369,203 @@ async def auto_eval_tick(ctx: dict) -> None:
             "cron.auto_eval_tick.partial_failure",
             failed_count=failed_count,
         )
+
+
+async def skill_decay_tick(ctx: dict) -> None:
+    """Cron job (04:00 UTC daily): decay all active skill scores across every workspace/agent pair."""
+    pool = ctx["pool"]
+    agent_rows = await pool.fetch("SELECT id, workspace_id FROM agents")
+    from flow.infrastructure.persistence.repo import FlowRepository
+
+    repo = FlowRepository(pool)
+    decayed = 0
+    for row in agent_rows:
+        try:
+            pruned = await repo.decay_skill_scores(row["id"], row["workspace_id"])
+            decayed += pruned
+        except Exception:
+            pass
+    structlog.get_logger().info("cron.skill_decay_tick.done", pruned=decayed)
+
+
+async def auto_safety_eval_tick(ctx: dict) -> None:
+    """Cron job (04:30 UTC daily): re-evaluate auto-promoted genomes and roll back if they regressed.
+
+    Targets any agent_version that was auto_promoted_at within the last 36 hours
+    and has not yet had its safety_eval_passed flag set.
+    """
+    import datetime
+
+    pool = ctx["pool"]
+    settings = ctx.get("settings")
+    log = structlog.get_logger()
+
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=36)
+
+    # Find genomes that were auto-promoted and haven't been safety-checked yet
+    pending = await pool.fetch(
+        """
+        SELECT av.id AS version_id, av.agent_id, a.workspace_id,
+               a.auto_improve_rollback_delta
+        FROM agent_versions av
+        JOIN agents a ON a.id = av.agent_id
+        WHERE av.auto_promoted_at >= $1
+          AND av.auto_promoted_at IS NOT NULL
+          AND av.safety_eval_passed IS NULL
+          AND av.status = 'active'
+        """,
+        cutoff,
+    )
+
+    if not pending:
+        log.info("cron.safety_eval_tick.nothing_pending")
+        return
+
+    openai_api_key = getattr(settings, "openai_api_key", None) if settings else None
+    client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else AsyncOpenAI()
+
+    rolled_back = 0
+    passed = 0
+
+    for row in pending:
+        agent_id = row["agent_id"]
+        workspace_id = row["workspace_id"]
+        version_id = row["version_id"]
+        rollback_delta = row["auto_improve_rollback_delta"] or 0.15
+
+        try:
+            # Find the golden set most recently used with this agent
+            gs_row = await pool.fetchrow(
+                """
+                SELECT DISTINCT golden_set_id FROM golden_results
+                WHERE agent_id = $1
+                ORDER BY golden_set_id LIMIT 1
+                """,
+                agent_id,
+            )
+            if gs_row is None:
+                # No golden set — can't safety-check; mark passed to avoid retry loop
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                continue
+
+            golden_set_id = gs_row["golden_set_id"]
+
+            # Get baseline score before this promotion (most recent ARCHIVED version score)
+            baseline_row = await pool.fetchrow(
+                """
+                SELECT avg_score FROM agent_versions
+                WHERE agent_id = $1 AND status = 'archived'
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                agent_id,
+            )
+            baseline_score = baseline_row["avg_score"] if baseline_row and baseline_row["avg_score"] else None
+
+            # Run a fresh evaluation of current genome on the golden set
+            items = await pool.fetch(
+                "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1",
+                golden_set_id,
+            )
+            if not items:
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                continue
+
+            active_genome = await get_active_genome(pool, agent_id)
+            if active_genome is None:
+                continue
+
+            scores = []
+            for item in items:
+                try:
+                    actual = await run_agent_on_item(
+                        input_text=item["input_text"],
+                        system_prompt=active_genome.system_prompt,
+                        llm_config={
+                            "provider": active_genome.llm_config.provider,
+                            "model": active_genome.llm_config.model,
+                            "temperature": active_genome.llm_config.temperature,
+                        },
+                        openai_api_key=openai_api_key,
+                    )
+                    result = await judge_single(
+                        item["input_text"],
+                        item["expected_output"],
+                        actual,
+                        item["scoring_criteria"],
+                        client=client,
+                    )
+                    scores.append(result["score"])
+                except Exception:
+                    pass
+
+            if not scores:
+                continue
+
+            new_avg = sum(scores) / len(scores)
+
+            # Roll back if score dropped more than rollback_delta from baseline
+            if baseline_score is not None and new_avg < baseline_score - rollback_delta:
+                log.warning(
+                    "cron.safety_eval_tick.rollback",
+                    agent_id=str(agent_id),
+                    new_score=new_avg,
+                    baseline_score=baseline_score,
+                    delta=baseline_score - new_avg,
+                )
+                from uuid import uuid4 as _uuid4
+
+                from flow.application.genome_service import rollback_genome
+
+                # Find workspace owner for audit proposal
+                ws_user = await pool.fetchrow(
+                    "SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND role = 'admin' LIMIT 1",
+                    workspace_id,
+                )
+                fallback_user = ws_user["user_id"] if ws_user else None
+
+                await rollback_genome(pool, agent_id, workspace_id)
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = FALSE WHERE id = $1",
+                    version_id,
+                )
+
+                if fallback_user:
+                    alert_id = _uuid4()
+                    await pool.execute(
+                        """
+                        INSERT INTO proposals (id, workspace_id, user_id, title, body, status)
+                        VALUES ($1, $2, $3, $4, $5, 'pending')
+                        """,
+                        alert_id,
+                        workspace_id,
+                        fallback_user,
+                        "Safety rollback: auto-promoted genome regressed",
+                        f"Auto-promoted genome {version_id} scored {new_avg:.2f} vs baseline {baseline_score:.2f} "
+                        f"(delta -{baseline_score - new_avg:.2f} > threshold {rollback_delta:.2f}). "
+                        "Previous genome restored. Review and retrain.",
+                    )
+                rolled_back += 1
+            else:
+                await pool.execute(
+                    "UPDATE agent_versions SET safety_eval_passed = TRUE WHERE id = $1",
+                    version_id,
+                )
+                passed += 1
+                log.info(
+                    "cron.safety_eval_tick.passed",
+                    agent_id=str(agent_id),
+                    new_score=new_avg,
+                )
+
+        except Exception:
+            log.warning("cron.safety_eval_tick.agent_failed", agent_id=str(agent_id), exc_info=True)
+
+    log.info("cron.safety_eval_tick.done", passed=passed, rolled_back=rolled_back)

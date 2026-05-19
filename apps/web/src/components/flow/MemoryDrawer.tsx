@@ -44,7 +44,7 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[min(100vw-2rem,26rem)] gap-0 p-0">
-        <SheetHeader className="border-b border-border/60 px-5 py-4 text-left">
+        <SheetHeader className="border-b border-flow-800 px-5 py-4 text-left">
           <SheetTitle className="text-base">Memory</SheetTitle>
         </SheetHeader>
 
@@ -148,7 +148,7 @@ function MemoryCard({
         "group relative rounded-lg border p-3 text-xs leading-relaxed",
         tier === "semantic"
           ? "border-flow-done/30 bg-flow-done/5"
-          : "border-border/60 bg-muted/20",
+          : "border-flow-800 bg-muted/20",
       )}
     >
       <p className="pr-6 text-foreground/80">{entry.content}</p>

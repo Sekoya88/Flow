@@ -47,19 +47,17 @@ class KGGraphEngine:
         id_path = nx.shortest_path(G, src, tgt)
         return [G.nodes[nid]["label"] for nid in id_path]
 
-    def find_shortest_path_ids(
-        self, G: nx.DiGraph, source_label: str, target_label: str
-    ) -> tuple[list[str], list[str]]:
+    def find_shortest_path_ids(self, G: nx.DiGraph, source_label: str, target_label: str) -> tuple[list[str], list[str]]:
         """Return (label_path, edge_types) for the shortest path."""
         label_to_id = {data["label"]: nid for nid, data in G.nodes(data=True)}
         src = label_to_id.get(source_label)
         tgt = label_to_id.get(target_label)
         if src is None or tgt is None:
-            raise nx.NetworkXNoPath(f"Node not found")
+            raise nx.NetworkXNoPath("Node not found")
         id_path = nx.shortest_path(G, src, tgt)
         labels = [G.nodes[nid]["label"] for nid in id_path]
         edge_types: list[str] = []
-        for a, b in zip(id_path, id_path[1:]):
+        for a, b in zip(id_path, id_path[1:], strict=False):
             edge_types.append(G.edges[a, b].get("edge_type", "links_to"))
         return labels, edge_types
 
@@ -91,12 +89,14 @@ class KGGraphEngine:
         except ModuleNotFoundError:
             # scipy not available; fall back to pure-python implementation
             from networkx.algorithms.link_analysis.pagerank_alg import _pagerank_python
+
             pr = _pagerank_python(G, alpha=0.85)
         for nid, score in pr.items():
             G.nodes[nid]["pagerank"] = score
 
         try:
             import community as community_louvain
+
             undirected = G.to_undirected()
             partition = community_louvain.best_partition(undirected)
             for nid, cluster in partition.items():

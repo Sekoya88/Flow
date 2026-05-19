@@ -15,8 +15,8 @@ dependencies = [
   "asyncpg>=0.30,<1",
   "structlog>=24.4,<26",
   "langgraph>=0.6,<2",
-  "langchain-core>=0.3,<1",
-  "langchain-openai>=0.3,<1",
+  "langchain-core>=1.4,<2",
+  "langchain-openai>=1.0,<2",
   "openai>=1.50,<2",
   "langgraph-checkpoint-postgres>=2.0",
   "psycopg[binary]>=3.2,<4",
@@ -37,16 +37,19 @@ dependencies = [
   "prometheus-fastapi-instrumentator>=7.1.0",
   "arq>=0.28.0",
   "tenacity>=8.0,<10",
+  "croniter>=5.0,<7",
   "tiktoken>=0.7,<1",
   "redis>=5.3.1",
-  "langchain-anthropic>=0.3.22",
-  "langchain-ollama>=0.3.10",
+  "langchain-anthropic>=1.0,<2",
+  "langchain-ollama>=1.0,<2",
+  "deepagents>=0.6.1,<1",
   "networkx>=3.3,<4",
   "e2b-code-interpreter>=2.6.0",
   "qdrant-client>=1.12,<2",
   "fastembed>=0.4,<1",
   "tavily-python>=0.5,<1",
   "pymupdf>=1.24,<2",
+  "pypdf>=4.0,<6",
   "python-docx>=1.1,<2",
   "beautifulsoup4>=4.12,<5",
   "pyyaml>=6.0,<7",
@@ -72,12 +75,16 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.ruff]
-line-length = 120
+line-length = 150
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = [
+  "E501",   # line too long — enforced by formatter, not linter
+  "B008",   # do not perform function calls in default args — FastAPI Depends() pattern
+  "E402",   # module-level import not at top — lazy imports are intentional
+]
 
 [tool.ruff.lint.per-file-ignores]
-# LangSmith must run before any LangChain/LangGraph import chain (arq/worker imports).
 "flow/infrastructure/queue/worker.py" = ["E402"]

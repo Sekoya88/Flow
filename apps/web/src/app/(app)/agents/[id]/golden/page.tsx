@@ -188,8 +188,8 @@ export default function GoldenSetPage() {
             { label: "Pass rate ≥70%", value: `${(aggregate.pass_rate * 100).toFixed(0)}%`, icon: Trophy },
             { label: "Min score", value: `${(aggregate.min_score * 100).toFixed(0)}%`, icon: BarChart3 },
           ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="rounded-xl border border-border/40 bg-card/60 p-4 text-center">
-              <Icon className="h-4 w-4 text-flow-brand mx-auto mb-2" />
+            <div key={label} className="rounded-xl border border-flow-800 bg-card p-4 text-center">
+              <Icon className="h-4 w-4 text-flow-violet mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">{label}</p>
               <p className="font-mono text-xl font-bold tabular-nums mt-0.5">{value}</p>
             </div>
@@ -198,7 +198,7 @@ export default function GoldenSetPage() {
       )}
 
       {/* Evaluate bar */}
-      <div className="flex items-center gap-3 rounded-xl border border-border/40 bg-card/40 px-4 py-3">
+      <div className="flex items-center gap-3 rounded-xl border border-flow-800 bg-card px-4 py-3">
         <span className="text-sm text-muted-foreground shrink-0">Evaluate with</span>
         <Select value={selectedAgent} onValueChange={(v) => { if (v) setSelectedAgent(v); }}>
           <SelectTrigger className="h-8 text-xs max-w-xs">
@@ -227,7 +227,7 @@ export default function GoldenSetPage() {
 
       {/* Add form */}
       {showAddForm && (
-        <div className="rounded-xl border border-flow-brand/20 bg-flow-brand/5 p-5 space-y-3 animate-slide-up">
+        <div className="rounded-xl border border-flow-violet/20 bg-flow-violet/5 p-5 space-y-3 animate-slide-up">
           <p className="text-sm font-medium text-foreground">New test case</p>
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Input / Question</Label>
@@ -240,7 +240,7 @@ export default function GoldenSetPage() {
               onChange={(e) => setNewExpected(e.target.value)}
               placeholder="The expected answer or key facts that must be present…"
               rows={3}
-              className="w-full resize-none rounded-lg border border-border/60 bg-card/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-flow-brand/30"
+              className="w-full resize-none rounded-lg border border-flow-800 bg-card/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-flow-violet/30"
             />
           </div>
           <div className="space-y-2">
@@ -273,7 +273,7 @@ export default function GoldenSetPage() {
             const result = resultsByItem.get(item.id);
             const isExpanded = expandedItem === item.id;
             return (
-              <div key={item.id} className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+              <div key={item.id} className="rounded-xl border border-flow-800 bg-card overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedItem(isExpanded ? null : item.id)}
@@ -302,7 +302,7 @@ export default function GoldenSetPage() {
                 </button>
 
                 {isExpanded && (
-                  <div className="border-t border-border/40 px-4 py-3 space-y-3 animate-slide-up">
+                  <div className="border-t border-flow-800 px-4 py-3 space-y-3 animate-slide-up">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Expected</p>
