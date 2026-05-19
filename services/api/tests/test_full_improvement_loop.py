@@ -70,6 +70,10 @@ async def test_full_loop_eval_to_candidate():
 
     with (
         patch(
+            "flow.application.curator._get_agent_auto_threshold",
+            new=AsyncMock(return_value=(None, 0.15)),
+        ),
+        patch(
             "flow.application.genome_service.get_active_genome",
             return_value=active_genome,
         ),
@@ -168,6 +172,7 @@ async def test_full_loop_regression_alert_created():
     active_genome.llm_config.temperature = 0.3
 
     with (
+        patch("flow.application.curator._get_agent_auto_threshold", new=AsyncMock(return_value=(None, 0.15))),
         patch("flow.application.genome_service.get_active_genome", return_value=active_genome),
         patch("flow.application.prompt_rewriter.rewrite_and_snapshot", return_value=None),
     ):
