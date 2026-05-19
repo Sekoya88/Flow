@@ -42,9 +42,11 @@ from flow.interfaces.http.routes import (
     health,
     kg,
     knowledge,
+    local,
     logs,
     memory,
     meta,
+    observability_ws,
     personas,
     preferences,
     proposals,
@@ -135,6 +137,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(health.router)
+    app.include_router(local.router)   # no auth — desktop app discovery
     app.include_router(auth.router)
     app.include_router(analytics.router)
     app.include_router(dashboard.router)
@@ -150,6 +153,7 @@ def create_app() -> FastAPI:
     app.include_router(proposals.router)
     app.include_router(memory.router)
     app.include_router(meta.router)
+    app.include_router(observability_ws.router)
     app.include_router(schedules.router)
     app.include_router(tools.router)
     app.include_router(trace.router)

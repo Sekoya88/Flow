@@ -230,6 +230,11 @@ def make_planner(ctx: GraphContext):
                 if matched:
                     skills_block = loader.format_xml(matched)
                     matched_skill_dicts = loader.to_state_dicts(matched)
+                    if ctx.stream_hub:
+                        ctx.stream_hub.publish_agent_event(ctx.agent_id, {
+                            "type": "skills_matched",
+                            "skills": [{"name": s.name, "version": s.version} for s in matched]
+                        })
             except Exception:
                 pass
 
@@ -644,6 +649,16 @@ Output ONLY valid JSON:
                         ],
                         "mutations_count": len(mutations),
                     }
+                    if ctx.stream_hub:
+                        ctx.stream_hub.publish_agent_event(ctx.agent_id, {
+                            "type": "metacog_evaluated",
+                            "grade": grade,
+                            "mutations_proposed": len(mutations),
+                            "skill_scores": [
+                                {"name": s.skill_name, "contribution": s.contribution}
+                                for s in skill_scores
+                            ]
+                        })
                 except Exception:
                     _node_logger.debug("metacog_service integration failed", exc_info=True)
 
@@ -659,6 +674,12 @@ Output ONLY valid JSON:
                         sid = skill_dict.get("skill_id")
                         if sid:
                             await bandit.update(ctx.agent_id, _UUID(sid), reward)
+                            if ctx.stream_hub:
+                                ctx.stream_hub.publish_agent_event(ctx.agent_id, {
+                                    "type": "skill_arm_updated",
+                                    "skill_id": sid,
+                                    "reward": reward,
+                                })
                 except Exception:
                     pass  # bandit updates are best-effort
 

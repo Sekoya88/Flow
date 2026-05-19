@@ -1,0 +1,5 @@
+const electron = require('electron')
+console.log('typeof electron:', typeof electron)
+console.log('has app:', typeof electron === 'object' && 'app' in electron)
+console.log('value:', typeof electron === 'string' ? electron.slice(0,40) : JSON.stringify(Object.keys(electron || {})))
+electron.app?.quit()
