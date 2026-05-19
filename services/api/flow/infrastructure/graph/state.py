@@ -30,3 +30,9 @@ class FlowGraphState(TypedDict, total=False):
     rag_sources: list[dict]  # [{"source_id": str, "title": str, "chunk_index": int, "preview": str}]
     reflection: dict  # added for reflector node output
     prediction: str  # JEPA-style: reflector predicts next likely query/topic
+
+    # Phase 1 — Skills Loader
+    active_skills: list[dict]  # matched skills for this execution (serialized MatchedSkill)
+
+    # Phase 2 — MetaCognition
+    metacog_state: dict  # accumulated metacognitive context (calibration, journal entries)

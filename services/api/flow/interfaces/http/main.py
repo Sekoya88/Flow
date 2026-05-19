@@ -35,6 +35,7 @@ from flow.interfaces.http.routes import (
     dashboard,
     evaluations,
     executions,
+    evolution,
     feedback,
     golden_sets,
     graph,
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(agent_versions.router)
     app.include_router(executions.router)
+    app.include_router(evolution.router)
     app.include_router(feedback.router)
     app.include_router(knowledge.router)
     app.include_router(preferences.router)
