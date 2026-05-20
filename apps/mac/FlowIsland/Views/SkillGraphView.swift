@@ -24,9 +24,9 @@ private func radialPositions(count: Int, size: CGSize) -> [CGPoint] {
     let cx = size.width / 2, cy = size.height / 2
     if count == 1 { return [CGPoint(x: cx, y: cy)] }
 
-    // Distribute skill nodes evenly on a slightly elliptical orbit
-    let rw = size.width  * 0.34
-    let rh = size.height * 0.36
+    // Tight orbit — leaves room for node radius (~16px) + label (~12px) on all sides
+    let rw = min(size.width  * 0.26, 130.0)
+    let rh = min(size.height * 0.26, 36.0)
     var pts: [CGPoint] = []
     for i in 0..<count {
         let angle = (Double(i) / Double(count)) * 2.0 * Double.pi - Double.pi / 2.0
@@ -215,13 +215,15 @@ struct SkillGraphView: View {
                 let pt    = pts[i]
                 let label = skill.name.count > 13 ? String(skill.name.prefix(12)) + "…" : skill.name
 
-                // Push label away from center
+                // Push label outward from center, clamped to stay within canvas
                 let dx    = pt.x - center.x
                 let dy    = pt.y - center.y
                 let len   = max(sqrt(dx * dx + dy * dy), 1)
-                let push: Double = 16
-                let lx    = pt.x + (dx / len) * push
-                let ly    = pt.y + (dy / len) * push + 5
+                let push: Double = 14
+                let rawLx = pt.x + (dx / len) * push
+                let rawLy = pt.y + (dy / len) * push + 4
+                let lx    = max(30, min(geo.size.width  - 30, rawLx))
+                let ly    = max(10, min(geo.size.height - 10, rawLy))
 
                 Text(label)
                     .font(.system(size: 7.5, weight: skill.active ? .bold : .regular))

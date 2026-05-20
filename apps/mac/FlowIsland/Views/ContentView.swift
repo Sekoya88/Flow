@@ -648,16 +648,17 @@ struct SkillChipView: View {
                     .lineLimit(1)
             }
             // Score bar
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.06))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(cyan.opacity(0.55))
-                        .frame(width: g.size.width * chip.score)
-                }
-            }
-            .frame(height: 3)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 3)
+                .overlay(
+                    GeometryReader { g in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(cyan.opacity(0.55))
+                            .frame(width: g.size.width * chip.score)
+                    },
+                    alignment: .leading
+                )
             HStack {
                 Text(String(format: "%.0f%%", chip.score * 100))
                     .font(.system(size: 8, design: .monospaced))
