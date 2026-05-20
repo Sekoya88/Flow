@@ -91,9 +91,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let screen = self.notchScreen() else { return }
 
             if state == .closed && self.pillZone(screen).contains(loc) {
-                // Cursor entered pill — open
+                guard !self.store.isHoveringPill else { return }
+                // Phase 1: hover feedback — enable mouse events + glow effect
                 self.panel.ignoresMouseEvents = false
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { self.store.isHoveringPill = true }
+                // Phase 2: 80ms later, spring-open the panel
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                    guard let self, self.store.isHoveringPill else { return }
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
                         self.store.notchState = .open
                     }
@@ -101,9 +105,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else if state == .open && !self.panelZone(screen).contains(loc) {
                 // Cursor left panel — close
                 DispatchQueue.main.async {
+                    self.store.isHoveringPill = false
                     withAnimation(.spring(response: 0.45, dampingFraction: 1.0)) {
                         self.store.notchState = .closed
                     }
+                }
+            } else if state == .closed && !self.pillZone(screen).contains(loc) {
+                // Cursor left pill before panel opened — cancel hover
+                if self.store.isHoveringPill {
+                    DispatchQueue.main.async { self.store.isHoveringPill = false }
                 }
             }
         }

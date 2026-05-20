@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 private let WEB_APP          = "http://localhost:13000"
+private let API_BASE         = "http://localhost:18000/api/v1/local"
 private let PILL_W:  CGFloat = 200
 private let PILL_H:  CGFloat = 37
 private let PANEL_W: CGFloat = 540
@@ -14,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.clear   // fills panel — transparent, no hit-testing
+            Color.clear
             NotchMorphView(store: store)
         }
     }
@@ -25,7 +26,8 @@ struct ContentView: View {
 struct NotchMorphView: View {
     @ObservedObject var store: AppStore
 
-    private var isOpen: Bool { store.notchState == .open }
+    private var isOpen:     Bool { store.notchState     == .open }
+    private var isHovering: Bool { store.isHoveringPill && !isOpen }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,27 +49,33 @@ struct NotchMorphView: View {
             height: isOpen ? PANEL_H  : PILL_H,
             alignment: .top
         )
-        .background(morphBackground)
+        .background(Color.black)
         .clipShape(
             NotchShape(
                 topRadius:    isOpen ? 20 : 8,
                 bottomRadius: isOpen ? 24 : 20
             )
         )
-        .shadow(color: isOpen ? .black.opacity(0.55) : .clear, radius: 22, y: 12)
+        // Hover glow — soft white halo before expansion
+        .shadow(
+            color: isHovering ? .white.opacity(0.18) : (isOpen ? .black.opacity(0.55) : .clear),
+            radius: isHovering ? 12 : 22,
+            y: isHovering ? 0 : 12
+        )
+        // Hover scale — pill slightly grows before opening
+        .scaleEffect(isHovering ? 1.05 : 1.0)
+        .animation(
+            isHovering
+                ? .spring(response: 0.18, dampingFraction: 0.65)
+                : .spring(response: 0.45, dampingFraction: 1.0),
+            value: isHovering
+        )
         .animation(
             isOpen
                 ? .spring(response: 0.42, dampingFraction: 0.8)
                 : .spring(response: 0.45, dampingFraction: 1.0),
             value: store.notchState
         )
-    }
-
-    // MARK: - Background (pure black — matches Apple Dynamic Island exactly)
-
-    @ViewBuilder
-    private var morphBackground: some View {
-        Color.black
     }
 
     // MARK: - Pill row
@@ -78,6 +86,8 @@ struct NotchMorphView: View {
                 .fill(store.wsClient.isConnected ? Color.green : Color(nsColor: .systemGray))
                 .frame(width: 7, height: 7)
                 .shadow(color: store.wsClient.isConnected ? .green.opacity(0.8) : .clear, radius: 4)
+                // Dot pulses brighter on hover
+                .brightness(isHovering ? 0.3 : 0)
 
             Text("Flow")
                 .font(.system(size: 13, weight: .bold))
@@ -100,9 +110,14 @@ struct NotchMorphView: View {
         VStack(spacing: 0) {
             headerRow
             if !store.wsClient.isConnected { noAgentBanner }
-            skillGraphSection
-            Divider().opacity(0.15).padding(.horizontal, 16)
-            eventFeedSection
+
+            // Tab content
+            switch store.activeTab {
+            case .overview: overviewContent
+            case .runs:     RunsTabView(agentId: store.wsClient.currentAgentId)
+            case .memory:   MemoryTabView(agentId: store.wsClient.currentAgentId)
+            }
+
             footerRow
         }
     }
@@ -153,7 +168,8 @@ struct NotchMorphView: View {
 
     private var openButton: some View {
         Button("↗ Open") {
-            NSWorkspace.shared.open(URL(string: WEB_APP)!)
+            // Go straight to dashboard — skip public landing page
+            NSWorkspace.shared.open(URL(string: "\(WEB_APP)/dashboard")!)
         }
         .buttonStyle(GlassButtonStyle(accent: true))
     }
@@ -179,7 +195,15 @@ struct NotchMorphView: View {
             .padding(.top, 8)
     }
 
-    // MARK: Skill graph
+    // MARK: Overview tab (skill graph + events)
+
+    private var overviewContent: some View {
+        VStack(spacing: 0) {
+            skillGraphSection
+            Divider().opacity(0.15).padding(.horizontal, 16)
+            eventFeedSection
+        }
+    }
 
     private var skillGraphSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -192,8 +216,6 @@ struct NotchMorphView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: Event feed
-
     private var eventFeedSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("Live events")
@@ -205,16 +227,13 @@ struct NotchMorphView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: Footer
+    // MARK: Footer — tab switcher
 
     private var footerRow: some View {
         HStack(spacing: 5) {
-            footerBtn("This Agent",
-                      store.wsClient.currentAgentId.map { "/agents/\($0)" } ?? "/agents")
-            footerBtn("Runs",
-                      store.wsClient.currentAgentId.map { "/agents/\($0)/executions" } ?? "/executions")
-            footerBtn("Memory",
-                      store.wsClient.currentAgentId.map { "/agents/\($0)/memory" } ?? "/memory")
+            tabBtn("This Agent", tab: .overview)
+            tabBtn("Runs",       tab: .runs)
+            tabBtn("Memory",     tab: .memory)
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
@@ -222,9 +241,9 @@ struct NotchMorphView: View {
         .overlay(Divider().opacity(0.08), alignment: .top)
     }
 
-    private func footerBtn(_ label: String, _ path: String) -> some View {
-        Button(label) { NSWorkspace.shared.open(URL(string: WEB_APP + path)!) }
-            .buttonStyle(FooterButtonStyle())
+    private func tabBtn(_ label: String, tab: PanelTab) -> some View {
+        Button(label) { store.activeTab = tab }
+            .buttonStyle(TabButtonStyle(active: store.activeTab == tab))
     }
 
     private func sectionLabel(_ text: String) -> some View {
@@ -233,6 +252,196 @@ struct NotchMorphView: View {
             .foregroundColor(Color(nsColor: .systemGray).opacity(0.7))
             .tracking(1.2)
     }
+}
+
+// MARK: - Runs tab
+
+struct RunsTabView: View {
+    let agentId: String?
+
+    struct RunRow: Identifiable {
+        let id, status, message, createdAt: String
+    }
+
+    @State private var runs: [RunRow] = []
+    @State private var loading = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                sectionLabel("Recent runs")
+                Spacer()
+                if loading { ProgressView().scaleEffect(0.5) }
+            }
+            if runs.isEmpty && !loading {
+                emptyState("No runs yet")
+            } else {
+                VStack(spacing: 4) {
+                    ForEach(runs) { run in
+                        RunRowView(run: run)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .frame(maxHeight: .infinity)
+        .onAppear { fetchRuns() }
+        .onChange(of: agentId) { _ in fetchRuns() }
+    }
+
+    private func fetchRuns() {
+        guard let id = agentId else { loading = false; return }
+        guard let url = URL(string: "\(API_BASE)/agent-executions/\(id)") else { return }
+        loading = true
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            let rows = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])
+                .flatMap { $0["executions"] as? [[String: Any]] } ?? []
+            DispatchQueue.main.async {
+                runs = rows.map {
+                    RunRow(
+                        id:        $0["id"]         as? String ?? "",
+                        status:    $0["status"]      as? String ?? "unknown",
+                        message:   $0["message"]     as? String ?? "",
+                        createdAt: $0["created_at"]  as? String ?? ""
+                    )
+                }
+                loading = false
+            }
+        }.resume()
+    }
+}
+
+struct RunRowView: View {
+    let run: RunsTabView.RunRow
+
+    private var dotColor: Color {
+        switch run.status {
+        case "completed": return .green
+        case "running":   return Color(red: 0.23, green: 0.51, blue: 0.96)
+        default:          return Color(nsColor: .systemGray)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(dotColor).frame(width: 6, height: 6)
+            Text(run.message.isEmpty ? "(no message)" : run.message)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+            Spacer()
+            Text(run.status)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(dotColor)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - Memory tab
+
+struct MemoryTabView: View {
+    let agentId: String?
+
+    struct MemRow: Identifiable {
+        let id, content, createdAt: String
+    }
+
+    @State private var memories: [MemRow] = []
+    @State private var loading = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                sectionLabel("Memory")
+                Spacer()
+                if loading { ProgressView().scaleEffect(0.5) }
+            }
+            if memories.isEmpty && !loading {
+                emptyState("No memory entries yet")
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(memories) { mem in
+                            MemRowView(mem: mem)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .frame(maxHeight: .infinity)
+        .onAppear { fetchMemory() }
+        .onChange(of: agentId) { _ in fetchMemory() }
+    }
+
+    private func fetchMemory() {
+        guard let id = agentId else { loading = false; return }
+        guard let url = URL(string: "\(API_BASE)/agent-memory/\(id)") else { return }
+        loading = true
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            let rows = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])
+                .flatMap { $0["memories"] as? [[String: Any]] } ?? []
+            DispatchQueue.main.async {
+                memories = rows.map {
+                    MemRow(
+                        id:        $0["id"]         as? String ?? "",
+                        content:   $0["content"]    as? String ?? "",
+                        createdAt: $0["created_at"] as? String ?? ""
+                    )
+                }
+                loading = false
+            }
+        }.resume()
+    }
+}
+
+struct MemRowView: View {
+    let mem: MemoryTabView.MemRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "brain")
+                .font(.system(size: 9))
+                .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98))
+                .padding(.top, 2)
+            Text(mem.content)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.8))
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - Shared helpers
+
+private func sectionLabel(_ text: String) -> some View {
+    Text(text.uppercased())
+        .font(.system(size: 9, weight: .bold))
+        .foregroundColor(Color(nsColor: .systemGray).opacity(0.7))
+        .tracking(1.2)
+}
+
+private func emptyState(_ text: String) -> some View {
+    Text(text)
+        .font(.system(size: 11))
+        .foregroundColor(Color(nsColor: .systemGray).opacity(0.6))
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
 }
 
 // MARK: - Button styles
@@ -258,18 +467,23 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
-struct FooterButtonStyle: ButtonStyle {
+struct TabButtonStyle: ButtonStyle {
+    let active: Bool
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(configuration.isPressed
+            .font(.system(size: 10, weight: active ? .bold : .semibold))
+            .foregroundColor(active
                              ? Color(red: 0.65, green: 0.71, blue: 0.99)
                              : Color(nsColor: .systemGray))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(configuration.isPressed ? 0.08 : 0.04)))
+                .fill(active
+                      ? Color(red: 0.39, green: 0.4, blue: 0.96).opacity(0.15)
+                      : Color.white.opacity(configuration.isPressed ? 0.08 : 0.04)))
             .overlay(RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1))
+                .stroke(active
+                        ? Color(red: 0.39, green: 0.4, blue: 0.96).opacity(0.35)
+                        : Color.white.opacity(0.07), lineWidth: 1))
     }
 }
