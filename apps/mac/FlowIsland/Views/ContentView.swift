@@ -8,11 +8,10 @@ private let PILL_H:  CGFloat = 37
 private let PANEL_W: CGFloat = 540
 private let PANEL_H: CGFloat = 500
 
-// ContentView fills the NSPanel (always full-size, transparent).
-// The morphing notchContent sits at the top and is the only visible element.
+// MARK: - Root
+
 struct ContentView: View {
     @ObservedObject var store: AppStore
-
     var body: some View {
         ZStack(alignment: .top) {
             Color.clear
@@ -25,22 +24,19 @@ struct ContentView: View {
 
 struct NotchMorphView: View {
     @ObservedObject var store: AppStore
+    @State private var showAgentPicker = false
 
     private var isOpen:     Bool { store.notchState     == .open }
     private var isHovering: Bool { store.isHoveringPill && !isOpen }
 
     var body: some View {
         VStack(spacing: 0) {
-            pillRow
-                .frame(height: PILL_H)
-
+            pillRow.frame(height: PILL_H)
             panelBody
                 .frame(height: PANEL_H - PILL_H)
                 .opacity(isOpen ? 1 : 0)
                 .animation(
-                    isOpen
-                        ? .easeIn(duration: 0.12).delay(0.08)
-                        : .easeOut(duration: 0.08),
+                    isOpen ? .easeIn(duration: 0.12).delay(0.08) : .easeOut(duration: 0.08),
                     value: isOpen
                 )
         }
@@ -50,35 +46,26 @@ struct NotchMorphView: View {
             alignment: .top
         )
         .background(Color.black)
-        .clipShape(
-            NotchShape(
-                topRadius:    isOpen ? 20 : 8,
-                bottomRadius: isOpen ? 24 : 20
-            )
-        )
-        // Hover glow — soft white halo before expansion
+        .clipShape(NotchShape(topRadius: isOpen ? 20 : 8, bottomRadius: isOpen ? 24 : 20))
         .shadow(
             color: isHovering ? .white.opacity(0.18) : (isOpen ? .black.opacity(0.55) : .clear),
             radius: isHovering ? 12 : 22,
             y: isHovering ? 0 : 12
         )
-        // Hover scale — pill slightly grows before opening
         .scaleEffect(isHovering ? 1.05 : 1.0)
         .animation(
-            isHovering
-                ? .spring(response: 0.18, dampingFraction: 0.65)
-                : .spring(response: 0.45, dampingFraction: 1.0),
+            isHovering ? .spring(response: 0.18, dampingFraction: 0.65)
+                       : .spring(response: 0.45, dampingFraction: 1.0),
             value: isHovering
         )
         .animation(
-            isOpen
-                ? .spring(response: 0.42, dampingFraction: 0.8)
-                : .spring(response: 0.45, dampingFraction: 1.0),
+            isOpen ? .spring(response: 0.42, dampingFraction: 0.8)
+                   : .spring(response: 0.45, dampingFraction: 1.0),
             value: store.notchState
         )
     }
 
-    // MARK: - Pill row
+    // MARK: Pill row
 
     private var pillRow: some View {
         HStack(spacing: 7) {
@@ -86,14 +73,11 @@ struct NotchMorphView: View {
                 .fill(store.wsClient.isConnected ? Color.green : Color(nsColor: .systemGray))
                 .frame(width: 7, height: 7)
                 .shadow(color: store.wsClient.isConnected ? .green.opacity(0.8) : .clear, radius: 4)
-                // Dot pulses brighter on hover
                 .brightness(isHovering ? 0.3 : 0)
-
             Text("Flow")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
                 .tracking(-0.5)
-
             if store.wsClient.agentState != .idle {
                 Text(store.wsClient.agentState.emoji)
                     .font(.system(size: 11))
@@ -104,20 +88,17 @@ struct NotchMorphView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Expanded panel
+    // MARK: Expanded panel
 
     private var panelBody: some View {
         VStack(spacing: 0) {
             headerRow
             if !store.wsClient.isConnected { noAgentBanner }
-
-            // Tab content
             switch store.activeTab {
             case .overview: overviewContent
             case .runs:     RunsTabView(agentId: store.wsClient.currentAgentId)
             case .memory:   MemoryTabView(agentId: store.wsClient.currentAgentId)
             }
-
             footerRow
         }
     }
@@ -126,10 +107,9 @@ struct NotchMorphView: View {
 
     private var headerRow: some View {
         HStack(spacing: 8) {
+            // Status dot
             Circle()
-                .fill(store.wsClient.isConnected
-                      ? Color.green
-                      : Color(nsColor: .systemGray).opacity(0.4))
+                .fill(store.wsClient.isConnected ? Color.green : Color(nsColor: .systemGray).opacity(0.4))
                 .frame(width: 7, height: 7)
                 .shadow(color: store.wsClient.isConnected ? .green.opacity(0.7) : .clear, radius: 4)
 
@@ -137,14 +117,30 @@ struct NotchMorphView: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
 
-            if let id = store.wsClient.currentAgentId {
-                Text(store.wsClient.agentName ?? (String(id.prefix(8)) + "…"))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(Color(nsColor: .systemGray))
+            // Agent name — clickable picker
+            Button(action: { showAgentPicker.toggle() }) {
+                HStack(spacing: 3) {
+                    Text(store.wsClient.agentName
+                         ?? (store.wsClient.currentAgentId.map { String($0.prefix(8)) + "…" })
+                         ?? "No agent")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.65))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.white.opacity(0.3))
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color.white.opacity(0.07))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .popover(isPresented: $showAgentPicker, arrowEdge: .bottom) {
+                agentPickerPopover
             }
 
             Spacer()
-
             stateBadge
             openButton
             quitButton
@@ -154,6 +150,61 @@ struct NotchMorphView: View {
         .padding(.bottom, 10)
         .overlay(Divider().opacity(0.1), alignment: .bottom)
     }
+
+    // MARK: Agent picker popover
+
+    private var agentPickerPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("AGENTS")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(Color(nsColor: .systemGray))
+                .tracking(1.5)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+
+            if store.availableAgents.isEmpty {
+                Text("No agents found")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(nsColor: .secondaryLabelColor))
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 12)
+            } else {
+                ForEach(store.availableAgents) { agent in
+                    Button(action: {
+                        store.wsClient.connect(agentId: agent.id, name: agent.name)
+                        showAgentPicker = false
+                    }) {
+                        HStack(spacing: 9) {
+                            Circle()
+                                .fill(agent.id == store.wsClient.currentAgentId
+                                      ? Color.green : Color(nsColor: .systemGray).opacity(0.4))
+                                .frame(width: 6, height: 6)
+                            Text(agent.name)
+                                .font(.system(size: 12))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if agent.id == store.wsClient.currentAgentId {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.green)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(agent.id == store.wsClient.currentAgentId
+                                    ? Color.accentColor.opacity(0.1) : Color.clear)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+        .frame(minWidth: 220)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: State badge / buttons
 
     private var stateBadge: some View {
         Text(store.wsClient.agentState.label)
@@ -168,7 +219,6 @@ struct NotchMorphView: View {
 
     private var openButton: some View {
         Button("↗ Open") {
-            // Go straight to dashboard — skip public landing page
             NSWorkspace.shared.open(URL(string: "\(WEB_APP)/dashboard")!)
         }
         .buttonStyle(GlassButtonStyle(accent: true))
@@ -195,7 +245,7 @@ struct NotchMorphView: View {
             .padding(.top, 8)
     }
 
-    // MARK: Overview tab (skill graph + events)
+    // MARK: Overview tab
 
     private var overviewContent: some View {
         VStack(spacing: 0) {
@@ -207,9 +257,25 @@ struct NotchMorphView: View {
 
     private var skillGraphSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("Skill graph")
-            SkillGraphView(skills: store.wsClient.skills)
-                .frame(height: 130)
+            HStack {
+                sectionLabel("Skill graph")
+                Spacer()
+                if !store.wsClient.skills.isEmpty {
+                    Text("LIVE")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.green)
+                        .tracking(1)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+            SkillGraphView(
+                wsSkills: store.wsClient.skills,
+                agentId:  store.wsClient.currentAgentId
+            )
+            .frame(height: 130)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -260,25 +326,71 @@ struct RunsTabView: View {
     let agentId: String?
 
     struct RunRow: Identifiable {
-        let id, status, message, createdAt: String
+        let id: String
+        let status: String
+        let message: String
+        let createdAt: String
+        let completedAt: String
+
+        var statusIcon: String {
+            switch status {
+            case "completed":          return "checkmark.circle.fill"
+            case "running":            return "bolt.fill"
+            case "failed", "error":    return "xmark.circle.fill"
+            default:                   return "circle"
+            }
+        }
+
+        var statusColor: Color {
+            switch status {
+            case "completed":          return .green
+            case "running":            return Color(red: 0.23, green: 0.51, blue: 0.96)
+            case "failed", "error":    return Color(red: 0.96, green: 0.3, blue: 0.3)
+            default:                   return Color(nsColor: .systemGray)
+            }
+        }
+
+        var duration: String {
+            guard let start = parseISO(createdAt) else { return "" }
+            let end: Date = completedAt.isEmpty ? Date() : (parseISO(completedAt) ?? Date())
+            let secs = Int(end.timeIntervalSince(start))
+            if secs <= 0 { return "" }
+            return secs < 60 ? "\(secs)s" : "\(secs / 60)m \(secs % 60)s"
+        }
+
+        var relativeTime: String {
+            guard let date = parseISO(createdAt) else { return "" }
+            let diff = -date.timeIntervalSinceNow
+            if diff < 60  { return "just now" }
+            if diff < 3600 { return "\(Int(diff / 60))m ago" }
+            if diff < 86400 { return "\(Int(diff / 3600))h ago" }
+            return "\(Int(diff / 86400))d ago"
+        }
     }
 
     @State private var runs: [RunRow] = []
     @State private var loading = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 sectionLabel("Recent runs")
                 Spacer()
                 if loading { ProgressView().scaleEffect(0.5) }
+                else {
+                    Text("\(runs.count) run\(runs.count == 1 ? "" : "s")")
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                }
             }
+
             if runs.isEmpty && !loading {
-                emptyState("No runs yet")
+                emptyState(icon: "play.circle", title: "No runs yet",
+                           subtitle: "Trigger an agent to see execution history")
             } else {
-                VStack(spacing: 4) {
-                    ForEach(runs) { run in
-                        RunRowView(run: run)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 5) {
+                        ForEach(runs) { run in RunRowView(run: run) }
                     }
                 }
             }
@@ -302,10 +414,11 @@ struct RunsTabView: View {
             DispatchQueue.main.async {
                 runs = rows.map {
                     RunRow(
-                        id:        $0["id"]         as? String ?? "",
-                        status:    $0["status"]      as? String ?? "unknown",
-                        message:   $0["message"]     as? String ?? "",
-                        createdAt: $0["created_at"]  as? String ?? ""
+                        id:          $0["id"]           as? String ?? "",
+                        status:      $0["status"]        as? String ?? "unknown",
+                        message:     $0["message"]       as? String ?? "",
+                        createdAt:   $0["created_at"]    as? String ?? "",
+                        completedAt: $0["completed_at"]  as? String ?? ""
                     )
                 }
                 loading = false
@@ -317,30 +430,59 @@ struct RunsTabView: View {
 struct RunRowView: View {
     let run: RunsTabView.RunRow
 
-    private var dotColor: Color {
-        switch run.status {
-        case "completed": return .green
-        case "running":   return Color(red: 0.23, green: 0.51, blue: 0.96)
-        default:          return Color(nsColor: .systemGray)
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(dotColor).frame(width: 6, height: 6)
-            Text(run.message.isEmpty ? "(no message)" : run.message)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.85))
-                .lineLimit(1)
-            Spacer()
-            Text(run.status)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(dotColor)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Image(systemName: run.statusIcon)
+                    .font(.system(size: 10))
+                    .foregroundColor(run.statusColor)
+                    .frame(width: 14)
+
+                Text(run.message.isEmpty ? "(no message)" : run.message)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.88))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text(run.relativeTime)
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.55))
+            }
+
+            HStack(spacing: 8) {
+                Text(run.status.uppercased())
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(run.statusColor)
+                    .tracking(0.8)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(run.statusColor.opacity(0.1))
+                    .clipShape(Capsule())
+
+                if !run.duration.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 7))
+                        Text(run.duration)
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                }
+
+                Spacer()
+
+                Text(String(run.id.prefix(8)))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.3))
+            }
+            .padding(.leading, 21)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
         .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.06), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -350,27 +492,43 @@ struct MemoryTabView: View {
     let agentId: String?
 
     struct MemRow: Identifiable {
-        let id, content, createdAt: String
+        let id: String
+        let content: String
+        let createdAt: String
+
+        var relativeTime: String {
+            guard let date = parseISO(createdAt) else { return "" }
+            let diff = -date.timeIntervalSinceNow
+            if diff < 60   { return "just now" }
+            if diff < 3600  { return "\(Int(diff / 60))m ago" }
+            if diff < 86400 { return "\(Int(diff / 3600))h ago" }
+            return "\(Int(diff / 86400))d ago"
+        }
     }
 
     @State private var memories: [MemRow] = []
     @State private var loading = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 sectionLabel("Memory")
                 Spacer()
                 if loading { ProgressView().scaleEffect(0.5) }
+                else if !memories.isEmpty {
+                    Text("\(memories.count) entr\(memories.count == 1 ? "y" : "ies")")
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                }
             }
+
             if memories.isEmpty && !loading {
-                emptyState("No memory entries yet")
+                emptyState(icon: "brain", title: "No memories yet",
+                           subtitle: "Memories are written after reflection cycles")
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
-                        ForEach(memories) { mem in
-                            MemRowView(mem: mem)
-                        }
+                    VStack(spacing: 5) {
+                        ForEach(memories) { mem in MemRowView(mem: mem) }
                     }
                 }
             }
@@ -410,20 +568,37 @@ struct MemRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "brain")
-                .font(.system(size: 9))
-                .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98))
-                .padding(.top, 2)
-            Text(mem.content)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.8))
-                .lineLimit(2)
-            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.12))
+                    .frame(width: 22, height: 22)
+                Image(systemName: "brain")
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98))
+            }
+            .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(mem.content)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.82))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !mem.relativeTime.isEmpty {
+                    Text(mem.relativeTime)
+                        .font(.system(size: 8))
+                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.45))
+                }
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.04))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .stroke(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.1), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -436,12 +611,30 @@ private func sectionLabel(_ text: String) -> some View {
         .tracking(1.2)
 }
 
-private func emptyState(_ text: String) -> some View {
-    Text(text)
-        .font(.system(size: 11))
-        .foregroundColor(Color(nsColor: .systemGray).opacity(0.6))
-        .frame(maxWidth: .infinity)
-        .padding(.top, 24)
+private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+    VStack(spacing: 6) {
+        Image(systemName: icon)
+            .font(.system(size: 20))
+            .foregroundColor(Color(nsColor: .systemGray).opacity(0.25))
+        Text(title)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+        Text(subtitle)
+            .font(.system(size: 9))
+            .foregroundColor(Color(nsColor: .systemGray).opacity(0.3))
+            .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.top, 20)
+}
+
+private func parseISO(_ str: String) -> Date? {
+    guard !str.isEmpty else { return nil }
+    let fmt = ISO8601DateFormatter()
+    fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = fmt.date(from: str) { return d }
+    fmt.formatOptions = [.withInternetDateTime]
+    return fmt.date(from: str)
 }
 
 // MARK: - Button styles
