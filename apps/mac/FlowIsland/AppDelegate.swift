@@ -51,7 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
 
-        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
     }
 
     // MARK: - Expand / Collapse

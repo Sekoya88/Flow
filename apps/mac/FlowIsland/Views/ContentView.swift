@@ -51,7 +51,7 @@ struct PillView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // No background — hardware notch is black, text renders on top
+        .background(Color.black.opacity(0.01)) // forces compositing layer
     }
 }
 
