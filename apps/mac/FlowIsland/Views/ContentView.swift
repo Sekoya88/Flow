@@ -63,16 +63,11 @@ struct NotchMorphView: View {
         )
     }
 
-    // MARK: - Background (black pill → dark glass panel)
+    // MARK: - Background (pure black — matches Apple Dynamic Island exactly)
 
     @ViewBuilder
     private var morphBackground: some View {
-        ZStack {
-            Color.black
-            VisualEffectBackground()
-                .opacity(isOpen ? 1 : 0)
-                .animation(.easeInOut(duration: 0.18), value: isOpen)
-        }
+        Color.black
     }
 
     // MARK: - Pill row
@@ -238,20 +233,6 @@ struct NotchMorphView: View {
             .foregroundColor(Color(nsColor: .systemGray).opacity(0.7))
             .tracking(1.2)
     }
-}
-
-// MARK: - NSVisualEffectView wrapper
-
-struct VisualEffectBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material      = .hudWindow
-        v.blendingMode  = .behindWindow
-        v.state         = .active
-        v.appearance    = NSAppearance(named: .darkAqua)
-        return v
-    }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - Button styles
