@@ -94,7 +94,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard !self.store.isHoveringPill else { return }
                 // Phase 1: hover feedback — haptic tap + enable mouse events + glow
                 NSHapticFeedbackManager.defaultPerformer.perform(
-                    .alignment, performanceTime: .default
+                    .levelChange, performanceTime: .now
                 )
                 self.panel.ignoresMouseEvents = false
                 DispatchQueue.main.async { self.store.isHoveringPill = true }
