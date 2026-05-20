@@ -1,9 +1,10 @@
 import Foundation
 import SwiftUI
 
-// Central observable state shared between AppDelegate and ContentView
+enum NotchState: Equatable { case closed, open }
+
 class AppStore: ObservableObject {
-    @Published var isExpanded: Bool = false
+    @Published var notchState: NotchState = .closed
     let wsClient   = WebSocketClient()
     let discovery  = AgentDiscovery()
 }

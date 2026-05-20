@@ -1,121 +1,100 @@
 import AppKit
 import SwiftUI
+import Combine
 
-private let NOTCH_W: CGFloat  = 250
-private let PANEL_W: CGFloat  = 420
-private let PANEL_H: CGFloat  = 560
-private let COLLAPSE_DELAY: TimeInterval = 0.35
+// Panel is always the full expanded size — never resized at runtime.
+// Only SwiftUI content inside morphs via spring animation.
+private let PILL_W:          CGFloat = 200
+private let PANEL_W:         CGFloat = 540
+private let PANEL_CONTENT_H: CGFloat = 500
+private let SHADOW_PAD:      CGFloat = 20
 
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     var panel: NSPanel!
     private var hostingView: NSHostingView<ContentView>!
-    private let store = AppStore()
+    let store = AppStore()
 
-    private var collapseTimer: Timer?
     private var mouseMonitor: Any?
+    private var cancellables  = Set<AnyCancellable>()
 
     // MARK: - Launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         buildPanel()
+        observeNotchState()
         startMouseTracking()
         store.discovery.start(wsClient: store.wsClient)
     }
 
-    // MARK: - Panel
+    // MARK: - Panel (fixed size, never changes)
 
     private func buildPanel() {
         guard let screen = NSScreen.main else { return }
-
         let notchH = notchHeight(screen)
-        let notchX = (screen.frame.width - NOTCH_W) / 2
+        let totalH = notchH + PANEL_CONTENT_H + SHADOW_PAD
+        let x = (screen.frame.width - PANEL_W) / 2
+        let y = screen.frame.maxY - totalH
 
         panel = NSPanel(
-            contentRect: NSRect(x: notchX, y: screen.frame.maxY - notchH, width: NOTCH_W, height: notchH),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
+            contentRect: NSRect(x: x, y: y, width: PANEL_W, height: totalH),
+            styleMask:   [.borderless, .nonactivatingPanel],
+            backing:     .buffered,
+            defer:       false
         )
         panel.level              = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
         panel.backgroundColor    = .clear
         panel.isOpaque           = false
         panel.hasShadow          = false
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true   // starts closed; mouse events re-enabled on open
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panel.isMovable          = false
 
-        let content = ContentView(store: store)
-        hostingView = NSHostingView(rootView: content)
+        hostingView = NSHostingView(rootView: ContentView(store: store))
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
-
         panel.orderFrontRegardless()
     }
 
-    // MARK: - Expand / Collapse
+    // MARK: - Sync ignoresMouseEvents with notch state via Combine
 
-    func expand() {
-        collapseTimer?.invalidate()
-        collapseTimer = nil
-        guard let screen = NSScreen.main else { return }
-        let notchH = notchHeight(screen)
-        let totalH = notchH + PANEL_H
-        let x = (screen.frame.width - PANEL_W) / 2
-        let y = screen.frame.maxY - totalH
-        panel.setFrame(NSRect(x: x, y: y, width: PANEL_W, height: totalH), display: true, animate: false)
-        panel.hasShadow = true
-
-        DispatchQueue.main.async { self.store.isExpanded = true }
+    private func observeNotchState() {
+        store.$notchState
+            .receive(on: RunLoop.main)
+            .sink { [weak self] state in
+                self?.panel.ignoresMouseEvents = (state == .closed)
+            }
+            .store(in: &cancellables)
     }
 
-    func scheduleCollapse() {
-        collapseTimer?.invalidate()
-        collapseTimer = Timer.scheduledTimer(withTimeInterval: COLLAPSE_DELAY, repeats: false) { [weak self] _ in
-            self?.collapse()
-        }
-    }
-
-    func collapse() {
-        collapseTimer?.invalidate()
-        collapseTimer = nil
-        guard let screen = NSScreen.main else { return }
-        let notchH = notchHeight(screen)
-        let x = (screen.frame.width - NOTCH_W) / 2
-        let y = screen.frame.maxY - notchH
-        panel.setFrame(NSRect(x: x, y: y, width: NOTCH_W, height: notchH), display: true, animate: false)
-        panel.hasShadow = false
-
-        DispatchQueue.main.async { self.store.isExpanded = false }
-    }
-
-    // MARK: - Mouse tracking
+    // MARK: - Global mouse monitor (open on pill entry, close on panel exit)
 
     private func startMouseTracking() {
+        guard let screen = NSScreen.main else { return }
+
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
             guard let self else { return }
-            let loc = NSEvent.mouseLocation
-            if self.notchZone.contains(loc) {
-                self.collapseTimer?.invalidate()
-                self.collapseTimer = nil
-                if !self.store.isExpanded { self.expand() }
-            } else if !self.panelZone.contains(loc) {
-                if self.store.isExpanded { self.scheduleCollapse() }
+            let loc   = NSEvent.mouseLocation
+            let state = self.store.notchState
+
+            if state == .closed && self.pillZone(screen).contains(loc) {
+                // Cursor entered pill — open
+                self.panel.ignoresMouseEvents = false
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+                        self.store.notchState = .open
+                    }
+                }
+            } else if state == .open && !self.panelZone(screen).contains(loc) {
+                // Cursor left panel — close
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 1.0)) {
+                        self.store.notchState = .closed
+                    }
+                }
             }
         }
-    }
-
-    private var notchZone: NSRect {
-        guard let screen = NSScreen.main else { return .zero }
-        let h = notchHeight(screen)
-        return NSRect(x: (screen.frame.width - NOTCH_W) / 2, y: screen.frame.maxY - h, width: NOTCH_W, height: h)
-    }
-
-    private var panelZone: NSRect {
-        guard let screen = NSScreen.main else { return .zero }
-        let h = notchHeight(screen) + PANEL_H
-        return NSRect(x: (screen.frame.width - PANEL_W) / 2, y: screen.frame.maxY - h, width: PANEL_W, height: h)
     }
 
     // MARK: - Helpers
@@ -123,5 +102,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func notchHeight(_ screen: NSScreen) -> CGFloat {
         let inset = screen.safeAreaInsets.top
         return inset > 0 ? inset : 37
+    }
+
+    private func pillZone(_ screen: NSScreen) -> NSRect {
+        let h = notchHeight(screen)
+        return NSRect(
+            x: (screen.frame.width - PILL_W) / 2,
+            y: screen.frame.maxY - h,
+            width: PILL_W, height: h
+        )
+    }
+
+    private func panelZone(_ screen: NSScreen) -> NSRect {
+        let h   = notchHeight(screen)
+        let buf: CGFloat = 16   // grace buffer so cursor doesn't accidentally close
+        return NSRect(
+            x: (screen.frame.width - PANEL_W) / 2 - buf,
+            y: screen.frame.maxY - (h + PANEL_CONTENT_H) - buf,
+            width:  PANEL_W + buf * 2,
+            height: h + PANEL_CONTENT_H + buf
+        )
     }
 }

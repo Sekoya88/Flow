@@ -51,7 +51,7 @@ struct AgentEvent: Identifiable {
             return "Reflection \(bar) \(grade)/5  +\(mutations) mutations"
         case "skill_arm_updated":
             let reward = (payload["reward"] as? Double ?? 0)
-            let id     = (payload["skill_id"] as? String ?? "").prefix(8)
+            let id     = String((payload["skill_id"] as? String ?? "").prefix(8))
             return String(format: "Bandit reward %.2f → %@…", reward, id)
         case "connection_established":
             return "Connected to Flow"
