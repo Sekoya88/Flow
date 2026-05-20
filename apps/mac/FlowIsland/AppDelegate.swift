@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import CoreGraphics
 
 // Panel is always the full expanded size — never resized at runtime.
 // Only SwiftUI content inside morphs via spring animation.
@@ -28,13 +29,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         store.discovery.start(wsClient: store.wsClient)
     }
 
+    // MARK: - Screen selection
+
+    /// Returns the MacBook's built-in LCD panel.
+    /// CGDisplayIsBuiltin is the only reliable identifier — it's hardware-level and unaffected
+    /// by which screen is "main", which has the menubar, or multimonitor arrangement.
+    private func notchScreen() -> NSScreen? {
+        NSScreen.screens.first(where: { screen in
+            let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+            return CGDisplayIsBuiltin(id) != 0
+        }) ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.screens.first
+    }
+
     // MARK: - Panel (fixed size, never changes)
 
     private func buildPanel() {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = notchScreen() else { return }
         let notchH = notchHeight(screen)
         let totalH = notchH + PANEL_CONTENT_H + SHADOW_PAD
-        let x = (screen.frame.width - PANEL_W) / 2
+        let x = screen.frame.minX + (screen.frame.width - PANEL_W) / 2
         let y = screen.frame.maxY - totalH
 
         panel = NSPanel(
@@ -71,12 +84,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Global mouse monitor (open on pill entry, close on panel exit)
 
     private func startMouseTracking() {
-        guard let screen = NSScreen.main else { return }
-
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
             guard let self else { return }
             let loc   = NSEvent.mouseLocation
             let state = self.store.notchState
+            guard let screen = self.notchScreen() else { return }
 
             if state == .closed && self.pillZone(screen).contains(loc) {
                 // Cursor entered pill — open
@@ -107,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func pillZone(_ screen: NSScreen) -> NSRect {
         let h = notchHeight(screen)
         return NSRect(
-            x: (screen.frame.width - PILL_W) / 2,
+            x: screen.frame.minX + (screen.frame.width - PILL_W) / 2,
             y: screen.frame.maxY - h,
             width: PILL_W, height: h
         )
@@ -115,9 +127,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func panelZone(_ screen: NSScreen) -> NSRect {
         let h   = notchHeight(screen)
-        let buf: CGFloat = 16   // grace buffer so cursor doesn't accidentally close
+        let buf: CGFloat = 16
         return NSRect(
-            x: (screen.frame.width - PANEL_W) / 2 - buf,
+            x: screen.frame.minX + (screen.frame.width - PANEL_W) / 2 - buf,
             y: screen.frame.maxY - (h + PANEL_CONTENT_H) - buf,
             width:  PANEL_W + buf * 2,
             height: h + PANEL_CONTENT_H + buf
