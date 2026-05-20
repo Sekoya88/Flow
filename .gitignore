@@ -16,3 +16,8 @@ coverage/
 *.log
 .superpowers/
 test.md
+
+# Xcode user-specific state (never commit)
+*.xcuserstate
+xcuserdata/
+
