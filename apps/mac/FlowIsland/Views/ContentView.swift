@@ -486,16 +486,13 @@ struct RunRowView: View {
     }
 }
 
-// MARK: - Memory tab
+// MARK: - Memory tab  (Agent Knowledge: skills + episodic memories)
 
 struct MemoryTabView: View {
     let agentId: String?
 
     struct MemRow: Identifiable {
-        let id: String
-        let content: String
-        let createdAt: String
-
+        let id, content, createdAt: String
         var relativeTime: String {
             guard let date = parseISO(createdAt) else { return "" }
             let diff = -date.timeIntervalSinceNow
@@ -506,77 +503,195 @@ struct MemoryTabView: View {
         }
     }
 
-    @State private var memories: [MemRow] = []
-    @State private var loading = true
+    struct SkillChip: Identifiable {
+        let id, name: String
+        let score: Double
+        let useCount: Int
+    }
+
+    @State private var memories: [MemRow]    = []
+    @State private var skills:   [SkillChip] = []
+    @State private var loadingMem  = true
+    @State private var loadingSkills = true
+
+    private var loading: Bool { loadingMem || loadingSkills }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                sectionLabel("Memory")
-                Spacer()
-                if loading { ProgressView().scaleEffect(0.5) }
-                else if !memories.isEmpty {
-                    Text("\(memories.count) entr\(memories.count == 1 ? "y" : "ies")")
-                        .font(.system(size: 9))
-                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
-                }
-            }
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                // ── Skills section ────────────────────────────────
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        sectionLabel("Skills")
+                        Spacer()
+                        if loadingSkills { ProgressView().scaleEffect(0.45) }
+                        else {
+                            Text("\(skills.count) skill\(skills.count == 1 ? "" : "s")")
+                                .font(.system(size: 8))
+                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                        }
+                    }
 
-            if memories.isEmpty && !loading {
-                emptyState(icon: "brain", title: "No memories yet",
-                           subtitle: "Memories are written after reflection cycles")
-            } else {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 5) {
-                        ForEach(memories) { mem in MemRowView(mem: mem) }
+                    if skills.isEmpty && !loadingSkills {
+                        Text("No skills configured for this agent")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                            .padding(.top, 2)
+                    } else {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 6),
+                            GridItem(.flexible(), spacing: 6),
+                        ], spacing: 6) {
+                            ForEach(skills) { skill in SkillChipView(chip: skill) }
+                        }
+                    }
+                }
+
+                Divider().opacity(0.12)
+
+                // ── Memories section ──────────────────────────────
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        sectionLabel("Episodic Memory")
+                        Spacer()
+                        if loadingMem { ProgressView().scaleEffect(0.45) }
+                        else if !memories.isEmpty {
+                            Text("\(memories.count) entr\(memories.count == 1 ? "y" : "ies")")
+                                .font(.system(size: 8))
+                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                        }
+                    }
+
+                    if memories.isEmpty && !loadingMem {
+                        VStack(spacing: 5) {
+                            Image(systemName: "brain")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.25))
+                            Text("No memories yet")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                            Text("Written during metacognition cycles")
+                                .font(.system(size: 9))
+                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.25))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                    } else {
+                        VStack(spacing: 5) {
+                            ForEach(memories) { mem in MemRowView(mem: mem) }
+                        }
                     }
                 }
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
         .frame(maxHeight: .infinity)
-        .onAppear { fetchMemory() }
-        .onChange(of: agentId) { _ in fetchMemory() }
+        .onAppear { fetchAll() }
+        .onChange(of: agentId) { _ in fetchAll() }
+    }
+
+    private func fetchAll() {
+        fetchMemory()
+        fetchSkills()
     }
 
     private func fetchMemory() {
-        guard let id = agentId else { loading = false; return }
+        guard let id = agentId else { loadingMem = false; return }
         guard let url = URL(string: "\(API_BASE)/agent-memory/\(id)") else { return }
-        loading = true
+        loadingMem = true
         URLSession.shared.dataTask(with: url) { data, _, _ in
             let rows = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])
                 .flatMap { $0["memories"] as? [[String: Any]] } ?? []
             DispatchQueue.main.async {
-                memories = rows.map {
-                    MemRow(
-                        id:        $0["id"]         as? String ?? "",
-                        content:   $0["content"]    as? String ?? "",
-                        createdAt: $0["created_at"] as? String ?? ""
-                    )
-                }
-                loading = false
+                memories   = rows.map { MemRow(id: $0["id"] as? String ?? "",
+                                               content: $0["content"] as? String ?? "",
+                                               createdAt: $0["created_at"] as? String ?? "") }
+                loadingMem = false
+            }
+        }.resume()
+    }
+
+    private func fetchSkills() {
+        guard let id = agentId else { loadingSkills = false; return }
+        guard let url = URL(string: "\(API_BASE)/agent-skills/\(id)") else { return }
+        loadingSkills = true
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            let rows = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])
+                .flatMap { $0["skills"] as? [[String: Any]] } ?? []
+            DispatchQueue.main.async {
+                skills        = rows.map { SkillChip(id: $0["id"] as? String ?? "",
+                                                      name: $0["name"] as? String ?? "",
+                                                      score: $0["score"] as? Double ?? 0,
+                                                      useCount: $0["use_count"] as? Int ?? 0) }
+                loadingSkills = false
             }
         }.resume()
     }
 }
 
+struct SkillChipView: View {
+    let chip: MemoryTabView.SkillChip
+
+    private let cyan = Color(red: 0.133, green: 0.827, blue: 0.933)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(cyan.opacity(0.7))
+                    .frame(width: 5, height: 5)
+                Text(chip.name)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(cyan.opacity(0.9))
+                    .lineLimit(1)
+            }
+            // Score bar
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(cyan.opacity(0.55))
+                        .frame(width: g.size.width * chip.score)
+                }
+            }
+            .frame(height: 3)
+            HStack {
+                Text(String(format: "%.0f%%", chip.score * 100))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                Spacer()
+                if chip.useCount > 0 {
+                    Text("×\(chip.useCount)")
+                        .font(.system(size: 8))
+                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(cyan.opacity(0.05))
+        .overlay(RoundedRectangle(cornerRadius: 7)
+            .stroke(cyan.opacity(0.18), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+    }
+}
+
 struct MemRowView: View {
     let mem: MemoryTabView.MemRow
+    private let violet = Color(red: 0.655, green: 0.545, blue: 0.973)
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             ZStack {
-                Circle()
-                    .fill(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.12))
-                    .frame(width: 22, height: 22)
+                Circle().fill(violet.opacity(0.1)).frame(width: 22, height: 22)
                 Image(systemName: "brain")
                     .font(.system(size: 9))
-                    .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98))
+                    .foregroundColor(violet.opacity(0.8))
             }
-            .padding(.top, 2)
+            .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(mem.content)
@@ -584,20 +699,18 @@ struct MemRowView: View {
                     .foregroundColor(.white.opacity(0.82))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-
                 if !mem.relativeTime.isEmpty {
                     Text(mem.relativeTime)
                         .font(.system(size: 8))
-                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.45))
+                        .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
                 }
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.04))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .stroke(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.1), lineWidth: 1))
+        .background(violet.opacity(0.04))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(violet.opacity(0.12), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
