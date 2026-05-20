@@ -128,6 +128,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <ThemeToggle />
 
+          <UserAvatar />
+
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -234,6 +236,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-flow-800 bg-flow-950 py-3 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-flow-600">
         Flow · agent workspace
       </footer>
+    </div>
+  );
+}
+
+function UserAvatar() {
+  const user = useStore((s) => s.user);
+  if (!user) return null;
+  const initial = user.email[0].toUpperCase();
+  return (
+    <div
+      className="hidden md:flex h-6 w-6 items-center justify-center rounded-full bg-flow-violet/20 border border-flow-violet/40 font-mono text-[10px] font-bold text-flow-violet cursor-default select-none"
+      title={user.email}
+    >
+      {initial}
     </div>
   );
 }
