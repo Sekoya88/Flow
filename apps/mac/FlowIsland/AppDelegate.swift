@@ -92,7 +92,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if state == .closed && self.pillZone(screen).contains(loc) {
                 guard !self.store.isHoveringPill else { return }
-                // Phase 1: hover feedback — enable mouse events + glow effect
+                // Phase 1: hover feedback — haptic tap + enable mouse events + glow
+                NSHapticFeedbackManager.defaultPerformer.perform(
+                    .alignment, performanceTime: .default
+                )
                 self.panel.ignoresMouseEvents = false
                 DispatchQueue.main.async { self.store.isHoveringPill = true }
                 // Phase 2: 80ms later, spring-open the panel

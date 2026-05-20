@@ -11,10 +11,20 @@ router = APIRouter(prefix="/api/v1/local", tags=["local"])
 
 @router.get("/active-agents")
 async def active_agents(request: Request) -> dict:
-    """Return agent IDs that have had events in the last 2 hours. No auth required."""
+    """Return active agents (Redis), falling back to most-recent-execution agent from DB."""
     stream_hub = request.app.state.stream_hub
     ids = await stream_hub.get_active_agent_ids()
-    return {"agents": [{"id": aid} for aid in ids]}
+    if ids:
+        return {"agents": [{"id": aid, "name": None} for aid in ids]}
+    pool = request.app.state.pool
+    row = await pool.fetchrow(
+        "SELECT a.id, a.name FROM executions e "
+        "JOIN agents a ON a.id = e.agent_id "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    if row:
+        return {"agents": [{"id": str(row["id"]), "name": row["name"]}]}
+    return {"agents": []}
 
 
 @router.get("/agent-executions/{agent_id}")

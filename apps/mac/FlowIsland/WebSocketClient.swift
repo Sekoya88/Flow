@@ -69,6 +69,7 @@ class WebSocketClient: ObservableObject {
     @Published var skills        : [SkillNode]  = []
     @Published var agentState    : AgentState   = .idle
     @Published var reconnectAttempt: Int        = 0
+    @Published var agentName     : String?
 
     private(set) var currentAgentId: String?
 
@@ -79,12 +80,13 @@ class WebSocketClient: ObservableObject {
 
     // MARK: - Connect / Disconnect
 
-    func connect(agentId: String) {
+    func connect(agentId: String, name: String? = nil) {
         guard agentId != currentAgentId || !isConnected else { return }
         disconnect()
         currentAgentId = agentId
         reconnectDelay = 1.0
         reconnectAttempt = 0
+        DispatchQueue.main.async { self.agentName = name }
         openConnection(agentId: agentId)
     }
 
@@ -95,6 +97,7 @@ class WebSocketClient: ObservableObject {
         DispatchQueue.main.async {
             self.isConnected = false
             self.reconnectAttempt = 0
+            self.agentName = nil
         }
     }
 

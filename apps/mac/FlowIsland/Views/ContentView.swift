@@ -138,7 +138,7 @@ struct NotchMorphView: View {
                 .foregroundColor(.white)
 
             if let id = store.wsClient.currentAgentId {
-                Text(String(id.prefix(8)) + "…")
+                Text(store.wsClient.agentName ?? (String(id.prefix(8)) + "…"))
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(Color(nsColor: .systemGray))
             }

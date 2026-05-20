@@ -23,10 +23,11 @@ class AgentDiscovery {
                   let agents = json["agents"] as? [[String: Any]],
                   let first = agents.first,
                   let id = first["id"] as? String else { return }
+            let name = first["name"] as? String
             if id != self.lastConnectedId {
                 self.lastConnectedId = id
                 DispatchQueue.main.async {
-                    self.wsClient?.connect(agentId: id)
+                    self.wsClient?.connect(agentId: id, name: name)
                 }
             }
         }.resume()
