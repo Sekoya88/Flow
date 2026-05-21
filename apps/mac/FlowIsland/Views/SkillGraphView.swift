@@ -50,10 +50,10 @@ struct GraphNode: Identifiable, Equatable {
 
     var radius: Double {
         switch type {
-        case .agent:               return 18
-        case .skill:               return 9 + score * 7
+        case .agent:               return 15
+        case .skill:               return 8 + score * 5
         case .tool, .systemPrompt,
-             .metacog, .memory:    return 9
+             .metacog, .memory:    return 7
         }
     }
 
@@ -84,7 +84,7 @@ struct GraphEdge: Identifiable {
 
 struct AgentGraphResponse: Decodable {
     struct AgentInfo: Decodable { let id: String; let name: String; let template: String }
-    struct SkillInfo: Decodable { let id: String; let name: String; let score: Double; let useCount: Int }
+    struct SkillInfo: Decodable { let id: String; let name: String; let score: Double; let useCount: Int; let category: String }
     let agent: AgentInfo?
     let skills: [SkillInfo]
     let tools: [String]
@@ -132,7 +132,7 @@ class ForceGraph: ObservableObject {
                 let dist = sqrt(dist2)
                 let minDist = n[i].radius + n[j].radius + 34
                 if dist < minDist * 2.5 {
-                    let force = min(200.0 / dist2, 4.0)
+                    let force = min(120.0 / dist2, 4.0)
                     let nx = dx / dist; let ny = dy / dist
                     if !n[i].pinned { n[i].vx -= nx * force; n[i].vy -= ny * force }
                     if !n[j].pinned { n[j].vx += nx * force; n[j].vy += ny * force }
@@ -141,7 +141,7 @@ class ForceGraph: ObservableObject {
         }
 
         // Spring attraction along edges
-        let restLen: Double = 88
+        let restLen: Double = 70
         let springK: Double = 0.055
         for edge in edges {
             guard let si = n.firstIndex(where: { $0.id == edge.sourceId }),
@@ -195,7 +195,7 @@ class ForceGraph: ObservableObject {
 
         for skill in response.skills {
             let angle = Double.random(in: 0 ..< (2 * .pi))
-            let r = Double.random(in: 75...115)
+            let r = Double.random(in: 60...85)
             newNodes.append(GraphNode(id: skill.id, label: skill.name, type: .skill,
                                        x: cx + Darwin.cos(angle) * r,
                                        y: cy + Darwin.sin(angle) * r,
@@ -343,10 +343,6 @@ struct SkillGraphView: View {
     private var graphView: some View {
         GeometryReader { geo in
             ZStack {
-                // Starfield
-                Canvas { ctx, size in drawStarfield(ctx: ctx, size: size) }
-                    .allowsHitTesting(false)
-
                 // Edges
                 Canvas { ctx, _ in drawEdges(ctx: ctx) }
                     .allowsHitTesting(false)
@@ -463,20 +459,6 @@ struct SkillGraphView: View {
 
     // MARK: Canvas drawing
 
-    private func drawStarfield(ctx: GraphicsContext, size: CGSize) {
-        let seeds: [(Double, Double, Double)] = [
-            (0.15,0.22,0.35),(0.78,0.12,0.25),(0.35,0.88,0.30),(0.62,0.55,0.20),
-            (0.22,0.64,0.25),(0.88,0.78,0.35),(0.45,0.15,0.20),(0.10,0.48,0.30),
-            (0.92,0.35,0.25),(0.55,0.72,0.20),(0.30,0.40,0.15),(0.70,0.25,0.30),
-        ]
-        for (rx, ry, alpha) in seeds {
-            ctx.fill(
-                Path(ellipseIn: CGRect(x: rx*size.width-1, y: ry*size.height-1, width: 2, height: 2)),
-                with: .color(.white.opacity(alpha))
-            )
-        }
-    }
-
     private func drawEdges(ctx: GraphicsContext) {
         for edge in graph.edges {
             guard let s = graph.nodes.first(where: { $0.id == edge.sourceId }),
@@ -484,12 +466,12 @@ struct SkillGraphView: View {
             var path = Path()
             path.move(to: CGPoint(x: s.x, y: s.y))
             path.addLine(to: CGPoint(x: t.x, y: t.y))
-            let alpha = t.active ? 0.40 : 0.15
+            let alpha = t.active ? 0.35 : 0.10
             if edge.dashed {
                 ctx.stroke(path, with: .color(t.color.opacity(alpha)),
-                           style: StrokeStyle(lineWidth: 0.8, dash: [4, 4]))
+                           style: StrokeStyle(lineWidth: 0.75, dash: [4, 4]))
             } else {
-                ctx.stroke(path, with: .color(t.color.opacity(alpha)), lineWidth: 0.8)
+                ctx.stroke(path, with: .color(t.color.opacity(alpha)), lineWidth: 0.75)
             }
         }
     }
@@ -501,50 +483,37 @@ struct SkillGraphView: View {
         let isAgent = node.type == .agent
         let lit = node.active || isAgent
 
-        // Glow
-        let glows: [(Double, Double)] = isAgent ? [(r+14, 0.08), (r+8, 0.15)] : [(r+7, lit ? 0.20 : 0.06)]
-        for (gr, alpha) in glows {
-            ctx.fill(Path(ellipseIn: CGRect(x: pt.x-gr, y: pt.y-gr, width: gr*2, height: gr*2)),
-                     with: .color(color.opacity(alpha)))
-        }
+        // Single-layer subtle glow
+        let gr = r + 5
+        let glowA = isAgent ? 0.12 : (lit ? 0.14 : 0.04)
+        ctx.fill(Path(ellipseIn: CGRect(x: pt.x-gr, y: pt.y-gr, width: gr*2, height: gr*2)),
+                 with: .color(color.opacity(glowA)))
 
-        // Fill + border
+        // Fill + 1px stroke at 60% opacity
         let fillA = isAgent ? 0.80 : (lit ? 0.55 : 0.22)
         let circle = Path(ellipseIn: CGRect(x: pt.x-r, y: pt.y-r, width: r*2, height: r*2))
         ctx.fill(circle, with: .color(color.opacity(fillA)))
-        ctx.stroke(circle, with: .color(color.opacity(lit ? 0.90 : 0.40)),
-                   lineWidth: lit ? 1.2 : 0.7)
+        ctx.stroke(circle, with: .color(color.opacity(0.60)), lineWidth: 1.0)
 
         if isAgent {
             ctx.fill(Path(ellipseIn: CGRect(x: pt.x-4, y: pt.y-4, width: 8, height: 8)),
                      with: .color(.white.opacity(0.25)))
         }
-
-        // Score bar
-        if node.type == .skill && node.score > 0.1 {
-            let barW = max(0, (r*2 - 4) * node.score)
-            ctx.fill(
-                Path(roundedRect: CGRect(x: pt.x-r+2, y: pt.y+r-4, width: barW, height: 2.5), cornerRadius: 1.5),
-                with: .color(color.opacity(lit ? 0.8 : 0.3))
-            )
-        }
     }
 
     // MARK: Labels overlay
 
+    @ViewBuilder
     private func nodeLabel(node: GraphNode) -> some View {
-        let isAgent = node.type == .agent
-        let label = node.label.count > 13 ? String(node.label.prefix(12)) + "…" : node.label
-        let yOff: Double = isAgent ? 26 : node.radius + 11
-        return Text(label)
-            .font(.system(size: isAgent ? 8 : 7.5, weight: (node.active || isAgent) ? .bold : .regular))
-            .foregroundColor(node.active
-                ? node.color.opacity(0.95)
-                : (isAgent ? .white.opacity(0.55) : Color(nsColor: .systemGray).opacity(0.50)))
-            .shadow(color: node.active ? node.color.opacity(0.4) : .clear, radius: 3)
-            .position(x: node.x, y: node.y + yOff)
-            .animation(.none, value: node.x)
-            .animation(.none, value: node.y)
+        if node.type == .agent || selectedNode?.id == node.id {
+            let isAgent = node.type == .agent
+            Text(node.label.count > 13 ? String(node.label.prefix(12)) + "…" : node.label)
+                .font(.system(size: isAgent ? 8 : 7.5, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.75))
+                .position(x: node.x, y: node.y + (isAgent ? 22 : node.radius + 11))
+                .animation(.none, value: node.x)
+                .animation(.none, value: node.y)
+        }
     }
 
     // MARK: Node popover
