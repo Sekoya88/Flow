@@ -6,7 +6,9 @@ matching LangGraph's `(state) -> dict` signature.
 
 from __future__ import annotations
 
+import re
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from flow.infrastructure.observability.logging import get_logger as _get_node_logger
@@ -285,6 +287,21 @@ def make_planner(ctx: GraphContext):
                 )
                 plan = str(out.content)
             _node_logger.info("node.done", node="planner", duration_ms=int((time.monotonic() - _t0) * 1000))
+
+            # Emit parsed plan as todo_update to agent observability channel
+            if ctx.stream_hub and plan and ctx.agent_id:
+                todo_lines = [
+                    re.sub(r"^(\d+[\.\)]\s*|\*\s*|-\s*)", "", l).strip()
+                    for l in plan.split("\n")
+                    if l.strip()
+                ]
+                todos = [{"status": "pending", "content": t} for t in todo_lines if t]
+                if todos:
+                    ctx.stream_hub.publish_agent_event(ctx.agent_id, {
+                        "type": "todo_update",
+                        "todos": todos,
+                    })
+
             result: dict = {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
             if matched_skill_dicts:
                 result["active_skills"] = matched_skill_dicts
@@ -1005,6 +1022,7 @@ def _build_context_tools(ctx: GraphContext) -> list:
 
     async def _subagent_call(agent_name: str, message: str) -> str:
         t0 = time.time()
+        call_id = str(uuid.uuid4())
         # Emit start event so the parent run UI can render the inline card immediately
         hub = getattr(ctx, "stream_hub", None)
         parent_exec_id = getattr(ctx, "execution_id", None)
@@ -1020,6 +1038,17 @@ def _build_context_tools(ctx: GraphContext) -> list:
                 )
             except Exception:
                 pass
+        if hub is not None and ctx.agent_id is not None:
+            hub.publish_agent_event(ctx.agent_id, {
+                "type": "subagent_call",
+                "id": call_id,
+                "status": "running",
+                "description": message[:500],
+                "subagent_type": agent_name,
+                "result": None,
+                "started_at": t0,
+                "completed_at": None,
+            })
         # Also persist a start row so a reload can replay it
         if parent_exec_id is not None and ctx.pool is not None:
             try:
@@ -1099,6 +1128,17 @@ def _build_context_tools(ctx: GraphContext) -> list:
                     )
                 except Exception:
                     pass
+            if hub is not None and ctx.agent_id is not None:
+                hub.publish_agent_event(ctx.agent_id, {
+                    "type": "subagent_call",
+                    "id": call_id,
+                    "status": "complete",
+                    "description": message[:500],
+                    "subagent_type": agent_name,
+                    "result": str(answer)[:2000],
+                    "started_at": t0,
+                    "completed_at": time.time(),
+                })
             if parent_exec_id is not None and ctx.pool is not None:
                 try:
                     from flow.infrastructure.persistence.repo import FlowRepository as _RepoDone
@@ -1135,6 +1175,17 @@ def _build_context_tools(ctx: GraphContext) -> list:
                     )
                 except Exception:
                     pass
+            if hub is not None and ctx.agent_id is not None:
+                hub.publish_agent_event(ctx.agent_id, {
+                    "type": "subagent_call",
+                    "id": call_id,
+                    "status": "error",
+                    "description": message[:500],
+                    "subagent_type": agent_name,
+                    "result": str(exc),
+                    "started_at": t0,
+                    "completed_at": time.time(),
+                })
             return f"[subagent_call] Error: {exc}"
 
     lc_tools.append(
