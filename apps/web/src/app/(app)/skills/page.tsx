@@ -1,8 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { Layers, Loader2, Search, Sparkles, Workflow } from 'lucide-react'
-import { SkillDetailSheet } from '@/components/skills/SkillDetailSheet'
-import { SkillHubCard } from '@/components/skills/SkillHubCard'
+import { Layers, Loader2, Plus, Search, Sparkles, Workflow } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -11,18 +10,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CategorySection } from '@/components/skills/CategorySection'
+import { CreateSkillSheet } from '@/components/skills/CreateSkillSheet'
+import { SkillDetailSheet } from '@/components/skills/SkillDetailSheet'
+import { SkillHubCard } from '@/components/skills/SkillHubCard'
 import { useSkillsCatalog, type SkillCatalogRow } from '@/lib/useSkillsCatalog'
 import { useWorkspaceId } from '@/lib/useWorkspace'
 
 type SortKey = 'score' | 'recent' | 'runs'
 
+const CATEGORY_ORDER = ['Research', 'Code', 'Communication', 'Analysis', 'Memory', 'Planning', 'General']
+
 export default function SkillsHubPage() {
   const { workspaceId, loading: wsLoading } = useWorkspaceId()
   const [search, setSearch] = useState('')
   const [agentFilter, setAgentFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [sort, setSort] = useState<SortKey>('score')
   const [selected, setSelected] = useState<SkillCatalogRow | null>(null)
   const [initialTab, setInitialTab] = useState<'overview' | 'versions' | 'playground'>('overview')
+  const [createOpen, setCreateOpen] = useState(false)
 
   const { skills, loading, error, reload } = useSkillsCatalog(workspaceId ?? undefined, {
     agentId: agentFilter === 'all' ? undefined : agentFilter,
@@ -37,26 +44,49 @@ export default function SkillsHubPage() {
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [skills])
 
-  const visible = useMemo(() => {
+  const categoryOptions = useMemo(() => {
+    const seen = new Set<string>()
+    for (const s of skills) seen.add(s.category || 'General')
+    return [...seen].sort((a, b) => {
+      const ia = CATEGORY_ORDER.indexOf(a)
+      const ib = CATEGORY_ORDER.indexOf(b)
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    })
+  }, [skills])
+
+  const sorted = useMemo(() => {
     const copy = [...skills]
-    if (sort === 'recent') {
-      copy.sort((a, b) => b.created_at.localeCompare(a.created_at))
-    } else if (sort === 'runs') {
-      copy.sort((a, b) => b.use_count - a.use_count)
-    } else {
-      copy.sort((a, b) => b.score - a.score)
-    }
+    if (sort === 'recent') copy.sort((a, b) => b.created_at.localeCompare(a.created_at))
+    else if (sort === 'runs') copy.sort((a, b) => b.use_count - a.use_count)
+    else copy.sort((a, b) => b.score - a.score)
     return copy
   }, [skills, sort])
 
-  const openSkill = (skill: SkillCatalogRow) => {
-    setInitialTab('overview')
-    setSelected(skill)
-  }
-  const tryRun = (skill: SkillCatalogRow) => {
-    setInitialTab('playground')
-    setSelected(skill)
-  }
+  const visible = useMemo(() => {
+    if (categoryFilter === 'all') return sorted
+    return sorted.filter(s => (s.category || 'General') === categoryFilter)
+  }, [sorted, categoryFilter])
+
+  // Group by category only when not searching/filtering
+  const isGrouped = !search.trim() && categoryFilter === 'all' && sort === 'score'
+
+  const grouped = useMemo(() => {
+    if (!isGrouped) return null
+    const map = new Map<string, SkillCatalogRow[]>()
+    for (const s of visible) {
+      const cat = s.category || 'General'
+      if (!map.has(cat)) map.set(cat, [])
+      map.get(cat)!.push(s)
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      const ia = CATEGORY_ORDER.indexOf(a)
+      const ib = CATEGORY_ORDER.indexOf(b)
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    })
+  }, [isGrouped, visible])
+
+  const openSkill = (skill: SkillCatalogRow) => { setInitialTab('overview'); setSelected(skill) }
+  const tryRun = (skill: SkillCatalogRow) => { setInitialTab('playground'); setSelected(skill) }
 
   if (wsLoading) {
     return (
@@ -88,15 +118,25 @@ export default function SkillsHubPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Browse, version & test every skill
           </h1>
-          <div className="flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Layers className="h-3 w-3" />
-              {skills.length} active
-            </span>
-            <span className="flex items-center gap-1">
-              <Workflow className="h-3 w-3" />
-              {agentOptions.length} agents
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                {skills.length} active
+              </span>
+              <span className="flex items-center gap-1">
+                <Workflow className="h-3 w-3" />
+                {agentOptions.length} agents
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+              className="gap-1.5 h-8 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Skill
+            </Button>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -116,21 +156,30 @@ export default function SkillsHubPage() {
             className="pl-9"
           />
         </div>
-        <Select value={agentFilter} onValueChange={(v) => setAgentFilter(v ?? 'all')}>
-          <SelectTrigger className="w-[220px]">
+        <Select value={agentFilter} onValueChange={v => setAgentFilter(v ?? 'all')}>
+          <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="All agents" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All agents</SelectItem>
             {agentOptions.map(([id, name]) => (
-              <SelectItem key={id} value={id}>
-                {name}
-              </SelectItem>
+              <SelectItem key={id} value={id}>{name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={sort} onValueChange={(v) => v && setSort(v as SortKey)}>
+        <Select value={categoryFilter} onValueChange={v => setCategoryFilter(v ?? 'all')}>
           <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categoryOptions.map(c => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={v => v && setSort(v as SortKey)}>
+          <SelectTrigger className="w-[140px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -141,7 +190,7 @@ export default function SkillsHubPage() {
         </Select>
       </section>
 
-      {/* Grid */}
+      {/* Skills list */}
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -157,23 +206,39 @@ export default function SkillsHubPage() {
       )}
 
       {!loading && visible.length > 0 && (
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visible.map(skill => (
-            <SkillHubCard
-              key={skill.id}
-              skill={skill}
-              onOpen={openSkill}
-              onTry={tryRun}
-            />
-          ))}
-        </section>
+        isGrouped && grouped ? (
+          <div className="space-y-8">
+            {grouped.map(([cat, catSkills]) => (
+              <CategorySection
+                key={cat}
+                category={cat}
+                skills={catSkills}
+                onOpen={openSkill}
+                onTry={tryRun}
+              />
+            ))}
+          </div>
+        ) : (
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map(skill => (
+              <SkillHubCard key={skill.id} skill={skill} onOpen={openSkill} onTry={tryRun} />
+            ))}
+          </section>
+        )
       )}
 
       <SkillDetailSheet
         skill={selected}
         initialTab={initialTab}
-        onOpenChange={(o) => !o && setSelected(null)}
-        onActivated={() => reload()}
+        onOpenChange={o => !o && setSelected(null)}
+        onActivated={reload}
+      />
+
+      <CreateSkillSheet
+        open={createOpen}
+        workspaceId={workspaceId}
+        onOpenChange={setCreateOpen}
+        onCreated={reload}
       />
     </div>
   )

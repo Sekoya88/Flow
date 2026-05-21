@@ -9,6 +9,7 @@ export interface SkillCatalogRow {
   name: string
   version: number
   description: string
+  category: string
   triggers: string[]
   allowed_tools: string[]
   metadata: Record<string, unknown>
@@ -24,6 +25,7 @@ interface CatalogResponse {
 interface UseCatalogOptions {
   agentId?: string
   q?: string
+  category?: string
 }
 
 export function useSkillsCatalog(
@@ -33,7 +35,7 @@ export function useSkillsCatalog(
   const [skills, setSkills] = useState<SkillCatalogRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { agentId, q } = opts
+  const { agentId, q, category } = opts
 
   const load = useCallback(async () => {
     if (!workspaceId) return
@@ -43,6 +45,7 @@ export function useSkillsCatalog(
       const params = new URLSearchParams({ workspace_id: workspaceId })
       if (agentId) params.set('agent_id', agentId)
       if (q && q.trim()) params.set('q', q.trim())
+      if (category && category !== 'all') params.set('category', category)
       const res = await apiFetch<CatalogResponse>(`/api/v1/skills/catalog?${params}`)
       setSkills(res.skills ?? [])
     } catch (e) {
@@ -50,7 +53,7 @@ export function useSkillsCatalog(
     } finally {
       setLoading(false)
     }
-  }, [workspaceId, agentId, q])
+  }, [workspaceId, agentId, q, category])
 
   useEffect(() => { load() }, [load])
 
