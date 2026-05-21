@@ -1060,6 +1060,7 @@ class FlowRepository:
         workspace_id: UUID,
         agent_id: UUID | None = None,
         q: str | None = None,
+        category: str | None = None,
         limit: int = 200,
     ) -> list[asyncpg.Record]:
         """Cross-agent catalog of active skills with the owning agent name joined.
@@ -1072,6 +1073,7 @@ class FlowRepository:
             SELECT s.id, s.agent_id, s.workspace_id, s.name, s.version,
                    s.content_md, s.description, s.allowed_tools, s.triggers,
                    s.metadata, s.active, s.score, s.use_count, s.created_at,
+                   s.category,
                    a.name AS agent_name
             FROM agent_skills s
             JOIN agents a ON a.id = s.agent_id
@@ -1081,6 +1083,7 @@ class FlowRepository:
               AND ($3::text IS NULL
                    OR s.name ILIKE '%' || $3 || '%'
                    OR s.description ILIKE '%' || $3 || '%')
+              AND ($5::text IS NULL OR s.category = $5)
             ORDER BY s.score DESC, s.use_count DESC, s.created_at DESC
             LIMIT $4
             """,
@@ -1088,6 +1091,7 @@ class FlowRepository:
             agent_id,
             q,
             limit,
+            category,
         )
 
     async def activate_skill_version(self, skill_id: UUID) -> asyncpg.Record | None:
@@ -1357,7 +1361,16 @@ class FlowRepository:
 
     # ── Agent Skills ─────────────────────────────────────────────────────
 
-    async def upsert_agent_skill(self, agent_id: UUID, workspace_id: UUID, name: str, content_md: str, *, initial_active: bool = True) -> UUID:
+    async def upsert_agent_skill(
+        self,
+        agent_id: UUID,
+        workspace_id: UUID,
+        name: str,
+        content_md: str,
+        *,
+        category: str = "General",
+        initial_active: bool = True,
+    ) -> UUID:
         """Insert a new version of a skill (append-only versioning).
 
         When initial_active=False the new version is created as inactive (candidate).
@@ -1377,8 +1390,8 @@ class FlowRepository:
             )
         new_row = await self._pool.fetchrow(
             """
-            INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO agent_skills (agent_id, workspace_id, name, version, content_md, category, active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             """,
             agent_id,
@@ -1386,6 +1399,7 @@ class FlowRepository:
             name,
             next_version,
             content_md,
+            category or "General",
             initial_active,
         )
         assert new_row is not None

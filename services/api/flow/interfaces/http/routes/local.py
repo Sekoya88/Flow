@@ -107,7 +107,7 @@ async def agent_graph(agent_id: UUID, request: Request) -> dict:
 
     skills = await pool.fetch(
         """
-        SELECT s.id, s.name, s.use_count,
+        SELECT s.id, s.name, s.use_count, s.category,
                COALESCE(
                    CASE WHEN b.total_pulls > 0 THEN b.total_reward / b.total_pulls END,
                    s.score
@@ -137,6 +137,7 @@ async def agent_graph(agent_id: UUID, request: Request) -> dict:
                 "name": r["name"],
                 "score": round(float(r["score"]), 3) if r["score"] is not None else 0.5,
                 "use_count": r["use_count"],
+                "category": r["category"] or "General",
             }
             for r in skills
         ],
@@ -239,7 +240,7 @@ async def agent_skills(agent_id: UUID, request: Request) -> dict:
     pool = request.app.state.pool
     rows = await pool.fetch(
         """
-        SELECT s.id, s.name, s.use_count,
+        SELECT s.id, s.name, s.use_count, s.category,
                COALESCE(
                    CASE WHEN b.total_pulls > 0 THEN b.total_reward / b.total_pulls ELSE NULL END,
                    s.score
@@ -259,6 +260,7 @@ async def agent_skills(agent_id: UUID, request: Request) -> dict:
                 "name": r["name"],
                 "score": round(float(r["bandit_score"]), 3),
                 "use_count": r["use_count"],
+                "category": r["category"] or "General",
             }
             for r in rows
         ]
