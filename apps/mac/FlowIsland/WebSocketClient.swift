@@ -71,7 +71,7 @@ class WebSocketClient: ObservableObject {
     @Published var reconnectAttempt: Int        = 0
     @Published var agentName     : String?
 
-    private(set) var currentAgentId: String?
+    @Published private(set) var currentAgentId: String?
 
     private var webSocketTask   : URLSessionWebSocketTask?
     private let urlSession       = URLSession(configuration: .default)

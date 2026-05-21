@@ -86,10 +86,21 @@ type AgentVersion = {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
+const TOOL_DEFAULTS: Record<string, boolean> = {
+  retrieve: true,
+  sandbox: true,
+  long_term_memory: true,
+  tavily_search: false,
+  fetch_webpage: false,
+  arxiv_search: false,
+  hf_papers: false,
+};
+
 function getTools(config: Record<string, unknown>): Record<string, boolean> {
   const t = config?.tools;
-  if (!t || typeof t !== "object" || Array.isArray(t)) return {};
-  return t as Record<string, boolean>;
+  if (!t || typeof t !== "object" || Array.isArray(t))
+    return { ...TOOL_DEFAULTS };
+  return { ...TOOL_DEFAULTS, ...(t as Record<string, boolean>) };
 }
 
 /* ------------------------------------------------------------------ */

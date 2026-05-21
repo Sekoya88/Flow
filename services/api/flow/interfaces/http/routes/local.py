@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Request
@@ -87,6 +88,149 @@ async def agent_memory(agent_id: UUID, request: Request) -> dict:
             for r in rows
         ]
     }
+
+
+@router.get("/agent-graph/{agent_id}")
+async def agent_graph(agent_id: UUID, request: Request) -> dict:
+    """Full graph payload for one agent: skills + tools + system_prompt flag + memory count."""
+    pool = request.app.state.pool
+    agent_row = await pool.fetchrow(
+        "SELECT id, name, template, config FROM agents WHERE id = $1", agent_id
+    )
+    if not agent_row:
+        return {"agent": None, "skills": [], "tools": [], "has_system_prompt": False, "memory_count": 0}
+
+    raw_config = agent_row["config"]
+    config: dict = json.loads(raw_config) if isinstance(raw_config, str) else (raw_config or {})
+    tools_enabled = [k for k, v in (config.get("tools") or {}).items() if v]
+    has_system_prompt = bool((config.get("system_prompt") or "").strip())
+
+    skills = await pool.fetch(
+        """
+        SELECT s.id, s.name, s.use_count,
+               COALESCE(
+                   CASE WHEN b.total_pulls > 0 THEN b.total_reward / b.total_pulls END,
+                   s.score
+               ) AS score
+        FROM agent_skills s
+        LEFT JOIN skill_bandit_arms b ON b.skill_id = s.id AND b.agent_id = $1
+        WHERE s.agent_id = $1 AND s.active = true
+        ORDER BY score DESC NULLS LAST
+        LIMIT 12
+        """,
+        agent_id,
+    )
+
+    mem_count = await pool.fetchval(
+        "SELECT COUNT(*) FROM agent_memories WHERE agent_id = $1", agent_id
+    )
+
+    return {
+        "agent": {
+            "id": str(agent_row["id"]),
+            "name": agent_row["name"],
+            "template": agent_row["template"],
+        },
+        "skills": [
+            {
+                "id": str(r["id"]),
+                "name": r["name"],
+                "score": round(float(r["score"]), 3) if r["score"] is not None else 0.5,
+                "use_count": r["use_count"],
+            }
+            for r in skills
+        ],
+        "tools": tools_enabled,
+        "has_system_prompt": has_system_prompt,
+        "memory_count": int(mem_count or 0),
+    }
+
+
+@router.post("/agent-skills")
+async def create_agent_skill(request: Request) -> dict:
+    """Create or upsert a skill for an agent. No auth — local desktop only."""
+    body = await request.json()
+    try:
+        agent_id = UUID(body["agent_id"])
+    except (KeyError, ValueError):
+        return {"error": "agent_id required"}
+    name = str(body.get("name", "")).strip()[:200]
+    content_md = str(body.get("content_md", "")).strip()[:10000]
+    if not name or not content_md:
+        return {"error": "name and content_md required"}
+
+    pool = request.app.state.pool
+    row = await pool.fetchrow("SELECT workspace_id FROM agents WHERE id = $1", agent_id)
+    if not row:
+        return {"error": "agent not found"}
+
+    sid = await pool.fetchval(
+        """
+        INSERT INTO agent_skills (agent_id, workspace_id, name, content_md, active)
+        VALUES ($1, $2, $3, $4, true)
+        ON CONFLICT (agent_id, name)
+        DO UPDATE SET content_md = EXCLUDED.content_md, active = true
+        RETURNING id
+        """,
+        agent_id,
+        row["workspace_id"],
+        name,
+        content_md,
+    )
+    return {"id": str(sid)}
+
+
+@router.post("/agent-knowledge")
+async def ingest_agent_knowledge(request: Request) -> dict:
+    """Ingest plain-text knowledge as an agent memory entry. No auth — local desktop only."""
+    body = await request.json()
+    try:
+        agent_id = UUID(body["agent_id"])
+    except (KeyError, ValueError):
+        return {"error": "agent_id required"}
+    title = str(body.get("title", "Knowledge")).strip()[:200]
+    content = str(body.get("content", "")).strip()[:8000]
+    if not content:
+        return {"error": "content required"}
+
+    pool = request.app.state.pool
+    row = await pool.fetchrow("SELECT workspace_id FROM agents WHERE id = $1", agent_id)
+    if not row:
+        return {"error": "agent not found"}
+
+    mid = await pool.fetchval(
+        "INSERT INTO agent_memories (agent_id, workspace_id, content) VALUES ($1, $2, $3) RETURNING id",
+        agent_id,
+        row["workspace_id"],
+        f"[Knowledge: {title}]\n{content}",
+    )
+    return {"id": str(mid)}
+
+
+@router.post("/agent-memory")
+async def add_agent_memory(request: Request) -> dict:
+    """Add a rule or episodic memory entry for an agent. No auth — local desktop only."""
+    body = await request.json()
+    try:
+        agent_id = UUID(body["agent_id"])
+    except (KeyError, ValueError):
+        return {"error": "agent_id required"}
+    content = str(body.get("content", "")).strip()[:2000]
+    if not content:
+        return {"error": "content required"}
+
+    pool = request.app.state.pool
+    row = await pool.fetchrow("SELECT workspace_id FROM agents WHERE id = $1", agent_id)
+    if not row:
+        return {"error": "agent not found"}
+
+    mid = await pool.fetchval(
+        "INSERT INTO agent_memories (agent_id, workspace_id, content) VALUES ($1, $2, $3) RETURNING id",
+        agent_id,
+        row["workspace_id"],
+        content,
+    )
+    return {"id": str(mid)}
 
 
 @router.get("/agent-skills/{agent_id}")

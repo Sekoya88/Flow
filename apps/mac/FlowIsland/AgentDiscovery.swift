@@ -43,13 +43,16 @@ class AgentDiscovery {
             guard let self, let data else { return }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let agents = json["agents"] as? [[String: Any]] else { return }
-            let infos = agents.compactMap { dict -> AgentInfo? in
+            let allInfos = agents.compactMap { dict -> AgentInfo? in
                 guard let id   = dict["id"]   as? String,
                       let name = dict["name"] as? String else { return nil }
                 return AgentInfo(id: id, name: name)
             }
+            // Deduplicate by name — keep first occurrence (DB ordering: alphabetical)
+            var seen = Set<String>()
+            let unique = allInfos.filter { seen.insert($0.name).inserted }
             DispatchQueue.main.async {
-                self.store?.availableAgents = infos
+                self.store?.availableAgents = unique
             }
         }.resume()
     }

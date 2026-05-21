@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -16,4 +17,12 @@ class AppStore: ObservableObject {
     @Published var availableAgents:  [AgentInfo] = []
     let wsClient   = WebSocketClient()
     let discovery  = AgentDiscovery()
+
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        wsClient.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+    }
 }

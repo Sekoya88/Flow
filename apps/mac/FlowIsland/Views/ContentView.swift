@@ -271,11 +271,8 @@ struct NotchMorphView: View {
                         .clipShape(Capsule())
                 }
             }
-            SkillGraphView(
-                wsSkills: store.wsClient.skills,
-                agentId:  store.wsClient.currentAgentId
-            )
-            .frame(height: 130)
+            SkillGraphView(wsClient: store.wsClient)
+                .frame(height: 130)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -486,7 +483,7 @@ struct RunRowView: View {
     }
 }
 
-// MARK: - Memory tab  (Agent Knowledge: skills + episodic memories)
+// MARK: - Memory tab  (Vibe coding: skills + knowledge + rules)
 
 struct MemoryTabView: View {
     let agentId: String?
@@ -496,7 +493,7 @@ struct MemoryTabView: View {
         var relativeTime: String {
             guard let date = parseISO(createdAt) else { return "" }
             let diff = -date.timeIntervalSinceNow
-            if diff < 60   { return "just now" }
+            if diff < 60    { return "just now" }
             if diff < 3600  { return "\(Int(diff / 60))m ago" }
             if diff < 86400 { return "\(Int(diff / 3600))h ago" }
             return "\(Int(diff / 86400))d ago"
@@ -509,88 +506,144 @@ struct MemoryTabView: View {
         let useCount: Int
     }
 
-    @State private var memories: [MemRow]    = []
-    @State private var skills:   [SkillChip] = []
-    @State private var loadingMem  = true
-    @State private var loadingSkills = true
-
-    private var loading: Bool { loadingMem || loadingSkills }
+    @State private var memories:      [MemRow]    = []
+    @State private var skills:        [SkillChip] = []
+    @State private var loadingMem     = true
+    @State private var loadingSkills  = true
+    @State private var showAddSkill   = false
+    @State private var showAddKnow    = false
+    @State private var showAddRule    = false
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                // ── Skills section ────────────────────────────────
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        sectionLabel("Skills")
-                        Spacer()
-                        if loadingSkills { ProgressView().scaleEffect(0.45) }
-                        else {
-                            Text("\(skills.count) skill\(skills.count == 1 ? "" : "s")")
-                                .font(.system(size: 8))
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+
+                    // ── Skills ────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            sectionLabel("Skills")
+                            Spacer()
+                            if loadingSkills {
+                                ProgressView().scaleEffect(0.45)
+                            } else {
+                                Text("\(skills.count) skill\(skills.count == 1 ? "" : "s")")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                            }
+                        }
+                        if skills.isEmpty && !loadingSkills {
+                            Text("No skills configured for this agent")
+                                .font(.system(size: 10))
                                 .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                                .padding(.top, 2)
+                        } else {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(), spacing: 6),
+                                GridItem(.flexible(), spacing: 6),
+                            ], spacing: 6) {
+                                ForEach(skills) { skill in SkillChipView(chip: skill) }
+                            }
                         }
                     }
 
-                    if skills.isEmpty && !loadingSkills {
-                        Text("No skills configured for this agent")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
-                            .padding(.top, 2)
-                    } else {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 6),
-                            GridItem(.flexible(), spacing: 6),
-                        ], spacing: 6) {
-                            ForEach(skills) { skill in SkillChipView(chip: skill) }
+                    Divider().opacity(0.12)
+
+                    // ── Episodic Memory / Rules ───────────────────
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            sectionLabel("Memory & Rules")
+                            Spacer()
+                            if loadingMem {
+                                ProgressView().scaleEffect(0.45)
+                            } else if !memories.isEmpty {
+                                Text("\(memories.count) entr\(memories.count == 1 ? "y" : "ies")")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                            }
+                        }
+                        if memories.isEmpty && !loadingMem {
+                            VStack(spacing: 5) {
+                                Image(systemName: "brain")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.25))
+                                Text("No memories yet")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
+                                Text("Written during metacognition cycles")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.25))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 8)
+                        } else {
+                            VStack(spacing: 5) {
+                                ForEach(memories) { mem in MemRowView(mem: mem) }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+            }
 
-                Divider().opacity(0.12)
-
-                // ── Memories section ──────────────────────────────
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        sectionLabel("Episodic Memory")
-                        Spacer()
-                        if loadingMem { ProgressView().scaleEffect(0.45) }
-                        else if !memories.isEmpty {
-                            Text("\(memories.count) entr\(memories.count == 1 ? "y" : "ies")")
-                                .font(.system(size: 8))
-                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
-                        }
-                    }
-
-                    if memories.isEmpty && !loadingMem {
-                        VStack(spacing: 5) {
-                            Image(systemName: "brain")
-                                .font(.system(size: 18))
-                                .foregroundColor(Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.25))
-                            Text("No memories yet")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
-                            Text("Written during metacognition cycles")
-                                .font(.system(size: 9))
-                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.25))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                    } else {
-                        VStack(spacing: 5) {
-                            ForEach(memories) { mem in MemRowView(mem: mem) }
-                        }
-                    }
+            // ── Vibe coding toolbar ───────────────────────────────
+            Divider().opacity(0.1)
+            HStack(spacing: 8) {
+                vibeButton(icon: "bolt.fill", label: "Skill",
+                           color: Color(red: 0.133, green: 0.827, blue: 0.933)) {
+                    showAddSkill = true
+                }
+                vibeButton(icon: "doc.text.fill", label: "Knowledge",
+                           color: Color(red: 0.133, green: 0.773, blue: 0.368)) {
+                    showAddKnow = true
+                }
+                vibeButton(icon: "brain", label: "Rule / Memory",
+                           color: Color(red: 0.655, green: 0.545, blue: 0.973)) {
+                    showAddRule = true
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 14)
+            .padding(.vertical, 10)
         }
         .frame(maxHeight: .infinity)
         .onAppear { fetchAll() }
         .onChange(of: agentId) { _ in fetchAll() }
+        .sheet(isPresented: $showAddSkill, onDismiss: fetchAll) {
+            AddSkillSheet(agentId: agentId ?? "")
+        }
+        .sheet(isPresented: $showAddKnow, onDismiss: fetchAll) {
+            AddKnowledgeSheet(agentId: agentId ?? "")
+        }
+        .sheet(isPresented: $showAddRule, onDismiss: fetchAll) {
+            AddRuleSheet(agentId: agentId ?? "")
+        }
     }
+
+    // MARK: Vibe button
+
+    private func vibeButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(color.opacity(0.85))
+                Text("+ \(label)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(color.opacity(0.85))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.08))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(color.opacity(0.22), lineWidth: 1))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .disabled(agentId == nil)
+    }
+
+    // MARK: Fetch
 
     private func fetchAll() {
         fetchMemory()
@@ -621,11 +674,278 @@ struct MemoryTabView: View {
             let rows = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])
                 .flatMap { $0["skills"] as? [[String: Any]] } ?? []
             DispatchQueue.main.async {
-                skills        = rows.map { SkillChip(id: $0["id"] as? String ?? "",
-                                                      name: $0["name"] as? String ?? "",
-                                                      score: $0["score"] as? Double ?? 0,
-                                                      useCount: $0["use_count"] as? Int ?? 0) }
+                skills = rows.map { SkillChip(id: $0["id"] as? String ?? "",
+                                              name: $0["name"] as? String ?? "",
+                                              score: $0["score"] as? Double ?? 0,
+                                              useCount: $0["use_count"] as? Int ?? 0) }
                 loadingSkills = false
+            }
+        }.resume()
+    }
+}
+
+// MARK: - Add Skill sheet
+
+struct AddSkillSheet: View {
+    let agentId: String
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var contentMd = "## Description\n\nDescribe what this skill does.\n\n## Instructions\n\n1. "
+    @State private var saving = false
+    @State private var errorMsg: String?
+
+    private let cyan = Color(red: 0.133, green: 0.827, blue: 0.933)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill").foregroundColor(cyan.opacity(0.8))
+                    Text("New Skill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(GlassButtonStyle(accent: false))
+            }
+
+            TextField("Skill name (e.g. content-brief-generation)", text: $name)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+                .padding(8)
+                .background(Color.white.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .cornerRadius(6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Skill instructions (Markdown)")
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                TextEditor(text: $contentMd)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(Color.white.opacity(0.04))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    .cornerRadius(6)
+                    .frame(minHeight: 180)
+            }
+
+            if let err = errorMsg {
+                Text(err).font(.system(size: 9)).foregroundColor(.red.opacity(0.8))
+            }
+
+            HStack {
+                Spacer()
+                Button(saving ? "Saving…" : "Save Skill") { save() }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || contentMd.isEmpty || saving)
+                    .buttonStyle(GlassButtonStyle(accent: true))
+            }
+        }
+        .padding(20)
+        .frame(width: 500, height: 400)
+        .background(Color(red: 0.06, green: 0.06, blue: 0.10))
+    }
+
+    private func save() {
+        saving = true; errorMsg = nil
+        guard let url = URL(string: "http://localhost:18000/api/v1/local/agent-skills") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "agent_id": agentId, "name": name.trimmingCharacters(in: .whitespaces), "content_md": contentMd
+        ])
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            DispatchQueue.main.async {
+                saving = false
+                if err != nil { errorMsg = "Network error"; return }
+                if let json = try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any],
+                   let e = json["error"] as? String { errorMsg = e; return }
+                dismiss()
+            }
+        }.resume()
+    }
+}
+
+// MARK: - Add Knowledge sheet
+
+struct AddKnowledgeSheet: View {
+    let agentId: String
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var content = ""
+    @State private var saving = false
+    @State private var errorMsg: String?
+
+    private let green = Color(red: 0.133, green: 0.773, blue: 0.368)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text.fill").foregroundColor(green.opacity(0.8))
+                    Text("Ingest Knowledge")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(GlassButtonStyle(accent: false))
+            }
+
+            TextField("Title or URL", text: $title)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+                .padding(8)
+                .background(Color.white.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .cornerRadius(6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Content (paste text, code, docs…)")
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                TextEditor(text: $content)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.85))
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(Color.white.opacity(0.04))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    .cornerRadius(6)
+                    .frame(minHeight: 160)
+            }
+
+            if let err = errorMsg {
+                Text(err).font(.system(size: 9)).foregroundColor(.red.opacity(0.8))
+            }
+
+            HStack {
+                Spacer()
+                Button(saving ? "Ingesting…" : "Ingest") { save() }
+                    .disabled(content.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                    .buttonStyle(GlassButtonStyle(accent: true))
+            }
+        }
+        .padding(20)
+        .frame(width: 500, height: 380)
+        .background(Color(red: 0.06, green: 0.06, blue: 0.10))
+    }
+
+    private func save() {
+        saving = true; errorMsg = nil
+        guard let url = URL(string: "http://localhost:18000/api/v1/local/agent-knowledge") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "agent_id": agentId,
+            "title": title.isEmpty ? "Knowledge" : title,
+            "content": content.trimmingCharacters(in: .whitespaces),
+        ])
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            DispatchQueue.main.async {
+                saving = false
+                if err != nil { errorMsg = "Network error"; return }
+                if let json = try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any],
+                   let e = json["error"] as? String { errorMsg = e; return }
+                dismiss()
+            }
+        }.resume()
+    }
+}
+
+// MARK: - Add Rule / Memory sheet
+
+struct AddRuleSheet: View {
+    let agentId: String
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var content = ""
+    @State private var saving = false
+    @State private var errorMsg: String?
+
+    private let violet = Color(red: 0.655, green: 0.545, blue: 0.973)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain").foregroundColor(violet.opacity(0.8))
+                    Text("Add Rule or Memory")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(GlassButtonStyle(accent: false))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Rule, fact, or memory the agent should always know")
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(nsColor: .systemGray).opacity(0.5))
+                ZStack(alignment: .topLeading) {
+                    if content.isEmpty {
+                        Text("e.g. Always respond in French. Never mention competitor pricing.")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(nsColor: .systemGray).opacity(0.3))
+                            .padding(.top, 10)
+                            .padding(.leading, 10)
+                            .allowsHitTesting(false)
+                    }
+                    TextEditor(text: $content)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.9))
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                }
+                .background(Color.white.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                .cornerRadius(6)
+                .frame(minHeight: 140)
+            }
+
+            if let err = errorMsg {
+                Text(err).font(.system(size: 9)).foregroundColor(.red.opacity(0.8))
+            }
+
+            HStack {
+                Spacer()
+                Button(saving ? "Saving…" : "Save") { save() }
+                    .disabled(content.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                    .buttonStyle(GlassButtonStyle(accent: true))
+            }
+        }
+        .padding(20)
+        .frame(width: 480, height: 320)
+        .background(Color(red: 0.06, green: 0.06, blue: 0.10))
+    }
+
+    private func save() {
+        saving = true; errorMsg = nil
+        guard let url = URL(string: "http://localhost:18000/api/v1/local/agent-memory") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "agent_id": agentId,
+            "content": content.trimmingCharacters(in: .whitespaces),
+        ])
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            DispatchQueue.main.async {
+                saving = false
+                if err != nil { errorMsg = "Network error"; return }
+                if let json = try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any],
+                   let e = json["error"] as? String { errorMsg = e; return }
+                dismiss()
             }
         }.resume()
     }
