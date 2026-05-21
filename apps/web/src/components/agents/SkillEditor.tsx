@@ -9,25 +9,37 @@ import { cn } from "@/lib/utils";
 
 const TEMPLATE = `---
 name: my-skill
-description: When and how to apply this skill
+description: Use this skill when the user asks about X — concise, max 200 chars
 version: "1.0"
-allowed-tools: retrieve, sandbox
+category: General
+allowed-tools: retrieve
 triggers:
   - "example trigger phrase"
+  - "another trigger"
 metadata:
-  author: user
+  author: flow
 ---
 
 # My Skill
 
-## Instructions
+<context>
+Brief background the agent needs to apply this skill correctly.
+</context>
 
-Describe the skill instructions here. The agent will follow these when a trigger matches.
+<instructions>
+1. Step one
+2. Step two
+3. Step three
+</instructions>
 
-## Guidelines
+<output_format>
+Describe the expected response structure.
+</output_format>
 
-- Be specific about the approach
-- Reference allowed tools when relevant
+<examples>
+**Input:** Example user message
+**Output:** Expected agent response
+</examples>
 `;
 
 interface SkillEditorProps {
