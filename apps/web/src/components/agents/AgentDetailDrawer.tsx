@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import type { AgentRow } from "./AgentCard";
 import { MetacogPanel } from "./MetacogPanel";
 import { ConfigDiffView } from "./ConfigDiffView";
+import { AgentLivePanel } from "../observability/AgentLivePanel";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -335,6 +336,7 @@ export function AgentDetailDrawer({
                 <TabsTrigger value="versions" onClick={() => { if (versions.length === 0) void loadVersions(); }}>Versions</TabsTrigger>
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="skills" onClick={() => { void loadSkills(); }}>Skills</TabsTrigger>
+                <TabsTrigger value="live">Live</TabsTrigger>
               </TabsList>
 
               {/* Tools tab */}
@@ -633,6 +635,10 @@ export function AgentDetailDrawer({
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="live" className="px-6 py-4">
+                <AgentLivePanel agentId={agent.id} />
               </TabsContent>
             </Tabs>
 
