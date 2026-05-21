@@ -504,6 +504,7 @@ struct MemoryTabView: View {
         let id, name: String
         let score: Double
         let useCount: Int
+        let category: String
     }
 
     @State private var memories:      [MemRow]    = []
@@ -538,11 +539,42 @@ struct MemoryTabView: View {
                                 .foregroundColor(Color(nsColor: .systemGray).opacity(0.4))
                                 .padding(.top, 2)
                         } else {
-                            LazyVGrid(columns: [
-                                GridItem(.flexible(), spacing: 6),
-                                GridItem(.flexible(), spacing: 6),
-                            ], spacing: 6) {
-                                ForEach(skills) { skill in SkillChipView(chip: skill) }
+                            let categoryOrder = ["Research","Code","Communication","Analysis","Memory","Planning","General"]
+                            let groups: [(String, [SkillChip])] = {
+                                var map = [(String, [SkillChip])]()
+                                for skill in skills {
+                                    if let idx = map.firstIndex(where: { $0.0 == skill.category }) {
+                                        map[idx].1.append(skill)
+                                    } else {
+                                        map.append((skill.category, [skill]))
+                                    }
+                                }
+                                return map.sorted {
+                                    let ia = categoryOrder.firstIndex(of: $0.0) ?? 99
+                                    let ib = categoryOrder.firstIndex(of: $1.0) ?? 99
+                                    return ia < ib
+                                }
+                            }()
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(groups, id: \.0) { cat, catSkills in
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        HStack(spacing: 4) {
+                                            Text(cat.uppercased())
+                                                .font(.system(size: 7.5, weight: .bold, design: .monospaced))
+                                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.45))
+                                                .tracking(1.0)
+                                            Text("·  \(catSkills.count)")
+                                                .font(.system(size: 7.5, design: .monospaced))
+                                                .foregroundColor(Color(nsColor: .systemGray).opacity(0.25))
+                                        }
+                                        LazyVGrid(columns: [
+                                            GridItem(.flexible(), spacing: 6),
+                                            GridItem(.flexible(), spacing: 6),
+                                        ], spacing: 6) {
+                                            ForEach(catSkills) { skill in SkillChipView(chip: skill) }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -677,7 +709,8 @@ struct MemoryTabView: View {
                 skills = rows.map { SkillChip(id: $0["id"] as? String ?? "",
                                               name: $0["name"] as? String ?? "",
                                               score: $0["score"] as? Double ?? 0,
-                                              useCount: $0["use_count"] as? Int ?? 0) }
+                                              useCount: $0["use_count"] as? Int ?? 0,
+                                              category: $0["category"] as? String ?? "General") }
                 loadingSkills = false
             }
         }.resume()
