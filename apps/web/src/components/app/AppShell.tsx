@@ -66,11 +66,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setUser = useStore((s) => s.setUser);
 
   useEffect(() => {
-    apiFetch<{ id: string; email: string; workspaces: { id: string; name: string }[] }>(
+    apiFetch<{ user: { id: string; email: string }; workspaces: { id: string; name: string }[] }>(
       "/api/v1/auth/me",
     )
       .then((me) => {
-        setUser({ id: me.id, email: me.email });
+        setUser({ id: me.user.id, email: me.user.email });
         setWorkspaces(me.workspaces ?? []);
       })
       .catch(() => {/* token invalid → middleware redirects */});
