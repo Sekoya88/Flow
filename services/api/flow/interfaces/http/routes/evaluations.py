@@ -73,7 +73,7 @@ async def run_evaluation_sse(
                 "temperature": active_genome.llm_config.temperature,
             }
             if active_genome
-            else {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
+            else {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
         )
 
         yield evt("info", message=f"Genome: {agent_version} | model: {llm_config['model']}")
@@ -473,7 +473,7 @@ async def trigger_improvement(
             "temperature": active_genome.llm_config.temperature,
         }
         if active_genome
-        else {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
+        else {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
     )
 
     # Resolve golden set

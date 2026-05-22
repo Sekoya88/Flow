@@ -37,7 +37,7 @@ def build_kg_query_graph(config: QueryConfig):
     api_key = config.openai_api_key
 
     def _llm() -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-4o-mini", temperature=0.2, openai_api_key=api_key)
+        return ChatOpenAI(model="gpt-5.4-mini", temperature=0.2, openai_api_key=api_key)
 
     # ── Tool helpers ─────────────────────────────────────────────────────────
 

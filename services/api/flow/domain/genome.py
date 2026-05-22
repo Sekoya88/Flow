@@ -113,7 +113,7 @@ class AgentGenome:
             system_prompt=row.get("system_prompt", ""),
             llm_config=ModelConfig(
                 provider=llm_raw.get("provider", "openai"),
-                model=llm_raw.get("model", "gpt-4o-mini"),
+                model=llm_raw.get("model", "gpt-5.4-mini"),
                 temperature=float(llm_raw.get("temperature", 0.2)),
                 extra={k: v for k, v in llm_raw.items() if k not in ("provider", "model", "temperature")},
             ),

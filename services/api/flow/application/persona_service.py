@@ -116,7 +116,7 @@ async def synthesize_persona(
 
 
 def _build_persona_llm(settings: Any) -> Any | None:
-    """Prefer Anthropic Haiku, fall back to OpenAI gpt-4o-mini, else None."""
+    """Prefer Anthropic Haiku, fall back to OpenAI gpt-5.4-mini, else None."""
     if getattr(settings, "anthropic_api_key", None):
         try:
             from langchain_anthropic import ChatAnthropic
@@ -132,7 +132,7 @@ def _build_persona_llm(settings: Any) -> Any | None:
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model="gpt-4o-mini",
+                model="gpt-5.4-mini",
                 api_key=settings.openai_api_key,
             )
         except Exception:

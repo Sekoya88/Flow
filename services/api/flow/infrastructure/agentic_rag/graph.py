@@ -97,7 +97,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
         confidence = 0.8
         if ctx.openai_api_key:
             try:
-                llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-4o-mini", temperature=0)
+                llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-5.4-mini", temperature=0)
                 structured = llm.with_structured_output(RoutingDecision)
                 out = await structured.ainvoke([HumanMessage(content=prompt)])
                 if isinstance(out, RoutingDecision):
@@ -206,7 +206,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
         if not ctx.openai_api_key:
             graded = list(state.get("retrieved_docs") or [])
         else:
-            llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-4o-mini", temperature=0)
+            llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-5.4-mini", temperature=0)
             structured = llm.with_structured_output(DocumentGrade)
             for doc in state.get("retrieved_docs") or []:
                 try:
@@ -253,7 +253,7 @@ def build_agentic_retrieval_graph(ctx: GraphContext):
         new_q = state.get("query_current", "")
         if ctx.openai_api_key:
             try:
-                llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-4o-mini", temperature=0.2)
+                llm = ChatOpenAI(api_key=ctx.openai_api_key, model="gpt-5.4-mini", temperature=0.2)
                 out = await llm.ainvoke([HumanMessage(content=prompt)])
                 new_q = str(out.content).strip()
             except Exception:

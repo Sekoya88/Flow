@@ -91,7 +91,7 @@ def _build_vibe_llm(settings: Any) -> Any | None:
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model="gpt-4o",
+                model="gpt-5.4-mini",
                 api_key=settings.openai_api_key,
                 streaming=True,
             )

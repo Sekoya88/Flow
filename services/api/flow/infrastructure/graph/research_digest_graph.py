@@ -106,7 +106,7 @@ async def filter_by_interest(state: DigestState) -> dict:
         {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.0},
         fallback_keys,
     ) or get_chat_model(
-        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.0}, fallback_keys
+        {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.0}, fallback_keys
     )
 
     for paper in candidates:
@@ -150,7 +150,7 @@ async def summarize_papers(state: DigestState) -> dict:
 
     settings = get_settings()
     fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
-    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model({"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys)
+    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model({"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.1}, fallback_keys)
     if llm is None:
         logger.warning("digest.summarize.no_llm_skipping")
         enriched = [dict(p, tldr=None, key_insights=None) for p in state["filtered_papers"]]

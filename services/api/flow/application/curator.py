@@ -57,7 +57,7 @@ async def maybe_spawn_proposal(
         from flow.infrastructure.llm.providers import get_chat_model
 
         llm = get_chat_model(
-            {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
+            {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
             fallback_api_keys={"openai": openai_api_key},
         )
         out = await llm.ainvoke(
@@ -271,7 +271,7 @@ async def check_regression_and_propose(
         from flow.infrastructure.llm.providers import get_chat_model
 
         llm = get_chat_model(
-            {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2},
+            {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.2},
             fallback_api_keys={"openai": openai_api_key},
         )
 

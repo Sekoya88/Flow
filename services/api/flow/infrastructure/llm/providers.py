@@ -12,7 +12,7 @@ def get_chat_model(model_config: dict[str, Any], fallback_api_keys: dict[str, st
     Returns None if the required key is missing.
     """
     provider = model_config.get("provider", "openai")
-    model = model_config.get("model", "gpt-4o-mini")
+    model = model_config.get("model", "gpt-5.4-mini")
     temperature = float(model_config.get("temperature", 0.2))
 
     if provider == "stub":
