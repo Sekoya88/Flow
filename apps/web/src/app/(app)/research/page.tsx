@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
   ExternalLink,
@@ -297,6 +297,8 @@ export default function ResearchPage() {
   const [status, setStatus] = useState<string>("unread");
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [digestQueued, setDigestQueued] = useState(false);
 
   useEffect(() => {
     if (!wsId) return;
@@ -305,16 +307,23 @@ export default function ResearchPage() {
       .catch(() => null);
   }, [wsId]);
 
-  useEffect(() => {
+  const loadPapers = useCallback(() => {
     if (!wsId) return;
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams({ workspace_id: wsId, limit: "30" });
     if (status) params.set("status", status);
     apiFetch<Paper[]>(`/api/v1/digest/papers?${params}`)
-      .then(setPapers)
-      .catch(() => setPapers([]))
+      .then((data) => { setError(null); setPapers(data); })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : "Failed to load papers";
+        setError(msg);
+        setPapers([]);
+      })
       .finally(() => setLoading(false));
   }, [wsId, status]);
+
+  useEffect(() => { loadPapers(); }, [loadPapers]);
 
   async function runDigest() {
     if (!wsId) return;
@@ -324,6 +333,11 @@ export default function ResearchPage() {
         method: "POST",
         json: { workspace_id: wsId },
       });
+      setDigestQueued(true);
+      setTimeout(() => {
+        setDigestQueued(false);
+        loadPapers();
+      }, 65_000);
     } finally {
       setRunning(false);
     }
@@ -367,6 +381,19 @@ export default function ResearchPage() {
           </Button>
         </div>
       </div>
+
+      {digestQueued && (
+        <div className="flex items-center gap-2 rounded border border-flow-violet/30 bg-flow-violet/10 px-3 py-2 font-mono text-xs text-flow-violet">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Digest running — papers will appear in ~60s
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded border border-red-800 bg-red-900/20 px-3 py-2 font-mono text-xs text-red-400">
+          {error}
+        </div>
+      )}
 
       <div className="flex gap-1 border-b border-flow-800 pb-0">
         {STATUS_TABS.map(({ key, label }) => (

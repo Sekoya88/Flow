@@ -54,6 +54,7 @@ from flow.interfaces.http.routes import (
     proposals,
     schedules,
     skills,
+    stream,
     tools,
     trace,
     workspaces,
@@ -168,6 +169,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(mcp.router)
     app.include_router(digest.router)
+    app.include_router(stream.router)
     return app
 
 

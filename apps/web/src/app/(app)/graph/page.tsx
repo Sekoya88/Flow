@@ -25,13 +25,14 @@ interface SkillNodeDetail {
   version: number;
 }
 
-const NODE_TYPES = ["trace", "skill", "tool_call", "metacog", "note", "concept", "topic", "query", "prompt"] as const;
+const NODE_TYPES = ["trace", "skill", "tool_call", "metacog", "note", "concept", "topic", "query", "prompt", "paper"] as const;
 
 const ENTITY_FILTER_TABS = [
   { type: 'agent',          label: 'Agents',    color: NODE_COLORS.agent },
   { type: 'skill',          label: 'Skills',    color: NODE_COLORS.skill },
   { type: 'genome_version', label: 'Genomes',   color: NODE_COLORS.genome_version },
   { type: 'execution',      label: 'Executions', color: NODE_COLORS.execution },
+  { type: 'paper',          label: 'Papers',    color: NODE_COLORS.paper },
 ] as const;
 
 const TYPE_DOT_COLORS: Record<string, string> = {
@@ -49,6 +50,7 @@ const TYPE_DOT_COLORS: Record<string, string> = {
   execution: NODE_COLORS.execution,
   sub_agent: NODE_COLORS.sub_agent,
   system_prompt: NODE_COLORS.system_prompt,
+  paper: NODE_COLORS.paper,
 };
 
 export default function GraphPage() {

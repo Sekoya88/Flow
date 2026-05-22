@@ -100,7 +100,7 @@ async def task_run_deer_execution(
 
 
 async def task_run_research_digest(ctx: dict, workspace_id: str, config: dict) -> dict:
-    return await _run_digest(workspace_id, config)
+    return await _run_digest(workspace_id, config, stream_hub=ctx.get("stream_hub"))
 
 
 async def research_digest_tick(ctx: dict) -> None:

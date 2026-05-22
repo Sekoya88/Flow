@@ -6,6 +6,7 @@ export type NodeType =
   | 'execution'
   | 'sub_agent'
   | 'tool_call'
+  | 'paper'
   // legacy document types
   | 'note'
   | 'concept'
@@ -54,6 +55,7 @@ export const ENTITY_NODE_TYPES: NodeType[] = [
   'execution',
   'sub_agent',
   'tool_call',
+  'paper',
 ]
 
 export const DOCUMENT_NODE_TYPES: NodeType[] = [

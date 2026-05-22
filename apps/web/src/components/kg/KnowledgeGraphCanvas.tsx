@@ -11,7 +11,7 @@ export interface KGNode {
   id: string;
   label: string;
   node_type: "note" | "concept" | "topic" | "query" | "trace" | "skill" | "tool_call" | "prompt" | "metacog"
-    | "agent" | "genome_version" | "execution" | "sub_agent" | "system_prompt";
+    | "agent" | "genome_version" | "execution" | "sub_agent" | "system_prompt" | "paper";
   ref_id?: string | null;
   summary: string | null;
   source_path: string | null;
@@ -40,6 +40,7 @@ const TYPE_COLORS: Record<string, string> = {
   note: "#8b9cb7",
   topic: "#67e8f9",
   query: "#7dd3fc",
+  paper: "#f97316",
 };
 
 interface Props {

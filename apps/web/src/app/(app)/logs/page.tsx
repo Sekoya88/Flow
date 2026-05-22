@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   Bot,
+  BookOpen,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -21,7 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { apiFetch } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -303,9 +307,146 @@ function ExecutionLogRow({ exec }: { exec: ExecutionRow }) {
   );
 }
 
+// ── Live feed ─────────────────────────────────────────────────────────
+
+type LiveEvent = {
+  id: string;
+  kind: string;
+  ts: number;
+  payload: Record<string, unknown>;
+};
+
+const LIVE_KIND_CONFIG: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
+  "digest.start":    { icon: BookOpen,     color: "text-violet-400",  label: "Digest started" },
+  "digest.complete": { icon: CheckCircle2, color: "text-emerald-400", label: "Digest complete" },
+  "digest.fetch":    { icon: BookOpen,     color: "text-sky-400",     label: "Papers fetched" },
+  "digest.filter":   { icon: Zap,          color: "text-amber-400",   label: "Papers filtered" },
+  "knowledge.ingest":{ icon: BookOpen,     color: "text-sky-400",     label: "Knowledge ingested" },
+  "execution.start": { icon: Activity,     color: "text-blue-400",    label: "Execution started" },
+  "execution.done":  { icon: CheckCircle2, color: "text-emerald-400", label: "Execution done" },
+};
+
+function LiveFeed({ wsId }: { wsId: string }) {
+  const [events, setEvents] = useState<LiveEvent[]>([]);
+  const [connected, setConnected] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!wsId) return;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setConnected(false);
+
+    const apiBase = (process.env.NEXT_PUBLIC_FLOW_API_URL ?? "").replace(/\/$/, "");
+    const token = getToken();
+
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/stream?workspace_id=${wsId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) return;
+        setConnected(true);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            try {
+              const parsed = JSON.parse(line.slice(5).trim()) as Record<string, unknown>;
+              const kind = (parsed.kind as string) ?? "unknown";
+              setEvents((prev) => [
+                { id: `${Date.now()}-${Math.random()}`, kind, ts: Date.now(), payload: parsed },
+                ...prev.slice(0, 199),
+              ]);
+            } catch { /* malformed line */ }
+          }
+        }
+      } catch (e) {
+        if ((e as Error)?.name !== "AbortError") {
+          logger.warn("live stream error", { error: String(e) });
+        }
+      } finally {
+        setConnected(false);
+      }
+    })();
+
+    return () => ctrl.abort();
+  }, [wsId]);
+
+  function formatPayload(ev: LiveEvent): string {
+    const { kind: _kind, ...rest } = ev.payload;
+    if (ev.kind === "digest.complete") {
+      return `${rest.persisted ?? 0} persisted / ${rest.filtered ?? 0} filtered / ${rest.fetched ?? 0} fetched`;
+    }
+    const vals = Object.entries(rest)
+      .filter(([k]) => k !== "workspace_id")
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("  ·  ");
+    return vals;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className={cn("h-2 w-2 rounded-full", connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40")} />
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {connected ? "Connected — listening for events" : "Connecting…"}
+        </span>
+        {events.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setEvents([])}
+            className="ml-auto font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {events.length === 0 ? (
+        <div className="rounded-xl border border-flow-800 px-4 py-12 text-center">
+          <Activity className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">
+            Waiting for events — run a digest or start an agent.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-flow-800 overflow-hidden divide-y divide-border/20">
+          {events.map((ev) => {
+            const cfg = LIVE_KIND_CONFIG[ev.kind] ?? { icon: Terminal, color: "text-muted-foreground", label: ev.kind };
+            const Icon = cfg.icon;
+            const detail = formatPayload(ev);
+            const ts = new Date(ev.ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            return (
+              <div key={ev.id} className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-muted/10 transition-colors">
+                <span className="text-[10px] text-muted-foreground/40 font-mono pt-0.5 shrink-0 w-[68px]">{ts}</span>
+                <Icon className={cn("h-3.5 w-3.5 shrink-0 mt-0.5", cfg.color)} />
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className={cn("text-[11px] font-semibold shrink-0", cfg.color)}>{cfg.label}</span>
+                  {detail && <span className="text-[11px] text-foreground/60 truncate">{detail}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────
 
 export default function LogsPage() {
+  const wsId = useStore((s) => s.workspaces[0]?.id ?? "");
+  const [activeTab, setActiveTab] = useState<"executions" | "live">("executions");
   const [status, setStatus] = useState<ObsStatus | null>(null);
   const [executions, setExecutions] = useState<ExecutionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,6 +537,29 @@ export default function LogsPage() {
           </div>
         )}
 
+        {/* Main tab switcher */}
+        <div className="flex gap-1 border-b border-flow-800 pb-0">
+          {(["executions", "live"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors capitalize flex items-center gap-1.5",
+                activeTab === tab
+                  ? "border-flow-violet text-flow-50"
+                  : "border-transparent text-flow-500 hover:text-flow-300",
+              )}
+            >
+              {tab === "live" && <span className={cn("h-1.5 w-1.5 rounded-full", activeTab === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40")} />}
+              {tab === "executions" ? "Executions" : "Live"}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "live" && <LiveFeed wsId={wsId} />}
+
+        {activeTab === "executions" && <>
         {/* Filter tabs */}
         <div className="flex items-center gap-1">
           {(["all", "completed", "failed", "running"] as const).map((s) => (
@@ -445,6 +609,7 @@ export default function LogsPage() {
             ))}
           </div>
         )}
+        </>}
       </div>
     </div>
   );

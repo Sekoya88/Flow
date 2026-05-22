@@ -55,19 +55,25 @@ async def fetch_sources(state: DigestState) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get("https://huggingface.co/papers", headers={"Accept": "application/json"})
+            r = await client.get("https://huggingface.co/api/daily_papers")
             if r.status_code == 200:
-                data = r.json() if r.headers.get("content-type", "").startswith("application/json") else []
-                for item in data[:20] if isinstance(data, list) else []:
+                data = r.json()
+                for item in (data[:20] if isinstance(data, list) else []):
+                    paper = item.get("paper", item)
+                    authors_raw = paper.get("authors", [])
+                    authors = [
+                        a.get("name", str(a)) if isinstance(a, dict) else str(a)
+                        for a in authors_raw[:5]
+                    ]
                     papers.append(
                         {
-                            "title": item.get("title", ""),
-                            "abstract": item.get("abstract", ""),
-                            "source_url": f"https://huggingface.co/papers/{item.get('id', '')}",
-                            "arxiv_id": item.get("arxiv_id"),
-                            "authors": item.get("authors", [])[:5],
+                            "title": paper.get("title", ""),
+                            "abstract": paper.get("summary", "") or paper.get("abstract", ""),
+                            "source_url": f"https://huggingface.co/papers/{paper.get('id', '')}",
+                            "arxiv_id": paper.get("id"),
+                            "authors": authors,
                             "categories": [],
-                            "published_at": item.get("publishedAt"),
+                            "published_at": paper.get("publishedAt"),
                         }
                     )
     except Exception:
@@ -304,6 +310,59 @@ async def persist(state: DigestState) -> dict:
         except Exception:
             logger.exception("digest.persist.paper_failed", title=paper.get("title"))
 
+    # ── Knowledge graph nodes for each persisted paper ───────────────────
+    paper_kg_ids: list[tuple[str, list[str]]] = []
+    for note in state["obsidian_notes"]:
+        paper = note["paper"]
+        try:
+            row = await pool.fetchrow(
+                """
+                INSERT INTO kg_nodes
+                    (workspace_id, label, node_type, summary, source_path, metadata)
+                VALUES ($1, $2, 'paper', $3, $4, $5::jsonb)
+                ON CONFLICT (workspace_id, label, node_type) DO UPDATE
+                    SET summary = EXCLUDED.summary, source_path = EXCLUDED.source_path,
+                        metadata = EXCLUDED.metadata, updated_at = now()
+                RETURNING id
+                """,
+                UUID(workspace_id),
+                paper["title"][:500],
+                (paper.get("tldr") or paper.get("abstract", ""))[:500],
+                paper.get("source_url"),
+                json.dumps({
+                    "arxiv_id": paper.get("arxiv_id"),
+                    "categories": paper.get("categories", []),
+                    "relevance_score": paper.get("relevance_score"),
+                }),
+            )
+            if row:
+                paper_kg_ids.append((str(row["id"]), paper.get("categories", [])))
+        except Exception:
+            logger.warning("digest.persist.kg_node_failed", title=paper.get("title"))
+
+    # ── Edges between papers sharing categories ───────────────────────────
+    for i, (id_a, cats_a) in enumerate(paper_kg_ids):
+        for id_b, cats_b in paper_kg_ids[i + 1:]:
+            shared = set(cats_a) & set(cats_b)
+            if not shared:
+                continue
+            weight = len(shared) / max(len(cats_a), len(cats_b), 1)
+            try:
+                await pool.execute(
+                    """
+                    INSERT INTO kg_edges
+                        (workspace_id, source_id, target_id, edge_type, weight)
+                    VALUES ($1, $2, $3, 'co_category', $4)
+                    ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
+                    """,
+                    UUID(workspace_id),
+                    UUID(id_a),
+                    UUID(id_b),
+                    weight,
+                )
+            except Exception:
+                pass
+
     obsidian_mode = config.get("obsidian_mode", "filesystem")
     if obsidian_mode == "filesystem":
         vault_path = config.get("obsidian_vault_path", "/vault")
@@ -344,7 +403,10 @@ def build_research_digest_graph():
     return g.compile()
 
 
-async def run_research_digest(workspace_id: str, config: dict) -> dict:
+async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) -> dict:
+    if stream_hub is not None:
+        stream_hub.publish_global(workspace_id, "digest.start", {"workspace_id": workspace_id})
+
     graph = build_research_digest_graph()
     initial: DigestState = {
         "workspace_id": workspace_id,
@@ -356,4 +418,14 @@ async def run_research_digest(workspace_id: str, config: dict) -> dict:
         "persisted_ids": [],
     }
     result = await graph.ainvoke(initial)
-    return {"persisted": len(result.get("persisted_ids", []))}
+    persisted = len(result.get("persisted_ids", []))
+
+    if stream_hub is not None:
+        stream_hub.publish_global(workspace_id, "digest.complete", {
+            "workspace_id": workspace_id,
+            "persisted": persisted,
+            "fetched": len(result.get("raw_papers", [])),
+            "filtered": len(result.get("filtered_papers", [])),
+        })
+
+    return {"persisted": persisted}
