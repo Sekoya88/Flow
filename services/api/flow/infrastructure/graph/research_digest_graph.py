@@ -81,20 +81,62 @@ async def fetch_sources(state: DigestState) -> dict:
 
 
 async def filter_by_interest(state: DigestState) -> dict:
+    from flow.config import get_settings
+    from flow.infrastructure.llm.providers import get_chat_model
+
     config = state["config"]
     min_score = config.get("min_relevance_score", 0.5)
     categories = set(config.get("arxiv_categories", []))
 
-    filtered = []
+    # pre-filter: drop papers with no title/abstract or zero category overlap
+    candidates = []
     for paper in state["raw_papers"]:
         if not paper.get("title") or not paper.get("abstract"):
             continue
         paper_cats = set(paper.get("categories", []))
-        category_match = bool(categories & paper_cats) if categories and paper_cats else True
-        paper["relevance_score"] = 0.7 if category_match else 0.4
-        if paper["relevance_score"] >= min_score:
-            filtered.append(paper)
+        if categories and paper_cats and not (categories & paper_cats):
+            paper["relevance_score"] = 0.2
+        else:
+            paper["relevance_score"] = None  # needs LLM scoring
+        candidates.append(paper)
 
+    settings = get_settings()
+    fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
+    llm = get_chat_model(
+        {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.0},
+        fallback_keys,
+    ) or get_chat_model(
+        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.0}, fallback_keys
+    )
+
+    for paper in candidates:
+        if paper["relevance_score"] is not None:
+            continue
+        if llm is None:
+            paper["relevance_score"] = 0.6
+            continue
+        try:
+            from langchain_core.messages import HumanMessage, SystemMessage
+
+            prompt = (
+                f"Rate the research relevance of this paper to the topics: {', '.join(sorted(categories)) or 'AI/ML'}.\n"
+                f"Title: {paper['title']}\nAbstract: {paper['abstract'][:800]}\n"
+                'Reply with JSON only: {"score": <float 0.0-1.0>}'
+            )
+            resp = await llm.ainvoke([
+                SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
+                HumanMessage(content=prompt),
+            ])
+            text = resp.content if hasattr(resp, "content") else str(resp)
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            parsed = json.loads(text[start:end]) if start >= 0 else {}
+            paper["relevance_score"] = float(parsed.get("score", 0.5))
+        except Exception:
+            paper["relevance_score"] = 0.5
+
+    filtered = [p for p in candidates if p["relevance_score"] >= min_score]
+    filtered.sort(key=lambda p: p["relevance_score"], reverse=True)
     logger.info("digest.filter.done", kept=len(filtered), total=len(state["raw_papers"]))
     return {"filtered_papers": filtered[:20]}
 
@@ -149,32 +191,69 @@ async def format_obsidian(state: DigestState) -> dict:
     today = date.today().isoformat()
     notes = []
     for paper in state["enriched_papers"]:
-        lines = [
-            f"# {paper['title']}",
-            "",
-            f"**Date**: {today}",
-            f"**Source**: {paper.get('source_url', '')}",
-            f"**ArXiv**: {paper.get('arxiv_id', 'N/A')}",
-            f"**Authors**: {', '.join(paper.get('authors', []))}",
-            f"**Relevance**: {paper.get('relevance_score', 0):.2f}",
-            "",
-            "## TL;DR",
-            paper.get("tldr") or "_No summary generated._",
-            "",
-            "## Key Insights",
-            paper.get("key_insights") or "_No insights generated._",
-            "",
-            "## Abstract",
-            paper.get("abstract", "")[:2000],
-            "",
-            "---",
-            f"#research #digest #{today}",
-        ]
+        arxiv_id = paper.get("arxiv_id") or ""
+        authors_yaml = "\n".join(f"  - {a}" for a in paper.get("authors", []))
+        cats_yaml = "\n".join(f"  - {c}" for c in paper.get("categories", []))
+        relevance = paper.get("relevance_score", 0.0)
+
+        frontmatter = f"""---
+title: "{paper['title'].replace('"', "'")}"
+date: {today}
+created: {today}
+source: {paper.get('source_url', '')}
+arxiv_id: {arxiv_id}
+authors:
+{authors_yaml or '  - Unknown'}
+categories:
+{cats_yaml or '  - unknown'}
+tags:
+  - research
+  - digest
+  - {today}
+relevance_score: {relevance:.2f}
+flow_knowledge_id: null
+status: unread
+type: research-paper
+---"""
+
+        tldr = paper.get("tldr") or "_No summary generated._"
+        key_insights = paper.get("key_insights") or "_No insights generated._"
+        abstract = paper.get("abstract", "")[:2000]
+        daily_link = f"[[Research/Digest/{today}/index]]"
+
+        content = f"""{frontmatter}
+
+# {paper['title']}
+
+> [!abstract] TL;DR
+> {tldr}
+
+## 🔑 Key Insights
+{key_insights}
+
+## 📖 Abstract
+{abstract}
+
+## 🛠 Practical Applications
+_To be filled._
+
+## 📦 Models / Datasets / Benchmarks
+_See paper for details._
+
+## 🔗 References
+- Source: {paper.get('source_url', 'N/A')}
+- ArXiv: {f'https://arxiv.org/abs/{arxiv_id}' if arxiv_id else 'N/A'}
+- Daily digest: {daily_link}
+
+---
+#research #digest #{today.replace('-', '')}"""
+
+        safe_name = arxiv_id or paper['title'][:40].replace("/", "-").replace(":", "")
         notes.append(
             {
                 "paper": paper,
-                "path": f"Research/Digest/{today}/{paper.get('arxiv_id', paper['title'][:40])}.md",
-                "content": "\n".join(lines),
+                "path": f"Research/Digest/{today}/{safe_name}.md",
+                "content": content,
             }
         )
     return {"obsidian_notes": notes}
