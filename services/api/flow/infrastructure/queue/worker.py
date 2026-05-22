@@ -114,8 +114,7 @@ async def research_digest_tick(ctx: dict) -> None:
     arq_pool = ctx.get("arq_pool")
     if arq_pool is None:
         from flow.infrastructure.queue.client import get_arq_pool
-        from flow.config import get_settings
-        arq_pool = await get_arq_pool(get_settings().redis_url)
+        arq_pool = await get_arq_pool()
 
     for row in rows:
         import json as _json

@@ -114,7 +114,6 @@ async def run_digest_now(
 ) -> dict:
     """Trigger a research digest immediately. Returns job info."""
     from flow.infrastructure.queue.client import get_arq_pool
-    from flow.config import get_settings
 
     await _assert_workspace(user_id, body.workspace_id, repo)
     config_row = await repo._pool.fetchrow(
@@ -123,7 +122,7 @@ async def run_digest_now(
     )
     config = dict(config_row) if config_row else {}
 
-    arq_pool = await get_arq_pool(get_settings().redis_url)
+    arq_pool = await get_arq_pool()
     job = await arq_pool.enqueue_job(
         "run_research_digest",
         str(body.workspace_id),

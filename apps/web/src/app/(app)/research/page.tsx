@@ -54,6 +54,8 @@ type DigestConfig = {
   schedule_hour: number;
   min_relevance_score: number;
   arxiv_categories: string[];
+  obsidian_mode: string;
+  obsidian_vault_path: string | null;
 };
 
 function PaperCard({
@@ -167,6 +169,8 @@ function DigestConfigModal({
   const [categories, setCategories] = useState(
     (config?.arxiv_categories ?? ["cs.AI", "cs.LG", "cs.CL"]).join(", "),
   );
+  const [obsidianMode, setObsidianMode] = useState(config?.obsidian_mode ?? "none");
+  const [vaultPath, setVaultPath] = useState(config?.obsidian_vault_path ?? "/vault");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -184,6 +188,8 @@ function DigestConfigModal({
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
+          obsidian_mode: obsidianMode,
+          obsidian_vault_path: obsidianMode === "filesystem" ? vaultPath : null,
         },
       });
       onSaved(saved);
@@ -242,6 +248,32 @@ function DigestConfigModal({
               className="font-mono text-xs"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="font-mono text-xs">Obsidian sync</Label>
+            <select
+              value={obsidianMode}
+              onChange={(e) => setObsidianMode(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-xs"
+            >
+              <option value="none">Disabled</option>
+              <option value="filesystem">Filesystem</option>
+            </select>
+          </div>
+          {obsidianMode === "filesystem" && (
+            <div className="space-y-1.5">
+              <Label className="font-mono text-xs">Vault path (inside container)</Label>
+              <Input
+                value={vaultPath}
+                onChange={(e) => setVaultPath(e.target.value)}
+                placeholder="/vault"
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-flow-500 leading-relaxed">
+                Set <code className="text-flow-300">FLOW_OBSIDIAN_VAULT_PATH</code> in .env to your vault on disk.
+                The container mounts it at /vault.
+              </p>
+            </div>
+          )}
           <Button onClick={save} disabled={saving} className="w-full font-mono text-xs">
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
           </Button>

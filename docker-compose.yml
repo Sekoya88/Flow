@@ -125,6 +125,8 @@ services:
         condition: service_started
       qdrant:
         condition: service_started
+    volumes:
+      - "${FLOW_OBSIDIAN_VAULT_PATH:-/tmp/obsidian-vault}:/vault"
     restart: unless-stopped
     logging:
       driver: "json-file"
