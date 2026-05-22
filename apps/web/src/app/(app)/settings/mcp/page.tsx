@@ -66,6 +66,7 @@ function AddMCPServerModal({
   const [error, setError] = useState<string | null>(null);
 
   async function create() {
+    if (!wsId) return;
     setSaving(true);
     setError(null);
     try {

@@ -45,7 +45,7 @@ def _make_repo(server_row=None) -> FlowRepository:
     pool.fetch = AsyncMock(return_value=[server_row or _make_server_row()])
     pool.fetchrow = AsyncMock(return_value=server_row or _make_server_row())
     pool.execute = AsyncMock()
-    repo.pool = pool
+    repo._pool = pool
     return repo
 
 
@@ -63,7 +63,7 @@ def app(monkeypatch):
 async def test_list_mcp_servers_empty(app):
     app.dependency_overrides[get_repo] = lambda: (
         r := _make_repo(),
-        setattr(r.pool, "fetch", AsyncMock(return_value=[])),
+        setattr(r._pool, "fetch", AsyncMock(return_value=[])),
         r
     )[-1]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -105,7 +105,7 @@ async def test_delete_mcp_server(app):
 async def test_delete_mcp_server_not_found(app):
     app.dependency_overrides[get_repo] = lambda: (
         r := _make_repo(server_row=None),
-        setattr(r.pool, "fetchrow", AsyncMock(return_value=None)),
+        setattr(r._pool, "fetchrow", AsyncMock(return_value=None)),
         r
     )[-1]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

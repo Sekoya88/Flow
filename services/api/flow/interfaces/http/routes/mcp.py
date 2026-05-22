@@ -52,7 +52,7 @@ async def list_mcp_servers(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> list:
     await _assert_workspace(user_id, workspace_id, repo)
-    rows = await repo.pool.fetch(
+    rows = await repo._pool.fetch(
         "SELECT * FROM mcp_servers WHERE workspace_id = $1 ORDER BY created_at DESC",
         workspace_id,
     )
@@ -66,7 +66,7 @@ async def create_mcp_server(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     await _assert_workspace(user_id, body.workspace_id, repo)
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         """
         INSERT INTO mcp_servers (workspace_id, name, url, transport, metadata)
         VALUES ($1, $2, $3, $4, $5::jsonb)
@@ -88,7 +88,7 @@ async def patch_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT * FROM mcp_servers WHERE id = $1", server_id
     )
     if not row:
@@ -105,7 +105,7 @@ async def patch_mcp_server(
         f"{col} = ${i + 2}" for i, col in enumerate(updates)
     )
     values = [server_id, *updates.values()]
-    updated = await repo.pool.fetchrow(
+    updated = await repo._pool.fetchrow(
         f"UPDATE mcp_servers SET {set_clauses}, updated_at = now() WHERE id = $1 RETURNING *",
         *values,
     )
@@ -118,13 +118,13 @@ async def delete_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> None:
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT workspace_id FROM mcp_servers WHERE id = $1", server_id
     )
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
-    await repo.pool.execute("DELETE FROM mcp_servers WHERE id = $1", server_id)
+    await repo._pool.execute("DELETE FROM mcp_servers WHERE id = $1", server_id)
 
 
 @router.get("/servers/{server_id}/ping")
@@ -133,7 +133,7 @@ async def ping_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT * FROM mcp_servers WHERE id = $1", server_id
     )
     if not row:
@@ -163,7 +163,7 @@ async def list_mcp_server_tools(
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
 
-    rows = await repo.pool.fetch(
+    rows = await repo._pool.fetch(
         "SELECT * FROM mcp_server_tool_assignments WHERE mcp_server_id = $1",
         server_id,
     )
@@ -179,7 +179,7 @@ async def invoke_mcp_tool(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Playground: invoke a tool on an MCP server with arbitrary JSON arguments."""
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT * FROM mcp_servers WHERE id = $1", server_id
     )
     if not row:

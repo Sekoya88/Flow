@@ -170,6 +170,7 @@ function DigestConfigModal({
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (!wsId) return;
     setSaving(true);
     try {
       const saved = await apiFetch<DigestConfig>("/api/v1/digest/config", {

@@ -70,7 +70,7 @@ def _make_repo(config=None, papers=None) -> FlowRepository:
     pool.fetchrow = AsyncMock(return_value=config if config is not None else _make_config_row())
     pool.fetch = AsyncMock(return_value=papers if papers is not None else [_make_paper_row()])
     pool.execute = AsyncMock()
-    repo.pool = pool
+    repo._pool = pool
     return repo
 
 
@@ -95,7 +95,7 @@ async def test_get_digest_config(app):
 @pytest.mark.asyncio
 async def test_get_digest_config_not_configured(app):
     repo = _make_repo()
-    repo.pool.fetchrow = AsyncMock(return_value=None)
+    repo._pool.fetchrow = AsyncMock(return_value=None)
     app.dependency_overrides[get_repo] = lambda: repo
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(f"/api/v1/digest/config?workspace_id={_WS_ID}", headers=_auth())
@@ -143,7 +143,7 @@ async def test_list_papers_empty(app):
 @pytest.mark.asyncio
 async def test_patch_paper_status(app):
     repo = _make_repo()
-    repo.pool.fetchrow = AsyncMock(
+    repo._pool.fetchrow = AsyncMock(
         side_effect=[
             {"workspace_id": _WS_ID},
             _make_paper_row(status="read"),
@@ -163,7 +163,7 @@ async def test_patch_paper_status(app):
 @pytest.mark.asyncio
 async def test_patch_paper_not_found(app):
     repo = _make_repo()
-    repo.pool.fetchrow = AsyncMock(return_value=None)
+    repo._pool.fetchrow = AsyncMock(return_value=None)
     app.dependency_overrides[get_repo] = lambda: repo
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.patch(

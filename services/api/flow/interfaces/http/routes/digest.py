@@ -57,7 +57,7 @@ async def get_digest_config(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT * FROM workspace_digest_config WHERE workspace_id = $1", workspace_id
     )
     if not row:
@@ -72,7 +72,7 @@ async def upsert_digest_config(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     await _assert_workspace(user_id, body.workspace_id, repo)
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         """
         INSERT INTO workspace_digest_config
             (workspace_id, enabled, schedule_hour, min_relevance_score,
@@ -117,7 +117,7 @@ async def run_digest_now(
     from flow.config import get_settings
 
     await _assert_workspace(user_id, body.workspace_id, repo)
-    config_row = await repo.pool.fetchrow(
+    config_row = await repo._pool.fetchrow(
         "SELECT * FROM workspace_digest_config WHERE workspace_id = $1",
         body.workspace_id,
     )
@@ -157,7 +157,7 @@ async def list_digest_papers(
         i += 1
 
     where = " AND ".join(conditions)
-    rows = await repo.pool.fetch(
+    rows = await repo._pool.fetch(
         f"""
         SELECT * FROM digest_papers
         WHERE {where}
@@ -181,7 +181,7 @@ async def list_digest_history(
 ) -> list:
     """Paginated history of digest runs — grouped by day with aggregate stats."""
     await _assert_workspace(user_id, workspace_id, repo)
-    rows = await repo.pool.fetch(
+    rows = await repo._pool.fetch(
         """
         SELECT
             digested_at::date                          AS run_date,
@@ -211,14 +211,14 @@ async def patch_digest_paper(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo.pool.fetchrow(
+    row = await repo._pool.fetchrow(
         "SELECT workspace_id FROM digest_papers WHERE id = $1", paper_id
     )
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
 
-    updated = await repo.pool.fetchrow(
+    updated = await repo._pool.fetchrow(
         "UPDATE digest_papers SET status = $2 WHERE id = $1 RETURNING *",
         paper_id,
         body.status,
