@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . /app/flow_mcp/
+RUN touch /app/flow_mcp/__init__.py
 
 EXPOSE 8001
 
-CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "-m", "uvicorn", "flow_mcp.server:app", "--host", "0.0.0.0", "--port", "8001"]
