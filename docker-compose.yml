@@ -151,6 +151,56 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  mcp:
+    build:
+      context: ./services/mcp
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      FLOW_API_URL: http://api:8000
+      FLOW_JWT_SECRET: dev-insecure-change-in-prod-use-openssl-rand-hex-32
+      FLOW_GITHUB_TOKEN: ${FLOW_GITHUB_TOKEN:-}
+      FLOW_TAVILY_API_KEY: ${FLOW_TAVILY_API_KEY:-}
+      FLOW_OBSIDIAN_MODE: filesystem
+      FLOW_OBSIDIAN_VAULT_PATH: /vault
+      FLOW_MINIO_ENDPOINT: minio:9000
+      FLOW_MINIO_ACCESS_KEY: ${FLOW_MINIO_ACCESS_KEY:-minioadmin}
+      FLOW_MINIO_SECRET_KEY: ${FLOW_MINIO_SECRET_KEY:-minioadmin}
+      FLOW_MINIO_BUCKET: ${FLOW_MINIO_BUCKET:-flow-obsidian}
+    ports:
+      - "18001:8001"
+    volumes:
+      - flow_vault_data:/vault
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${FLOW_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${FLOW_MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - flow_minio_data:/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
 volumes:
   flow_pgdata:
   flow_qdrant_data:
+  flow_vault_data:
+  flow_minio_data:
