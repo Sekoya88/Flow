@@ -72,7 +72,7 @@ function AddMCPServerModal({
     try {
       const server = await apiFetch<MCPServer>("/api/v1/mcp/servers", {
         method: "POST",
-        body: JSON.stringify({ workspace_id: wsId, name, url, transport }),
+        json: { workspace_id: wsId, name, url, transport },
       });
       onCreated(server);
       setOpen(false);

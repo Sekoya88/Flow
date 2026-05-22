@@ -175,7 +175,7 @@ function DigestConfigModal({
     try {
       const saved = await apiFetch<DigestConfig>("/api/v1/digest/config", {
         method: "PUT",
-        body: JSON.stringify({
+        json: {
           workspace_id: wsId,
           enabled,
           schedule_hour: parseInt(hour) || 8,
@@ -184,7 +184,7 @@ function DigestConfigModal({
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
-        }),
+        },
       });
       onSaved(saved);
       setOpen(false);
@@ -290,7 +290,7 @@ export default function ResearchPage() {
     try {
       await apiFetch("/api/v1/digest/run", {
         method: "POST",
-        body: JSON.stringify({ workspace_id: wsId }),
+        json: { workspace_id: wsId },
       });
     } finally {
       setRunning(false);
@@ -300,7 +300,7 @@ export default function ResearchPage() {
   async function handleStatusChange(id: string, newStatus: string) {
     await apiFetch(`/api/v1/digest/papers/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: newStatus }),
+      json: { status: newStatus },
     });
     setPapers((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: newStatus as Paper["status"] } : p)),
