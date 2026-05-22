@@ -13,6 +13,8 @@ import {
   MessageSquare,
   MoreHorizontal,
   Network,
+  Newspaper,
+  Plug,
   ScrollText,
   Settings,
   Sparkles,
@@ -55,6 +57,7 @@ const primaryNav = [
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/evals", label: "Evals", icon: CheckCircle },
   { href: "/logs", label: "Logs", icon: Terminal },
+  { href: "/research", label: "Research", icon: Newspaper },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 
@@ -148,6 +151,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Settings className="h-3.5 w-3.5" aria-hidden />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push("/settings/mcp")}
+                className="gap-2 font-mono text-xs"
+              >
+                <Plug className="h-3.5 w-3.5" aria-hidden />
+                MCP Servers
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
