@@ -33,6 +33,7 @@ from flow.interfaces.http.routes import (
     analytics,
     auth,
     dashboard,
+    digest,
     evaluations,
     executions,
     evolution,
@@ -44,6 +45,7 @@ from flow.interfaces.http.routes import (
     knowledge,
     local,
     logs,
+    mcp,
     memory,
     meta,
     observability_ws,
@@ -164,6 +166,8 @@ def create_app() -> FastAPI:
     app.include_router(ab_tests.router)
     app.include_router(evaluations.router)
     app.include_router(graph.router)
+    app.include_router(mcp.router)
+    app.include_router(digest.router)
     return app
 
 
