@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 import httpx
@@ -168,3 +168,31 @@ async def list_mcp_server_tools(
         server_id,
     )
     return [dict(r) for r in rows]
+
+
+@router.post("/servers/{server_id}/tools/{tool_name}/invoke")
+async def invoke_mcp_tool(
+    server_id: UUID,
+    tool_name: str,
+    body: dict[str, Any],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Playground: invoke a tool on an MCP server with arbitrary JSON arguments."""
+    row = await repo.pool.fetchrow(
+        "SELECT * FROM mcp_servers WHERE id = $1", server_id
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    await _assert_workspace(user_id, row["workspace_id"], repo)
+
+    invoke_url = row["url"].rstrip("/").rsplit("/sse", 1)[0] + f"/invoke/{tool_name}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(invoke_url, json=body)
+            r.raise_for_status()
+            return {"ok": True, "result": r.json()}
+    except httpx.HTTPStatusError as exc:
+        return {"ok": False, "status_code": exc.response.status_code, "detail": exc.response.text}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}

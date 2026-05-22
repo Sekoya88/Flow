@@ -171,6 +171,39 @@ async def list_digest_papers(
     return [dict(r) for r in rows]
 
 
+@router.get("/history")
+async def list_digest_history(
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = Query(default=30, le=365),
+    offset: int = 0,
+) -> list:
+    """Paginated history of digest runs — grouped by day with aggregate stats."""
+    await _assert_workspace(user_id, workspace_id, repo)
+    rows = await repo.pool.fetch(
+        """
+        SELECT
+            digested_at::date                          AS run_date,
+            COUNT(*)                                   AS paper_count,
+            ROUND(AVG(relevance_score)::numeric, 3)    AS avg_relevance,
+            COUNT(*) FILTER (WHERE status = 'unread')  AS unread_count,
+            COUNT(*) FILTER (WHERE status = 'read')    AS read_count,
+            array_agg(DISTINCT unnest) FILTER (WHERE unnest IS NOT NULL) AS categories
+        FROM digest_papers dp,
+             LATERAL unnest(dp.categories) AS unnest
+        WHERE dp.workspace_id = $1
+        GROUP BY run_date
+        ORDER BY run_date DESC
+        LIMIT $2 OFFSET $3
+        """,
+        workspace_id,
+        limit,
+        offset,
+    )
+    return [dict(r) for r in rows]
+
+
 @router.patch("/papers/{paper_id}")
 async def patch_digest_paper(
     paper_id: UUID,
