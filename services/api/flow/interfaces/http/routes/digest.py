@@ -203,6 +203,55 @@ async def list_digest_history(
     return [dict(r) for r in rows]
 
 
+@router.post("/papers/{paper_id}/summarize")
+async def summarize_paper(
+    paper_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Re-run LLM summarization on a single paper and update tldr + key_insights."""
+    row = await repo._pool.fetchrow(
+        "SELECT * FROM digest_papers WHERE id = $1", paper_id
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    await _assert_workspace(user_id, row["workspace_id"], repo)
+
+    import json as _json
+    from flow.config import get_settings
+    from flow.infrastructure.llm.providers import get_chat_model
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    settings = get_settings()
+    fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
+    llm = get_chat_model(
+        {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.1}, fallback_keys
+    )
+    if llm is None:
+        raise HTTPException(status_code=503, detail="No LLM provider configured")
+
+    abstract = row["abstract"] or ""
+    resp = await llm.ainvoke([
+        SystemMessage(content="You are a research assistant. Be concise."),
+        HumanMessage(content=(
+            f"Paper: {row['title']}\n\nAbstract: {abstract[:1500]}\n\n"
+            'Reply with JSON only: {"tldr": "one sentence", "key_insights": "2-3 bullet points"}'
+        )),
+    ])
+    text = resp.content if hasattr(resp, "content") else str(resp)
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    parsed = _json.loads(text[start:end]) if start >= 0 else {}
+
+    updated = await repo._pool.fetchrow(
+        "UPDATE digest_papers SET tldr = $1, key_insights = $2 WHERE id = $3 RETURNING tldr, key_insights",
+        parsed.get("tldr"),
+        parsed.get("key_insights"),
+        paper_id,
+    )
+    return dict(updated)
+
+
 @router.patch("/papers/{paper_id}")
 async def patch_digest_paper(
     paper_id: UUID,

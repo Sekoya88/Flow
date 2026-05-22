@@ -31,12 +31,9 @@ class ExecutionStreamHub:
         keys = await self._client.keys("active_agent:*")
         return [k.replace("active_agent:", "") for k in keys]
 
-    def publish_global(self, workspace_id: str, kind: str, payload: dict) -> None:
+    async def publish_global(self, workspace_id: str, kind: str, payload: dict) -> None:
         """Broadcast a workspace-scoped event to the global stream channel."""
         event = {"kind": kind, **payload}
-        asyncio.create_task(self._publish_global(workspace_id, event))
-
-    async def _publish_global(self, workspace_id: str, event: dict) -> None:
         await self._client.publish(f"flow:global:{workspace_id}", json.dumps(event))
 
     async def subscribe(self, execution_id: UUID):

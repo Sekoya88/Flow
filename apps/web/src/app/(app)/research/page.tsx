@@ -8,6 +8,7 @@ import {
   Play,
   RefreshCw,
   Settings2,
+  Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,9 +62,13 @@ type DigestConfig = {
 function PaperCard({
   paper,
   onStatusChange,
+  onSummarize,
+  summarizing,
 }: {
   paper: Paper;
   onStatusChange: (id: string, status: string) => void;
+  onSummarize: (id: string) => void;
+  summarizing: boolean;
 }) {
   const scoreColor =
     paper.relevance_score >= 0.8
@@ -128,6 +133,19 @@ function PaperCard({
                 Paper
               </a>
             )}
+            <button
+              onClick={() => onSummarize(paper.id)}
+              disabled={summarizing}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] text-violet-500 hover:text-violet-300 hover:bg-flow-800 disabled:opacity-40 transition-colors"
+              title="Re-generate AI summary"
+            >
+              {summarizing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              Summarize
+            </button>
           </div>
           <div className="flex gap-1">
             {paper.status !== "read" && (
@@ -299,6 +317,7 @@ export default function ResearchPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [digestQueued, setDigestQueued] = useState(false);
+  const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!wsId) return;
@@ -351,6 +370,27 @@ export default function ResearchPage() {
     setPapers((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: newStatus as Paper["status"] } : p)),
     );
+  }
+
+  async function summarizePaper(id: string) {
+    setSummarizingIds((prev) => new Set(prev).add(id));
+    try {
+      const result = await apiFetch<{ tldr: string | null; key_insights: string | null }>(
+        `/api/v1/digest/papers/${id}/summarize`,
+        { method: "POST" },
+      );
+      setPapers((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, tldr: result.tldr, key_insights: result.key_insights } : p,
+        ),
+      );
+    } finally {
+      setSummarizingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
   return (
@@ -426,7 +466,13 @@ export default function ResearchPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {papers.map((paper) => (
-            <PaperCard key={paper.id} paper={paper} onStatusChange={handleStatusChange} />
+            <PaperCard
+                    key={paper.id}
+                    paper={paper}
+                    onStatusChange={handleStatusChange}
+                    onSummarize={summarizePaper}
+                    summarizing={summarizingIds.has(paper.id)}
+                  />
           ))}
         </div>
       )}

@@ -79,6 +79,31 @@ async def fetch_sources(state: DigestState) -> dict:
     except Exception:
         logger.warning("digest.fetch_sources.hf_failed")
 
+    try:
+        from flow.config import get_settings
+        from flow.infrastructure.tools.web import run_tavily_search
+        settings = get_settings()
+        if settings.tavily_api_key:
+            for cat in categories[:3]:
+                results = await run_tavily_search(
+                    query=f"new research paper {cat} 2025",
+                    max_results=3,
+                    api_key=settings.tavily_api_key,
+                )
+                for r in results:
+                    if r.get("title") and r.get("content"):
+                        papers.append({
+                            "title": r["title"],
+                            "abstract": r["content"][:800],
+                            "source_url": r.get("url", ""),
+                            "arxiv_id": None,
+                            "authors": [],
+                            "categories": [cat],
+                            "published_at": None,
+                        })
+    except Exception:
+        logger.warning("digest.fetch_sources.tavily_failed")
+
     logger.info("digest.fetch_sources.done", count=len(papers))
     return {"raw_papers": papers}
 
@@ -227,6 +252,14 @@ type: research-paper
         abstract = paper.get("abstract", "")[:2000]
         daily_link = f"[[Research/Digest/{today}/index]]"
 
+        # Wikilinks for categories and authors (kepano/obsidian-skills style)
+        cat_links = " ".join(
+            f"[[Category/{c.replace('.', '-')}]]" for c in paper.get("categories", [])
+        )
+        author_links = " ".join(
+            f"[[Author/{a.replace(' ', '-')}]]" for a in paper.get("authors", [])[:3]
+        )
+
         content = f"""{frontmatter}
 
 # {paper['title']}
@@ -246,6 +279,12 @@ _To be filled._
 ## 📦 Models / Datasets / Benchmarks
 _See paper for details._
 
+## 🏷 Topics
+{cat_links or '_No categories._'}
+
+## 👥 Authors
+{author_links or '_Unknown._'}
+
 ## 🔗 References
 - Source: {paper.get('source_url', 'N/A')}
 - ArXiv: {f'https://arxiv.org/abs/{arxiv_id}' if arxiv_id else 'N/A'}
@@ -262,6 +301,43 @@ _See paper for details._
                 "content": content,
             }
         )
+
+    # Second pass: add related papers section (shared categories)
+    for i, note in enumerate(notes):
+        shared = [
+            n for j, n in enumerate(notes)
+            if j != i and set(n["paper"].get("categories", [])) & set(note["paper"].get("categories", []))
+        ]
+        if shared:
+            related_links = "\n".join(
+                f"- [[{n['path'].replace('.md', '')}|{n['paper']['title'][:60]}]]"
+                for n in shared[:5]
+            )
+            note["content"] += f"\n\n## 🔗 Related Papers\n{related_links}"
+
+    # Daily index file — links to all papers in this digest
+    paper_links = "\n".join(
+        f"- [[{note['path'].replace('.md', '')}|{note['paper']['title'][:70]}]]"
+        for note in notes
+    )
+    index_content = f"""---
+date: {today}
+type: daily-digest
+tags:
+  - research
+  - digest
+  - {today}
+---
+# Research Digest — {today}
+
+{paper_links if paper_links else '_No papers in this digest._'}
+"""
+    notes.append({
+        "paper": {},
+        "path": f"Research/Digest/{today}/index.md",
+        "content": index_content,
+    })
+
     return {"obsidian_notes": notes}
 
 
@@ -288,7 +364,7 @@ async def persist(state: DigestState) -> dict:
                      authors, categories, relevance_score, tldr, key_insights,
                      summary_md, obsidian_path, status, published_at)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (workspace_id, title) DO NOTHING
                 RETURNING id
                 """,
                 UUID(workspace_id),
@@ -405,7 +481,7 @@ def build_research_digest_graph():
 
 async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) -> dict:
     if stream_hub is not None:
-        stream_hub.publish_global(workspace_id, "digest.start", {"workspace_id": workspace_id})
+        await stream_hub.publish_global(workspace_id, "digest.start", {"workspace_id": workspace_id})
 
     graph = build_research_digest_graph()
     initial: DigestState = {
@@ -421,7 +497,7 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
     persisted = len(result.get("persisted_ids", []))
 
     if stream_hub is not None:
-        stream_hub.publish_global(workspace_id, "digest.complete", {
+        await stream_hub.publish_global(workspace_id, "digest.complete", {
             "workspace_id": workspace_id,
             "persisted": persisted,
             "fetched": len(result.get("raw_papers", [])),
