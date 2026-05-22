@@ -310,3 +310,9 @@ select.field { cursor: pointer; appearance: none; -webkit-appearance: none; }
 .mcp-url  { font-size: 9px; color: var(--f-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
 .mcp-status { font-size: 9px; color: var(--f-500); flex-shrink: 0; }
 .mcp-empty { font-size: 11px; color: var(--f-500); text-align: center; padding: 28px 0; line-height: 1.7; }
+
+/* ── Image preview ───────────────────────────────────────────── */
+.img-preview-wrap { position: relative; display: inline-block; max-width: 100%; margin-bottom: 8px; }
+.img-preview { max-width: 100%; max-height: 140px; border-radius: var(--radius); border: 1px solid var(--f-700); object-fit: contain; display: block; }
+.img-preview-clear { position: absolute; top: 4px; right: 4px; background: var(--f-800); border: 1px solid var(--f-700); border-radius: 4px; color: var(--f-300); cursor: pointer; font-size: 10px; font-family: var(--font); padding: 1px 5px; line-height: 1.4; }
+.img-preview-clear:hover { background: var(--f-700); color: var(--f-50); }

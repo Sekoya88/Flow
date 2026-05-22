@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { listMCPServers, pingMCPServer, type MCPServer } from "../../lib/mcp-client";
+import { listMCPServers, type MCPServer } from "../../lib/mcp-client";
 
 type ServerStatus = { server: MCPServer; ok: boolean | null };
 
@@ -20,10 +20,11 @@ export function VaultStatus({ workspaceId }: { workspaceId: string }) {
         await Promise.all(
           servers.map(async (s, i) => {
             try {
-              const result = await pingMCPServer(s.id);
+              const healthUrl = s.url.replace(/\/sse$/, "").replace(/\/$/, "") + "/health";
+              const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
               if (!cancelled) {
                 setStatuses((prev) =>
-                  prev.map((item, idx) => (idx === i ? { ...item, ok: result.ok } : item))
+                  prev.map((item, idx) => (idx === i ? { ...item, ok: res.ok } : item))
                 );
               }
             } catch {

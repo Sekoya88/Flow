@@ -40,7 +40,8 @@ export type Paper = {
 };
 
 export async function listAgents(workspaceId: string): Promise<Agent[]> {
-  return flowFetch(`/api/v1/agents?workspace_id=${workspaceId}`);
+  const res = await flowFetch<{ agents: Agent[] }>(`/api/v1/workspaces/${workspaceId}/agents`);
+  return res.agents;
 }
 
 export async function listPapers(workspaceId: string): Promise<Paper[]> {
@@ -50,35 +51,50 @@ export async function listPapers(workspaceId: string): Promise<Paper[]> {
 }
 
 export async function runAgent(
-  workspaceId: string,
+  _workspaceId: string,
   agentId: string,
   message: string
 ): Promise<{ execution_id: string }> {
-  return flowFetch("/api/v1/executions", {
+  return flowFetch(`/api/v1/agents/${agentId}/execute`, {
     method: "POST",
-    body: JSON.stringify({
-      workspace_id: workspaceId,
-      agent_id: agentId,
-      user_message: message,
-    }),
+    body: JSON.stringify({ message }),
   });
 }
 
 export async function ingestKnowledge(
   workspaceId: string,
   title: string,
-  content: string,
-  sourceUrl?: string
+  body: string
 ): Promise<{ id: string }> {
-  return flowFetch("/api/v1/knowledge/ingest", {
+  return flowFetch("/api/v1/knowledge", {
     method: "POST",
-    body: JSON.stringify({
-      workspace_id: workspaceId,
-      title,
-      content,
-      source_url: sourceUrl,
-    }),
+    body: JSON.stringify({ workspace_id: workspaceId, title, body }),
   });
+}
+
+export async function flowUpload<T>(path: string, formData: FormData): Promise<T> {
+  const [token, baseUrl] = await Promise.all([getToken(), getApiUrl()]);
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (!res.ok) throw new FlowApiError(res.status, await res.text());
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export async function ingestImageKnowledge(
+  workspaceId: string,
+  imageBlob: Blob,
+  filename: string
+): Promise<{ id: string }> {
+  const formData = new FormData();
+  formData.append("workspace_id", workspaceId);
+  formData.append("image", imageBlob, filename);
+  return flowUpload("/api/v1/knowledge/from-image", formData);
 }
 
 export async function getMe(): Promise<{
