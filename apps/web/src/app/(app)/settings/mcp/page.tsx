@@ -221,7 +221,8 @@ function MCPServerCard({
   async function ping() {
     setPinging(true);
     try {
-      const r = await apiFetch<{ ok: boolean }>(`/api/v1/mcp/servers/${server.id}/ping`);
+      const healthUrl = server.url.replace(/\/sse$/, "").replace(/\/$/, "") + "/health";
+      const r = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
       setPingStatus(r.ok ? "ok" : "error");
     } catch {
       setPingStatus("error");
