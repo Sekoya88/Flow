@@ -870,7 +870,7 @@ def _check_tool_prereqs(tool_name: str, ctx: GraphContext) -> str | None:
     return None
 
 
-def _build_context_tools(ctx: GraphContext) -> list:
+async def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, Field
@@ -1197,6 +1197,18 @@ def _build_context_tools(ctx: GraphContext) -> list:
         )
     )
 
+    if enabled.get("use_mcp") and ctx.pool:
+        from flow.infrastructure.llm.mcp_client import get_mcp_tools_for_agent
+
+        try:
+            jwt_token = ctx.agent_config.get("_jwt_token", "")
+            mcp_tools = await get_mcp_tools_for_agent(
+                uuid.UUID(str(ctx.workspace_id)), jwt_token, ctx.pool
+            )
+            lc_tools.extend(mcp_tools)
+        except Exception:
+            _node_logger.warning("mcp_client.tools_load_failed")
+
     return lc_tools
 
 
@@ -1216,7 +1228,7 @@ def make_tool_agent(ctx: GraphContext):
             user_text = _last_human_text(state)
             plan = state.get("plan") or ""
 
-            lc_tools = _build_context_tools(ctx)
+            lc_tools = await _build_context_tools(ctx)
             llm = _get_llm(ctx)
 
             if llm is None:
