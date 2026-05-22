@@ -143,29 +143,27 @@ async def create_knowledge_from_image(
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
     if not settings.openai_api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required for embeddings")
-    if not settings.anthropic_api_key:
-        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY required for vision extraction")
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required")
     if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(status_code=422, detail="file must be an image")
     image_bytes = await image.read()
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="image too large (max 10 MB)")
 
-    from langchain_anthropic import ChatAnthropic
+    from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
-    llm = ChatAnthropic(
-        api_key=settings.anthropic_api_key,
-        model="claude-haiku-4-5-20251001",
+    llm = ChatOpenAI(
+        api_key=settings.openai_api_key,
+        model="gpt-4o-mini",
         temperature=0,
         max_tokens=1024,
     )
     msg = HumanMessage(content=[
         {
-            "type": "image",
-            "source": {"type": "base64", "media_type": image.content_type, "data": image_b64},
+            "type": "image_url",
+            "image_url": {"url": f"data:{image.content_type};base64,{image_b64}"},
         },
         {
             "type": "text",
