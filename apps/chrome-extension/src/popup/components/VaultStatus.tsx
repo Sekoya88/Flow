@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listMCPServers, pingMCPServer, type MCPServer } from "../../lib/mcp-client";
-
-interface Props {
-  workspaceId: string;
-}
 
 type ServerStatus = { server: MCPServer; ok: boolean | null };
 
-export function VaultStatus({ workspaceId }: Props) {
+export function VaultStatus({ workspaceId }: { workspaceId: string }) {
   const [statuses, setStatuses] = useState<ServerStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
-    async function load() {
+    setLoading(true);
+    setStatuses([]);
+
+    async function run() {
       try {
         const servers = await listMCPServers(workspaceId);
         const initial: ServerStatus[] = servers.map((s) => ({ server: s, ok: null }));
@@ -37,43 +36,50 @@ export function VaultStatus({ workspaceId }: Props) {
           })
         );
       } catch {
-        // no servers or network error — stay empty
+        // no servers or network error
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    load();
+
+    run();
     return () => { cancelled = true; };
   }, [workspaceId]);
 
-  if (loading) return <p style={{ fontSize: 11, color: "#888" }}>Checking MCP servers…</p>;
-  if (statuses.length === 0) return null;
+  useEffect(() => {
+    return load();
+  }, [load]);
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: "#555" }}>MCP / Vault</p>
-      {statuses.map(({ server, ok }) => (
-        <div
-          key={server.id}
-          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, marginBottom: 3 }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: ok === null ? "#ccc" : ok ? "#22c55e" : "#ef4444",
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {server.name}
-          </span>
-          <span style={{ color: "#999", marginLeft: "auto" }}>
-            {ok === null ? "…" : ok ? "online" : "offline"}
-          </span>
-        </div>
-      ))}
+    <div className="tab-pane">
+      <div className="mcp-header">
+        <label className="label" style={{ marginBottom: 0 }}>MCP Servers</label>
+        <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+          {loading ? "…" : "Refresh"}
+        </button>
+      </div>
+
+      {loading && statuses.length === 0 ? (
+        <p className="mcp-empty">Checking servers…</p>
+      ) : statuses.length === 0 ? (
+        <p className="mcp-empty">
+          No MCP servers configured.<br />
+          Add one in Flow → Settings → MCP.
+        </p>
+      ) : (
+        statuses.map(({ server, ok }) => (
+          <div key={server.id} className="mcp-row">
+            <span className={`dot ${ok === null ? "dot-pending" : ok ? "dot-ok" : "dot-error"}`} />
+            <div className="mcp-info">
+              <p className="mcp-name">{server.name}</p>
+              <p className="mcp-url">{server.url}</p>
+            </div>
+            <span className="mcp-status">
+              {ok === null ? "checking" : ok ? "online" : "offline"}
+            </span>
+          </div>
+        ))
+      )}
     </div>
   );
 }

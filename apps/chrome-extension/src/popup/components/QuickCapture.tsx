@@ -1,20 +1,11 @@
 import { useEffect, useState } from "react";
 import { ingestKnowledge } from "../../lib/flow-api";
 
-const s = {
-  section: { padding: "16px", borderBottom: "1px solid #1e1e3f" },
-  label: { fontSize: "10px", color: "#6b7280", display: "block" as const, marginBottom: "6px", letterSpacing: "0.05em", textTransform: "uppercase" as const },
-  textarea: { width: "100%", background: "#1a1a2e", border: "1px solid #3d3d7f", borderRadius: "6px", padding: "8px 10px", color: "#e2e2ff", fontSize: "11px", resize: "vertical" as const, minHeight: "72px", outline: "none" },
-  btn: { marginTop: "8px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 12px", cursor: "pointer", fontSize: "10px", fontWeight: "600" },
-  success: { marginTop: "6px", fontSize: "10px", color: "#34d399" },
-  error: { marginTop: "6px", fontSize: "10px", color: "#f87171" },
-};
-
 export function QuickCapture({ workspaceId }: { workspaceId: string }) {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "ok" | "error">("idle");
   const [pageUrl, setPageUrl] = useState<string | undefined>();
-  const [pageTitle, setPageTitle] = useState("Web capture");
+  const [pageTitle, setPageTitle] = useState("");
 
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -29,7 +20,7 @@ export function QuickCapture({ workspaceId }: { workspaceId: string }) {
     if (!text.trim()) return;
     setStatus("saving");
     try {
-      await ingestKnowledge(workspaceId, pageTitle, text, pageUrl);
+      await ingestKnowledge(workspaceId, pageTitle || "Web capture", text, pageUrl);
       setStatus("ok");
       setText("");
       setTimeout(() => setStatus("idle"), 2000);
@@ -40,19 +31,36 @@ export function QuickCapture({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <div style={s.section}>
-      <label style={s.label}>Quick Capture</label>
-      <textarea
-        style={s.textarea}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Paste or type text to save to Flow knowledge base…"
-      />
-      <button style={s.btn} onClick={save} disabled={status === "saving" || !text.trim()}>
-        {status === "saving" ? "Saving…" : "Save to Flow"}
-      </button>
-      {status === "ok" && <p style={s.success}>Saved!</p>}
-      {status === "error" && <p style={s.error}>Failed. Check connection.</p>}
+    <div className="tab-pane">
+      {pageTitle && (
+        <div className="page-badge">
+          <span className="page-badge-dot" />
+          <span className="page-badge-title">{pageTitle}</span>
+        </div>
+      )}
+      <div>
+        <label className="label">Note</label>
+        <textarea
+          className="field"
+          rows={5}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.metaKey && e.key === "Enter" && save()}
+          placeholder="Paste or type text to save to Flow knowledge base…"
+        />
+      </div>
+      <div className="capture-actions">
+        <span className="capture-hint">⌘↵ to save</span>
+        <button
+          className="btn btn-primary"
+          onClick={save}
+          disabled={status === "saving" || !text.trim()}
+        >
+          {status === "saving" ? "Saving…" : "Save to Flow"}
+        </button>
+      </div>
+      {status === "ok" && <p className="msg-ok">✓ Saved to knowledge base</p>}
+      {status === "error" && <div className="msg-error">Save failed — check connection.</div>}
     </div>
   );
 }
