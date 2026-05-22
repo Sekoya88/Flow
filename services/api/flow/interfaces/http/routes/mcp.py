@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -76,7 +77,7 @@ async def create_mcp_server(
         body.name,
         body.url,
         body.transport,
-        body.metadata,
+        json.dumps(body.metadata),
     )
     return dict(row)
 
@@ -98,11 +99,15 @@ async def patch_mcp_server(
     updates = {
         k: v for k, v in body.model_dump(exclude_none=True).items()
     }
+    if "metadata" in updates:
+        updates["metadata"] = json.dumps(updates["metadata"])
     if not updates:
         return dict(row)
 
+    _JSONB_COLS = {"metadata"}
     set_clauses = ", ".join(
-        f"{col} = ${i + 2}" for i, col in enumerate(updates)
+        f"{col} = ${i + 2}::jsonb" if col in _JSONB_COLS else f"{col} = ${i + 2}"
+        for i, col in enumerate(updates)
     )
     values = [server_id, *updates.values()]
     updated = await repo._pool.fetchrow(
