@@ -117,6 +117,8 @@ from flow.interfaces.http.schemas.skills import (
     SkillUsageDataPoint,
     SkillUsageOut,
     SkillVersionOut,
+    SkillVibeCreateIn,
+    SkillVibeModifyIn,
 )
 
 __all__ = [
@@ -205,6 +207,8 @@ __all__ = [
     "SkillCatalogItemOut",
     "SkillCatalogOut",
     "DeactivateOut",
+    "SkillVibeCreateIn",
+    "SkillVibeModifyIn",
     # ab_tests
     "ABTestCreateIn",
     "ABTestResultItem",

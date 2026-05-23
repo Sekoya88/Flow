@@ -11,7 +11,7 @@ export interface KGNode {
   id: string;
   label: string;
   node_type: "note" | "concept" | "topic" | "query" | "trace" | "skill" | "tool_call" | "prompt" | "metacog"
-    | "agent" | "genome_version" | "execution" | "sub_agent" | "system_prompt";
+    | "agent" | "genome_version" | "execution" | "sub_agent" | "system_prompt" | "paper";
   ref_id?: string | null;
   summary: string | null;
   source_path: string | null;
@@ -40,6 +40,7 @@ const TYPE_COLORS: Record<string, string> = {
   note: "#8b9cb7",
   topic: "#67e8f9",
   query: "#7dd3fc",
+  paper: "#f97316",
 };
 
 interface Props {
@@ -180,12 +181,12 @@ export function KnowledgeGraphCanvas({
       if (cancelled || !fgRef.current) return;
       try {
         const charge = fg.d3Force?.("charge");
-        if (charge?.strength) charge.strength(-180);
+        if (charge?.strength) charge.strength(-420);
         const link = fg.d3Force?.("link");
-        if (link?.distance) link.distance(50);
-        if (link?.strength) link.strength(0.25);
+        if (link?.distance) link.distance(120);
+        if (link?.strength) link.strength(0.15);
         const center = fg.d3Force?.("center");
-        if (center?.strength) center.strength(0.04);
+        if (center?.strength) center.strength(0.02);
         // NOTE: do NOT call d3ReheatSimulation — the engine reheats
         // automatically when forces change. Manual reheat keeps the
         // sim permanently hot, which makes drag/click feel laggy.

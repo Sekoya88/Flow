@@ -35,6 +35,7 @@ class ParsedSkill:
     # Display label from YAML frontmatter (e.g. "1.0", "2.1"). NOT the DB integer version —
     # the DB uses MAX(version)+1 via upsert_agent_skill and never reads this field.
     version: str = "1.0"
+    category: str = "General"
     allowed_tools: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
@@ -47,6 +48,8 @@ class ParsedSkill:
             fm["description"] = self.description
         if self.version != "1.0":
             fm["version"] = self.version
+        if self.category != "General":
+            fm["category"] = self.category
         if self.allowed_tools:
             fm["allowed-tools"] = ", ".join(self.allowed_tools)
         if self.triggers:
@@ -86,6 +89,7 @@ def parse_skill_md(content: str) -> ParsedSkill:
         name=fm.get("name", "unnamed"),
         description=fm.get("description", ""),
         version=str(fm.get("version", "1.0")),
+        category=str(fm.get("category", "General")) or "General",
         allowed_tools=allowed_tools,
         triggers=fm.get("triggers", []) if isinstance(fm.get("triggers"), list) else [],
         metadata=fm.get("metadata", {}) if isinstance(fm.get("metadata"), dict) else {},

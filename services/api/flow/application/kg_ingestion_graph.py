@@ -38,7 +38,7 @@ def build_kg_ingestion_graph(config: IngestionConfig):
     api_key = config.openai_api_key
 
     def _llm() -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=api_key)
+        return ChatOpenAI(model="gpt-5.4-mini", temperature=0, openai_api_key=api_key)
 
     # ── Node 1: parse ──────────────────────────────────────────────────────
     def parse_note(state: IngestionState) -> dict:

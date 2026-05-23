@@ -12,6 +12,7 @@ from flow.application.skill_parser import parse_skill_md
 from flow.application.skill_playground import run_skill_test
 from flow.config import Settings
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.infrastructure.persistence.skill_templates import SKILL_TEMPLATES
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.rate_limit import skill_test_rate_limit
 from flow.interfaces.http.schemas import (
@@ -25,6 +26,8 @@ from flow.interfaces.http.schemas import (
     SkillListOut,
     SkillTestIn,
     SkillUsageOut,
+    SkillVibeCreateIn,
+    SkillVibeModifyIn,
 )
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"])
@@ -66,11 +69,13 @@ async def create_skill(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> SkillCreateOut:
+    parsed = parse_skill_md(body.content_md)
     sid = await repo.upsert_agent_skill(
         agent_id=body.agent_id,
         workspace_id=body.workspace_id,
         name=body.name,
         content_md=body.content_md,
+        category=parsed.category,
     )
     return {"id": str(sid)}
 
@@ -119,6 +124,7 @@ def _catalog_row_to_out(row) -> dict:
         "name": parsed.name if parsed.name != "unnamed" else row["name"],
         "version": row["version"],
         "description": parsed.description or (row["description"] or ""),
+        "category": parsed.category if parsed.category != "General" else (row.get("category") or "General"),
         "triggers": parsed.triggers or list(row["triggers"] or []),
         "allowed_tools": parsed.allowed_tools or list(row["allowed_tools"] or []),
         "metadata": parsed.metadata or dict(row["metadata"] or {}),
@@ -135,14 +141,33 @@ async def list_skills_catalog(
     repo: Annotated[FlowRepository, Depends(get_repo)],
     agent_id: Annotated[UUID | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
+    category: Annotated[str | None, Query(max_length=100)] = None,
 ) -> SkillCatalogOut:
     """Cross-agent catalog of active skills for the Skills Hub."""
     ws_rows = await repo.list_workspaces_for_user(user_id)
     allowed = {r["id"] for r in ws_rows}
     if workspace_id not in allowed:
         raise HTTPException(status_code=403, detail="workspace access denied")
-    rows = await repo.list_skills_catalog(workspace_id, agent_id, q)
+    rows = await repo.list_skills_catalog(workspace_id, agent_id, q, category)
     return {"skills": [_catalog_row_to_out(r) for r in rows]}
+
+
+@router.get("/templates")
+async def list_skill_templates(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+) -> dict:
+    """Return the static skill template library."""
+    return {
+        "templates": [
+            {
+                "name": t["name"],
+                "category": t["category"],
+                "description": t["description"],
+                "content_md": t["content_md"],
+            }
+            for t in SKILL_TEMPLATES
+        ]
+    }
 
 
 @router.post("/{skill_id}/activate", response_model=SkillActivateOut)
@@ -334,3 +359,99 @@ async def skill_usage(
         "window_days": window,
         "data": [{"date": str(r["date"]), "count": r["count"]} for r in rows],
     }
+
+
+# ── Vibe (LLM-generated skills) ───────────────────────────────────────────────
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
+
+@router.post("/vibe-create")
+async def vibe_create_skill(
+    body: SkillVibeCreateIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> StreamingResponse:
+    """Stream a generated SKILL.md from a natural-language prompt.
+
+    SSE events:
+    - {"token": "..."} — incremental content
+    - {"done": true, "skill_id": "..."} — final event with saved candidate id
+    """
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    allowed = {r["id"] for r in ws_rows}
+    if body.workspace_id not in allowed:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    from flow.application.skill_vibe import vibe_create_skill as _vibe_create
+
+    async def event_generator():
+        buffer: list[str] = []
+        async for token in _vibe_create(settings, body.prompt, body.category):
+            buffer.append(token)
+            yield f"data: {json.dumps({'token': token})}\n\n"
+
+        content_md = "".join(buffer).strip()
+        parsed = parse_skill_md(content_md)
+        skill_name = parsed.name if parsed.name != "unnamed" else "vibe-skill"
+        skill_id = await repo.upsert_agent_skill(
+            agent_id=body.agent_id,
+            workspace_id=body.workspace_id,
+            name=skill_name,
+            content_md=content_md,
+            category=parsed.category or body.category,
+            initial_active=False,
+        )
+        yield f"data: {json.dumps({'done': True, 'skill_id': str(skill_id), 'name': skill_name})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+@router.post("/{skill_id}/vibe-modify")
+async def vibe_modify_skill(
+    skill_id: UUID,
+    body: SkillVibeModifyIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> StreamingResponse:
+    """Stream a modified SKILL.md from an existing skill and a change prompt.
+
+    SSE events:
+    - {"token": "..."} — incremental content
+    - {"done": true, "skill_id": "...", "original_skill_id": "..."} — saved candidate id
+    """
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    from flow.application.skill_vibe import vibe_modify_skill as _vibe_modify
+
+    async def event_generator():
+        buffer: list[str] = []
+        async for token in _vibe_modify(settings, skill["content_md"], body.prompt):
+            buffer.append(token)
+            yield f"data: {json.dumps({'token': token})}\n\n"
+
+        content_md = "".join(buffer).strip()
+        parsed = parse_skill_md(content_md)
+        new_id = await repo.upsert_agent_skill(
+            agent_id=skill["agent_id"],
+            workspace_id=skill["workspace_id"],
+            name=skill["name"],
+            content_md=content_md,
+            category=parsed.category or skill.get("category", "General"),
+            initial_active=False,
+        )
+        yield f"data: {json.dumps({'done': True, 'skill_id': str(new_id), 'original_skill_id': str(skill_id)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=_SSE_HEADERS)

@@ -6,7 +6,9 @@ matching LangGraph's `(state) -> dict` signature.
 
 from __future__ import annotations
 
+import re
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from flow.infrastructure.observability.logging import get_logger as _get_node_logger
@@ -214,36 +216,26 @@ def make_planner(ctx: GraphContext):
                 except Exception:
                     pass  # reasoning bank query is best-effort
 
-            # Read active agent skills (progressive disclosure)
+            # Load active agent skills via centralized SkillLoader (Phase 1)
             skills_block = ""
+            matched_skill_dicts: list[dict] = []
             try:
-                from flow.application.skill_parser import parse_skill_md, skill_matches_query
+                from flow.application.skill_loader import SkillLoader
 
-                skills = await repo.list_active_skills(ctx.agent_id, ctx.workspace_id)
-                if skills:
-                    matched_skills = []
-                    for s in skills:
-                        parsed = parse_skill_md(s["content_md"])
-                        if skill_matches_query(parsed, user_text):
-                            matched_skills.append((s, parsed))
-                            await repo.increment_skill_use(s["id"])
-                            await repo.log_skill_match(
-                                skill_id=s["id"],
-                                workspace_id=ctx.workspace_id,
-                                execution_id=ctx.execution_id,
-                                matched_text=user_text[:500] if user_text else None,
-                            )
-
-                    if matched_skills:
-                        skill_lines = []
-                        for _, parsed in matched_skills:
-                            skill_lines.append(
-                                f"[Skill: {parsed.name} v{parsed.version}]\n"
-                                f"Description: {parsed.description}\n"
-                                f"Allowed tools: {', '.join(parsed.allowed_tools) or 'any'}\n\n"
-                                f"{parsed.body_md[:800]}"
-                            )
-                        skills_block = "\n\n---\n\n".join(skill_lines)
+                loader = SkillLoader(repo)
+                matched = await loader.load_and_match(
+                    agent_id=ctx.agent_id,
+                    workspace_id=ctx.workspace_id,
+                    query=user_text,
+                    execution_id=ctx.execution_id,
+                )
+                if matched:
+                    skills_block = loader.format_xml(matched)
+                    matched_skill_dicts = loader.to_state_dicts(matched)
+                    if ctx.stream_hub:
+                        ctx.stream_hub.publish_agent_event(
+                            ctx.agent_id, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]}
+                        )
             except Exception:
                 pass
 
@@ -283,7 +275,7 @@ def make_planner(ctx: GraphContext):
                         "PAST SUCCESSFUL PATTERNS (use as inspiration, don't copy verbatim):\n" + pattern_block
                     )
                 if skills_block:
-                    system += f"\n\nAGENT SKILLS (apply these guidelines):\n{skills_block}"
+                    system += f"\n\n{skills_block}"
                 if prediction_hint:
                     system += prediction_hint
                 out = await llm.ainvoke(
@@ -294,7 +286,24 @@ def make_planner(ctx: GraphContext):
                 )
                 plan = str(out.content)
             _node_logger.info("node.done", node="planner", duration_ms=int((time.monotonic() - _t0) * 1000))
-            return {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
+
+            # Emit parsed plan as todo_update to agent observability channel
+            if ctx.stream_hub and plan and ctx.agent_id:
+                todo_lines = [re.sub(r"^(\d+[\.\)]\s*|\*\s*|-\s*)", "", ln).strip() for ln in plan.split("\n") if ln.strip()]
+                todos = [{"status": "pending", "content": t} for t in todo_lines if t]
+                if todos:
+                    ctx.stream_hub.publish_agent_event(
+                        ctx.agent_id,
+                        {
+                            "type": "todo_update",
+                            "todos": todos,
+                        },
+                    )
+
+            result: dict = {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
+            if matched_skill_dicts:
+                result["active_skills"] = matched_skill_dicts
+            return result
 
     return planner
 
@@ -454,7 +463,14 @@ def make_synthesizer(ctx: GraphContext):
 
 
 def make_reflector(ctx: GraphContext):
-    """Self-reflection node: grades answer quality and optionally creates/updates skills."""
+    """MetaCognition node (Phase 2) — enhanced reflector with:
+    1. JEPA-style grading + prediction (existing)
+    2. Per-skill contribution scoring (NEW)
+    3. Mutation proposals when grade <= 2 (NEW)
+    4. Metacognitive journal entries (NEW)
+    5. Confidence calibration tracking (NEW)
+    6. Bandit arm updates (Phase 3a)
+    """
     from flow.infrastructure.observability.tracing import get_tracer
 
     tracer = get_tracer()
@@ -489,6 +505,8 @@ Output ONLY valid JSON:
 
             user_text = _last_human_text(state)
             plan = state.get("plan") or ""
+            confidence = state.get("confidence") or 0.8
+            active_skills = state.get("active_skills") or []
 
             try:
                 import json as _json
@@ -591,8 +609,100 @@ Output ONLY valid JSON:
                     except Exception:
                         pass
 
+                # === Phase 2: MetaCognition Service integration ===
+                metacog_state: dict = {}
+                try:
+                    from uuid import uuid4 as _uuid4
+
+                    from flow.application.metacog_service import MetaCogEntry, MetaCogService
+
+                    metacog = MetaCogService(ctx.pool)
+
+                    skill_scores = await metacog.evaluate_skills(
+                        execution_id=ctx.execution_id or _uuid4(),
+                        matched_skills=active_skills,
+                        grade=grade,
+                        user_text=user_text,
+                        answer=str(answer)[:2000],
+                        llm=llm,
+                    )
+
+                    cal_error = await metacog.calibrate_confidence(
+                        agent_id=ctx.agent_id,
+                        workspace_id=ctx.workspace_id,
+                        predicted_confidence=float(confidence),
+                        actual_grade=grade,
+                    )
+
+                    mutations = await metacog.propose_mutations(
+                        agent_id=ctx.agent_id,
+                        workspace_id=ctx.workspace_id,
+                        grade=grade,
+                        skill_scores=skill_scores,
+                        user_text=user_text,
+                        answer=str(answer)[:2000],
+                        llm=llm,
+                    )
+
+                    entry = MetaCogEntry(
+                        execution_id=ctx.execution_id,
+                        grade=grade,
+                        prediction=prediction,
+                        calibration_error=cal_error,
+                        skill_scores=skill_scores,
+                        mutations_proposed=mutations,
+                        reasoning=data.get("issue") or "",
+                    )
+                    await metacog.update_journal(ctx.agent_id, ctx.workspace_id, entry)
+
+                    metacog_state = {
+                        "grade": grade,
+                        "calibration_error": cal_error,
+                        "skill_scores": [{"name": s.skill_name, "contribution": s.contribution} for s in skill_scores],
+                        "mutations_count": len(mutations),
+                    }
+                    if ctx.stream_hub:
+                        ctx.stream_hub.publish_agent_event(
+                            ctx.agent_id,
+                            {
+                                "type": "metacog_evaluated",
+                                "grade": grade,
+                                "mutations_proposed": len(mutations),
+                                "skill_scores": [{"name": s.skill_name, "contribution": s.contribution} for s in skill_scores],
+                            },
+                        )
+                except Exception:
+                    _node_logger.debug("metacog_service integration failed", exc_info=True)
+
+                # === Phase 3a: Bandit arm updates ===
+                try:
+                    from uuid import UUID as _UUID
+
+                    from flow.application.rl_bandit import SkillBandit
+
+                    bandit = SkillBandit(ctx.pool)
+                    reward = max(0.0, min(1.0, (grade - 1) / 4.0))
+                    for skill_dict in active_skills:
+                        sid = skill_dict.get("skill_id")
+                        if sid:
+                            await bandit.update(ctx.agent_id, _UUID(sid), reward)
+                            if ctx.stream_hub:
+                                ctx.stream_hub.publish_agent_event(
+                                    ctx.agent_id,
+                                    {
+                                        "type": "skill_arm_updated",
+                                        "skill_id": sid,
+                                        "reward": reward,
+                                    },
+                                )
+                except Exception:
+                    pass  # bandit updates are best-effort
+
                 _node_logger.info("node.done", node="reflector", grade=grade, duration_ms=int((time.monotonic() - _t0) * 1000))
-                return {"reflection": data, "prediction": prediction}
+                result: dict = {"reflection": data, "prediction": prediction}
+                if metacog_state:
+                    result["metacog_state"] = metacog_state
+                return result
             except Exception as exc:
                 _node_logger.debug("reflector failed: %s", exc)
                 return {"reflection": {"grade": 3, "error": str(exc)}}
@@ -758,7 +868,7 @@ def _check_tool_prereqs(tool_name: str, ctx: GraphContext) -> str | None:
     return None
 
 
-def _build_context_tools(ctx: GraphContext) -> list:
+async def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, Field
@@ -910,6 +1020,7 @@ def _build_context_tools(ctx: GraphContext) -> list:
 
     async def _subagent_call(agent_name: str, message: str) -> str:
         t0 = time.time()
+        call_id = str(uuid.uuid4())
         # Emit start event so the parent run UI can render the inline card immediately
         hub = getattr(ctx, "stream_hub", None)
         parent_exec_id = getattr(ctx, "execution_id", None)
@@ -925,6 +1036,20 @@ def _build_context_tools(ctx: GraphContext) -> list:
                 )
             except Exception:
                 pass
+        if hub is not None and ctx.agent_id is not None:
+            hub.publish_agent_event(
+                ctx.agent_id,
+                {
+                    "type": "subagent_call",
+                    "id": call_id,
+                    "status": "running",
+                    "description": message[:500],
+                    "subagent_type": agent_name,
+                    "result": None,
+                    "started_at": t0,
+                    "completed_at": None,
+                },
+            )
         # Also persist a start row so a reload can replay it
         if parent_exec_id is not None and ctx.pool is not None:
             try:
@@ -1004,6 +1129,20 @@ def _build_context_tools(ctx: GraphContext) -> list:
                     )
                 except Exception:
                     pass
+            if hub is not None and ctx.agent_id is not None:
+                hub.publish_agent_event(
+                    ctx.agent_id,
+                    {
+                        "type": "subagent_call",
+                        "id": call_id,
+                        "status": "complete",
+                        "description": message[:500],
+                        "subagent_type": agent_name,
+                        "result": str(answer)[:2000],
+                        "started_at": t0,
+                        "completed_at": time.time(),
+                    },
+                )
             if parent_exec_id is not None and ctx.pool is not None:
                 try:
                     from flow.infrastructure.persistence.repo import FlowRepository as _RepoDone
@@ -1040,6 +1179,20 @@ def _build_context_tools(ctx: GraphContext) -> list:
                     )
                 except Exception:
                     pass
+            if hub is not None and ctx.agent_id is not None:
+                hub.publish_agent_event(
+                    ctx.agent_id,
+                    {
+                        "type": "subagent_call",
+                        "id": call_id,
+                        "status": "error",
+                        "description": message[:500],
+                        "subagent_type": agent_name,
+                        "result": str(exc),
+                        "started_at": t0,
+                        "completed_at": time.time(),
+                    },
+                )
             return f"[subagent_call] Error: {exc}"
 
     lc_tools.append(
@@ -1050,6 +1203,16 @@ def _build_context_tools(ctx: GraphContext) -> list:
             args_schema=SubagentArgs,
         )
     )
+
+    if enabled.get("use_mcp") and ctx.pool:
+        from flow.infrastructure.llm.mcp_client import get_mcp_tools_for_agent
+
+        try:
+            jwt_token = ctx.agent_config.get("_jwt_token", "")
+            mcp_tools = await get_mcp_tools_for_agent(uuid.UUID(str(ctx.workspace_id)), jwt_token, ctx.pool)
+            lc_tools.extend(mcp_tools)
+        except Exception:
+            _node_logger.warning("mcp_client.tools_load_failed")
 
     return lc_tools
 
@@ -1070,7 +1233,7 @@ def make_tool_agent(ctx: GraphContext):
             user_text = _last_human_text(state)
             plan = state.get("plan") or ""
 
-            lc_tools = _build_context_tools(ctx)
+            lc_tools = await _build_context_tools(ctx)
             llm = _get_llm(ctx)
 
             if llm is None:

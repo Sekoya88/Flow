@@ -1,12 +1,13 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, GitBranch, History, Loader2, Play, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CheckCircle2, GitBranch, History, Loader2, Play, Sparkles, Wand2 } from 'lucide-react'
 import { SkillDiffView } from '@/components/agents/SkillDiffView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import type { SkillCatalogRow } from '@/lib/useSkillsCatalog'
 import { useSkillHistory } from '@/lib/useSkillHistory'
 import { useSkillUsage, type UsageDay } from '@/lib/useSkillUsage'
@@ -78,6 +79,102 @@ export function SkillDetailSheet({
     [versions, selectedVid],
   )
 
+  // Vibe-modify state
+  type VibeState = 'idle' | 'streaming' | 'done' | 'error'
+  const [vibePrompt, setVibePrompt] = useState('')
+  const [vibeState, setVibeState] = useState<VibeState>('idle')
+  const [vibeContent, setVibeContent] = useState('')
+  const [vibeCandidateId, setVibeCandidateId] = useState<string | null>(null)
+  const [vibeActivating, setVibeActivating] = useState(false)
+  const [vibeActivated, setVibeActivated] = useState(false)
+  const vibeScrollRef = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    if (vibeScrollRef.current) {
+      vibeScrollRef.current.scrollTop = vibeScrollRef.current.scrollHeight
+    }
+  }, [vibeContent])
+
+  useEffect(() => {
+    setVibePrompt('')
+    setVibeState('idle')
+    setVibeContent('')
+    setVibeCandidateId(null)
+    setVibeActivated(false)
+  }, [skill?.id])
+
+  const handleVibeModify = useCallback(async () => {
+    if (!skill || !vibePrompt.trim()) return
+    setVibeState('streaming')
+    setVibeContent('')
+    setVibeCandidateId(null)
+    setVibeActivated(false)
+
+    try {
+      const res = await fetch(`/api/v1/skills/${skill.id}/vibe-modify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('flow_token')}` },
+        body: JSON.stringify({ prompt: vibePrompt }),
+      })
+      if (!res.body) throw new Error('no stream')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const ev = JSON.parse(line.slice(6))
+            if (ev.token) setVibeContent(p => p + ev.token)
+            if (ev.done && ev.skill_id) {
+              setVibeCandidateId(ev.skill_id)
+              setVibeState('done')
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch {
+      setVibeState('error')
+    }
+  }, [skill, vibePrompt])
+
+  const handleVibeActivateNow = useCallback(async () => {
+    if (!vibeCandidateId) return
+    setVibeActivating(true)
+    try {
+      await fetch(`/api/v1/skills/${vibeCandidateId}/activate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('flow_token')}` },
+      })
+      setVibeActivated(true)
+      onActivated?.()
+    } finally {
+      setVibeActivating(false)
+    }
+  }, [vibeCandidateId, onActivated])
+
+  const handleVibeSubmitReview = useCallback(async () => {
+    if (!vibeCandidateId) return
+    setVibeActivating(true)
+    try {
+      await fetch(`/api/v1/proposals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('flow_token')}` },
+        body: JSON.stringify({ skill_candidate_id: vibeCandidateId, title: `Vibe edit: ${skill?.name}` }),
+      }).catch(() => {})
+      setVibeActivated(true)
+      onActivated?.()
+    } finally {
+      setVibeActivating(false)
+    }
+  }, [vibeCandidateId, skill?.name, onActivated])
+
   const handleActivate = async (id: string) => {
     await activate(id)
     onActivated?.()
@@ -121,6 +218,10 @@ export function SkillDetailSheet({
                   <TabsTrigger value="playground">
                     <Play className="mr-1 h-3.5 w-3.5" />
                     Playground
+                  </TabsTrigger>
+                  <TabsTrigger value="vibe">
+                    <Wand2 className="mr-1 h-3.5 w-3.5" />
+                    Vibe
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -286,6 +387,67 @@ export function SkillDetailSheet({
                 <ScrollArea className="h-full">
                   <div className="p-6">
                     <SkillPlayground skillId={skill.id} triggers={skill.triggers} />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="vibe" className="flex-1">
+                <ScrollArea className="h-full">
+                  <div className="space-y-4 p-6">
+                    <p className="text-xs text-muted-foreground">
+                      Describe the change you want — the AI will generate a new version of this skill.
+                    </p>
+                    <Textarea
+                      value={vibePrompt}
+                      onChange={e => setVibePrompt(e.target.value)}
+                      placeholder="e.g. Add an example for summarizing Slack threads, and make the output format use bullet points…"
+                      rows={3}
+                      className="resize-none text-sm"
+                      disabled={vibeState === 'streaming'}
+                    />
+                    {vibeState === 'idle' && (
+                      <Button size="sm" onClick={handleVibeModify} disabled={!vibePrompt.trim()} className="gap-1.5">
+                        <Wand2 className="h-3.5 w-3.5" />
+                        Generate modification
+                      </Button>
+                    )}
+                    {vibeState === 'streaming' && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Generating…
+                      </div>
+                    )}
+                    {(vibeState === 'streaming' || vibeState === 'done') && vibeContent && (
+                      <pre
+                        ref={vibeScrollRef}
+                        className="max-h-80 overflow-y-auto rounded-[6px] border border-flow-800 bg-muted/20 p-4 font-mono text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap"
+                      >
+                        {vibeContent}
+                      </pre>
+                    )}
+                    {vibeState === 'done' && !vibeActivated && (
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleVibeActivateNow} disabled={vibeActivating} className="gap-1.5">
+                          {vibeActivating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Activate now
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleVibeSubmitReview} disabled={vibeActivating} className="gap-1.5 border-flow-800">
+                          Submit for review
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setVibeState('idle'); setVibeContent('') }} className="text-muted-foreground">
+                          Discard
+                        </Button>
+                      </div>
+                    )}
+                    {vibeState === 'done' && vibeActivated && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Version saved successfully
+                      </div>
+                    )}
+                    {vibeState === 'error' && (
+                      <p className="text-xs text-destructive">Generation failed. Check API key configuration.</p>
+                    )}
                   </div>
                 </ScrollArea>
               </TabsContent>

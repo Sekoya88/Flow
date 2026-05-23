@@ -2,7 +2,18 @@
 import { Activity, Layers, Play, Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { SkillCatalogRow } from '@/lib/useSkillsCatalog'
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Research:      'border-blue-500/40 text-blue-400',
+  Code:          'border-emerald-500/40 text-emerald-400',
+  Communication: 'border-violet-500/40 text-violet-400',
+  Analysis:      'border-amber-500/40 text-amber-400',
+  Memory:        'border-pink-500/40 text-pink-400',
+  Planning:      'border-cyan-500/40 text-cyan-400',
+  General:       'border-flow-800 text-muted-foreground',
+}
 
 interface SkillHubCardProps {
   skill: SkillCatalogRow
@@ -28,6 +39,16 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
             <Workflow className="h-3 w-3" />
             <span className="truncate">{skill.agent_name}</span>
           </div>
+          {skill.category && skill.category !== 'General' && (
+            <div className="mt-1">
+              <Badge
+                variant="outline"
+                className={cn('text-[9px] px-1.5 py-0', CATEGORY_COLORS[skill.category] ?? CATEGORY_COLORS.General)}
+              >
+                {skill.category}
+              </Badge>
+            </div>
+          )}
         </div>
         <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
           v{skill.version}

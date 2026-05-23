@@ -15,6 +15,7 @@ from flow.application.scheduler import scheduler_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
+from flow.infrastructure.graph.research_digest_graph import run_research_digest as _run_digest
 from flow.infrastructure.observability.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -98,14 +99,41 @@ async def task_run_deer_execution(
         structlog.contextvars.unbind_contextvars("execution_id", "agent_id", "workspace_id", "template")
 
 
+async def task_run_research_digest(ctx: dict, workspace_id: str, config: dict) -> dict:
+    return await _run_digest(workspace_id, config, stream_hub=ctx.get("stream_hub"))
+
+
+async def research_digest_tick(ctx: dict) -> None:
+    """Fan out a digest run to every workspace with digest enabled."""
+    pool = ctx.get("pool")
+    if pool is None:
+        return
+    rows = await pool.fetch("SELECT workspace_id, row_to_json(wdc)::text AS cfg FROM workspace_digest_config wdc WHERE enabled = true")
+    arq_pool = ctx.get("arq_pool")
+    if arq_pool is None:
+        from flow.infrastructure.queue.client import get_arq_pool
+
+        arq_pool = await get_arq_pool()
+
+    for row in rows:
+        import json as _json
+
+        config = _json.loads(row["cfg"]) if isinstance(row["cfg"], str) else dict(row)
+        await arq_pool.enqueue_job("run_research_digest", str(row["workspace_id"]), config)
+
+
 class WorkerSettings:
-    functions = [arq.func(task_run_deer_execution, name="run_deer_execution")]
+    functions = [
+        arq.func(task_run_deer_execution, name="run_deer_execution"),
+        arq.func(task_run_research_digest, name="run_research_digest"),
+    ]
     cron_jobs = [
         arq.cron(scheduler_tick, minute=set(range(60)), run_at_startup=False),
         arq.cron(auto_eval_tick, hour=3, minute=0, run_at_startup=False),
         arq.cron(skill_decay_tick, hour=4, minute=0, run_at_startup=False),
         arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
         arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
+        arq.cron(research_digest_tick, hour=8, minute=0, run_at_startup=False),
     ]
     on_startup = startup
     on_shutdown = shutdown

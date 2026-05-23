@@ -29,7 +29,7 @@ build:
 # Use this for code changes + new migrations. NEVER destroys the DB.
 # Also re-runs seeds so newly added canonical agents/skills appear immediately.
 update:
-	docker compose up --build -d api worker web
+	docker compose up --build -d api worker web mcp minio
 	@sleep 4
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
@@ -57,6 +57,9 @@ logs-api:
 
 logs-worker:
 	docker compose logs -f worker --tail=100
+
+logs-mcp:
+	docker compose logs -f mcp --tail=100
 
 # ── Restart a single service ──────────────────────────────────────────────────
 restart:

@@ -13,6 +13,8 @@ import {
   MessageSquare,
   MoreHorizontal,
   Network,
+  Newspaper,
+  Plug,
   ScrollText,
   Settings,
   Sparkles,
@@ -55,6 +57,7 @@ const primaryNav = [
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/evals", label: "Evals", icon: CheckCircle },
   { href: "/logs", label: "Logs", icon: Terminal },
+  { href: "/research", label: "Research", icon: Newspaper },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 
@@ -66,11 +69,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setUser = useStore((s) => s.setUser);
 
   useEffect(() => {
-    apiFetch<{ id: string; email: string; workspaces: { id: string; name: string }[] }>(
+    apiFetch<{ user: { id: string; email: string }; workspaces: { id: string; name: string }[] }>(
       "/api/v1/auth/me",
     )
       .then((me) => {
-        setUser({ id: me.id, email: me.email });
+        setUser({ id: me.user.id, email: me.user.email });
         setWorkspaces(me.workspaces ?? []);
       })
       .catch(() => {/* token invalid → middleware redirects */});
@@ -128,6 +131,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <ThemeToggle />
 
+          <UserAvatar />
+
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -146,6 +151,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Settings className="h-3.5 w-3.5" aria-hidden />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push("/settings/mcp")}
+                className="gap-2 font-mono text-xs"
+              >
+                <Plug className="h-3.5 w-3.5" aria-hidden />
+                MCP Servers
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -234,6 +246,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-flow-800 bg-flow-950 py-3 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-flow-600">
         Flow · agent workspace
       </footer>
+    </div>
+  );
+}
+
+function UserAvatar() {
+  const user = useStore((s) => s.user);
+  if (!user) return null;
+  const initial = user.email[0].toUpperCase();
+  return (
+    <div
+      className="hidden md:flex h-6 w-6 items-center justify-center rounded-full bg-flow-violet/20 border border-flow-violet/40 font-mono text-[10px] font-bold text-flow-violet cursor-default select-none"
+      title={user.email}
+    >
+      {initial}
     </div>
   );
 }

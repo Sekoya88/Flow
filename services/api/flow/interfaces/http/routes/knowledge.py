@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -130,6 +131,70 @@ async def crawl_url(
         settings=settings,
     )
     return {"id": str(sid), "title": title}
+
+
+@router.post("/from-image", status_code=status.HTTP_201_CREATED)
+async def create_knowledge_from_image(
+    workspace_id: Annotated[UUID, Form()],
+    image: Annotated[UploadFile, File()],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    await _assert_workspace(user_id, workspace_id, repo)
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=400, detail="OPENAI_API_KEY required")
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=422, detail="file must be an image")
+    image_bytes = await image.read()
+    if len(image_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="image too large (max 10 MB)")
+
+    from langchain_core.messages import HumanMessage
+    from langchain_openai import ChatOpenAI
+
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    llm = ChatOpenAI(
+        api_key=settings.openai_api_key,
+        model="gpt-5.4-mini",
+        temperature=0,
+        max_tokens=1024,
+    )
+    msg = HumanMessage(
+        content=[
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{image.content_type};base64,{image_b64}"},
+            },
+            {
+                "type": "text",
+                "text": (
+                    "Extract all key information, text, data, and insights from this image "
+                    "as structured notes for a knowledge base. Be comprehensive but concise. "
+                    "If the image contains text, include it verbatim. If it contains diagrams "
+                    "or charts, describe them clearly."
+                ),
+            },
+        ]
+    )
+    result = await llm.ainvoke([msg])
+    notes: str = result.content  # type: ignore[assignment]
+
+    title = (image.filename or "Image capture").rsplit(".", 1)[0][:200] or "Image capture"
+    if notes:
+        first_line = notes.strip().splitlines()[0][:80]
+        if first_line:
+            title = first_line
+
+    sid = await ingest_document(
+        repo=repo,
+        openai_api_key=settings.openai_api_key,
+        workspace_id=workspace_id,
+        title=title,
+        body=notes,
+        settings=settings,
+    )
+    return {"id": str(sid)}
 
 
 @router.get("/{source_id}/chunks")

@@ -92,13 +92,17 @@ export default function AgentsPage() {
         json: { [tool]: enabled },
       });
       if (wsId) {
-        const a = await apiFetch<{ agents: AgentRow[] }>(
-          `/api/v1/workspaces/${wsId}/agents`,
-        );
-        if (a?.agents) {
-          setAgents(a.agents);
-          const updated = a.agents.find((x) => x.id === agentId);
-          if (updated) setSelectedAgent(updated);
+        try {
+          const a = await apiFetch<{ agents: AgentRow[] }>(
+            `/api/v1/workspaces/${wsId}/agents`,
+          );
+          if (a?.agents) {
+            setAgents(a.agents);
+            const updated = a.agents.find((x) => x.id === agentId);
+            if (updated) setSelectedAgent(updated);
+          }
+        } catch {
+          // Refresh failure is non-critical — PATCH already persisted
         }
       }
     },

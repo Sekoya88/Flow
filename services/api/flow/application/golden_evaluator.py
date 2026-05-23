@@ -1,6 +1,6 @@
 """LLM-judge evaluator for golden set items.
 
-Uses gpt-4o-mini to score actual vs expected output on a 0.0–1.0 scale.
+Uses gpt-5.4-mini to score actual vs expected output on a 0.0–1.0 scale.
 
 Evaluation flow:
   1. For each golden item, invoke the agent's own LLM with its system prompt.
@@ -66,7 +66,7 @@ Actual answer:
 
     try:
         resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5.4-mini",
             messages=[
                 {"role": "system", "content": _JUDGE_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -150,7 +150,7 @@ async def evaluate_golden_set(
         client = AsyncOpenAI(api_key=openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY"))
 
     run_id = eval_run_id or uuid4()
-    effective_llm_config = llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
+    effective_llm_config = llm_config or {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
 
     items = await pool.fetch(
         """
@@ -295,7 +295,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                 user_id=user_id,
                 client=client,
                 system_prompt=system_prompt,
-                llm_config=llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
+                llm_config=llm_config or {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
                 openai_api_key=openai_key,
             )
             candidate_id_str = result.get("candidate_version_id")

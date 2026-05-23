@@ -20,6 +20,17 @@ class SkillTestIn(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
 
 
+class SkillVibeCreateIn(BaseModel):
+    workspace_id: UUID
+    agent_id: UUID
+    prompt: str = Field(min_length=1, max_length=2000)
+    category: str = "General"
+
+
+class SkillVibeModifyIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
 
@@ -29,6 +40,7 @@ class SkillOut(BaseModel):
     version: int
     content_md: str
     description: str = ""
+    category: str = "General"
     allowed_tools: list[str] = []
     triggers: list[str] = []
     metadata: dict[str, Any] = {}
@@ -93,6 +105,7 @@ class SkillCatalogItemOut(BaseModel):
     name: str
     version: int
     description: str
+    category: str = "General"
     triggers: list[str]
     allowed_tools: list[str]
     metadata: dict[str, Any]

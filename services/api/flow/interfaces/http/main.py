@@ -33,7 +33,9 @@ from flow.interfaces.http.routes import (
     analytics,
     auth,
     dashboard,
+    digest,
     evaluations,
+    evolution,
     executions,
     feedback,
     golden_sets,
@@ -41,14 +43,18 @@ from flow.interfaces.http.routes import (
     health,
     kg,
     knowledge,
+    local,
     logs,
+    mcp,
     memory,
     meta,
+    observability_ws,
     personas,
     preferences,
     proposals,
     schedules,
     skills,
+    stream,
     tools,
     trace,
     workspaces,
@@ -134,6 +140,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(health.router)
+    app.include_router(local.router)  # no auth — desktop app discovery
     app.include_router(auth.router)
     app.include_router(analytics.router)
     app.include_router(dashboard.router)
@@ -141,6 +148,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(agent_versions.router)
     app.include_router(executions.router)
+    app.include_router(evolution.router)
     app.include_router(feedback.router)
     app.include_router(knowledge.router)
     app.include_router(preferences.router)
@@ -148,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(proposals.router)
     app.include_router(memory.router)
     app.include_router(meta.router)
+    app.include_router(observability_ws.router)
     app.include_router(schedules.router)
     app.include_router(tools.router)
     app.include_router(trace.router)
@@ -158,6 +167,9 @@ def create_app() -> FastAPI:
     app.include_router(ab_tests.router)
     app.include_router(evaluations.router)
     app.include_router(graph.router)
+    app.include_router(mcp.router)
+    app.include_router(digest.router)
+    app.include_router(stream.router)
     return app
 
 
