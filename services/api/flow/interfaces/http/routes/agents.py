@@ -164,7 +164,7 @@ async def vibe_agent(
     from flow.infrastructure.llm.providers import get_chat_model
 
     llm = get_chat_model(
-        {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
+        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
         fallback_api_keys={"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key},
     )
     if llm is None:

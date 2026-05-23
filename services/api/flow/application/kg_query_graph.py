@@ -37,14 +37,43 @@ def build_kg_query_graph(config: QueryConfig):
     api_key = config.openai_api_key
 
     def _llm() -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-5.4-mini", temperature=0.2, openai_api_key=api_key)
+        return ChatOpenAI(model="gpt-4o-mini", temperature=0.2, openai_api_key=api_key)
 
     # ── Tool helpers ─────────────────────────────────────────────────────────
 
-    async def _vector_search(query: str, k: int = 6) -> list[dict]:
+    async def _text_search(query: str, k: int = 8) -> list[dict]:
+        """Full-text keyword fallback — works even when embeddings are NULL."""
+        import re as _re
         try:
-            embs = await embed_texts(api_key=api_key, texts=[query])
-            rows = await repo.vector_search_kg(workspace_id, embs[0], k=k)
+            # Extract meaningful words (>2 chars, skip common stop words)
+            _STOPS = {"what", "are", "the", "about", "here", "this", "that",
+                      "with", "from", "have", "does", "for", "you", "your"}
+            raw_words = [w.lower().strip(".,?!:;\"'()") for w in _re.split(r'\s+', query)]
+            keywords = [w for w in raw_words if len(w) > 2 and w not in _STOPS][:10]
+            # Build OR-based ts_query so ANY keyword match is enough
+            ts_terms = " | ".join(keywords) if keywords else query[:100]
+            # ILIKE patterns for individual keywords
+            ilike_patterns = [f"%{kw}%" for kw in keywords] if keywords else [f"%{query[:60]}%"]
+
+            rows = await repo._pool.fetch(
+                """
+                SELECT id, label, node_type, summary, source_path
+                FROM kg_nodes
+                WHERE workspace_id = $1
+                  AND (
+                    label ILIKE ANY($2::text[])
+                    OR summary ILIKE ANY($2::text[])
+                    OR to_tsvector('english', coalesce(label,'') || ' ' || coalesce(summary,''))
+                       @@ to_tsquery('english', $3)
+                  )
+                ORDER BY pagerank DESC
+                LIMIT $4
+                """,
+                workspace_id,
+                ilike_patterns,
+                ts_terms,
+                k,
+            )
             return [
                 {
                     "id": str(r["id"]),
@@ -57,6 +86,27 @@ def build_kg_query_graph(config: QueryConfig):
             ]
         except Exception:
             return []
+
+    async def _vector_search(query: str, k: int = 6) -> list[dict]:
+        try:
+            embs = await embed_texts(api_key=api_key, texts=[query])
+            rows = await repo.vector_search_kg(workspace_id, embs[0], k=k)
+            results = [
+                {
+                    "id": str(r["id"]),
+                    "label": r["label"],
+                    "summary": r.get("summary") or "",
+                    "node_type": r["node_type"],
+                    "source_path": r.get("source_path"),
+                }
+                for r in rows
+            ]
+            # Fall back to text search if vector search returned nothing
+            if not results:
+                results = await _text_search(query, k=k)
+            return results
+        except Exception:
+            return await _text_search(query, k=k)
 
     async def _get_node_content(node_id: str) -> str:
         try:

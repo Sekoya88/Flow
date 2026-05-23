@@ -31,7 +31,9 @@ async def sparse_encode_text(text: str) -> tuple[list[int], list[float]]:
 
 
 def qdrant_point_id(workspace_id: UUID, chunk_pk: int) -> str:
-    return f"{workspace_id}:{chunk_pk}"
+    import uuid as _uuid
+    # Qdrant accepts only UUID or uint64; generate a deterministic UUID
+    return str(_uuid.uuid5(workspace_id, str(chunk_pk)))
 
 
 def get_qdrant_client(url: str) -> QdrantClient:

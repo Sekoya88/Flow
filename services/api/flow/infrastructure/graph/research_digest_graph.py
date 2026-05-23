@@ -1,8 +1,9 @@
 """5-node LangGraph for nightly research digest."""
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import TypedDict
+from typing import Any, TypedDict
 from uuid import UUID
 
 import httpx
@@ -22,12 +23,15 @@ class DigestState(TypedDict):
     enriched_papers: list[dict]
     obsidian_notes: list[dict]
     persisted_ids: list[str]
+    stream_hub: Any  # Optional[ExecutionStreamHub] — in-memory only, no checkpointer
 
 
 # ── Node 1: fetch_sources ─────────────────────────────────────────────────────
 
 
 async def fetch_sources(state: DigestState) -> dict:
+    from datetime import datetime
+
     config = state["config"]
     categories = config.get("arxiv_categories", ["cs.AI", "cs.LG", "cs.CL"])
     papers: list[dict] = []
@@ -47,7 +51,7 @@ async def fetch_sources(state: DigestState) -> dict:
                     "arxiv_id": result.get_short_id(),
                     "authors": [str(a) for a in result.authors[:5]],
                     "categories": result.categories,
-                    "published_at": result.published.isoformat() if result.published else None,
+                    "published_at": result.published,  # datetime.datetime — asyncpg needs this, not a string
                 }
             )
     except Exception:
@@ -65,6 +69,11 @@ async def fetch_sources(state: DigestState) -> dict:
                         a.get("name", str(a)) if isinstance(a, dict) else str(a)
                         for a in authors_raw[:5]
                     ]
+                    pub_str = paper.get("publishedAt")
+                    try:
+                        pub_dt: datetime | None = datetime.fromisoformat(pub_str.replace("Z", "+00:00")) if pub_str else None
+                    except (ValueError, AttributeError):
+                        pub_dt = None
                     papers.append(
                         {
                             "title": paper.get("title", ""),
@@ -73,7 +82,7 @@ async def fetch_sources(state: DigestState) -> dict:
                             "arxiv_id": paper.get("id"),
                             "authors": authors,
                             "categories": [],
-                            "published_at": paper.get("publishedAt"),
+                            "published_at": pub_dt,
                         }
                     )
     except Exception:
@@ -104,7 +113,37 @@ async def fetch_sources(state: DigestState) -> dict:
     except Exception:
         logger.warning("digest.fetch_sources.tavily_failed")
 
+    custom_sources = config.get("custom_sources", [])
+    if custom_sources:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for url in custom_sources[:5]:
+                try:
+                    r = await client.get(url, follow_redirects=True)
+                    if r.status_code != 200:
+                        continue
+                    try:
+                        data = r.json()
+                        items = data if isinstance(data, list) else data.get("papers", data.get("results", []))
+                        for item in (items[:10] if isinstance(items, list) else []):
+                            if item.get("title"):
+                                papers.append({
+                                    "title": item.get("title", ""),
+                                    "abstract": item.get("abstract", item.get("summary", "")),
+                                    "source_url": item.get("url", url),
+                                    "arxiv_id": None,
+                                    "authors": item.get("authors", [])[:5],
+                                    "categories": [],
+                                    "published_at": None,
+                                })
+                    except Exception:
+                        pass
+                except Exception:
+                    logger.warning("digest.fetch_sources.custom_url_failed", url=url)
+
     logger.info("digest.fetch_sources.done", count=len(papers))
+    hub = state.get("stream_hub")
+    if hub:
+        await hub.publish_global(state["workspace_id"], "digest.fetch_done", {"count": len(papers)})
     return {"raw_papers": papers}
 
 
@@ -137,39 +176,63 @@ async def filter_by_interest(state: DigestState) -> dict:
         {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.0},
         fallback_keys,
     ) or get_chat_model(
-        {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.0}, fallback_keys
+        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.0}, fallback_keys
     )
 
-    for paper in candidates:
-        if paper["relevance_score"] is not None:
-            continue
-        if llm is None:
-            paper["relevance_score"] = 0.6
-            continue
-        try:
-            from langchain_core.messages import HumanMessage, SystemMessage
+    need_scoring = [p for p in candidates if p["relevance_score"] is None]
 
-            prompt = (
-                f"Rate the research relevance of this paper to the topics: {', '.join(sorted(categories)) or 'AI/ML'}.\n"
-                f"Title: {paper['title']}\nAbstract: {paper['abstract'][:800]}\n"
-                'Reply with JSON only: {"score": <float 0.0-1.0>}'
-            )
-            resp = await llm.ainvoke([
-                SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
-                HumanMessage(content=prompt),
-            ])
-            text = resp.content if hasattr(resp, "content") else str(resp)
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            parsed = json.loads(text[start:end]) if start >= 0 else {}
-            paper["relevance_score"] = float(parsed.get("score", 0.5))
-        except Exception:
-            paper["relevance_score"] = 0.5
+    hub = state.get("stream_hub")
+    if hub:
+        await hub.publish_global(state["workspace_id"], "digest.scoring", {"count": len(need_scoring)})
+    logger.info("digest.filter.scoring_start", count=len(need_scoring))
+
+    if llm is None:
+        for p in need_scoring:
+            p["relevance_score"] = 0.6
+    else:
+        sem = asyncio.Semaphore(10)
+
+        user_interests = config.get("user_interests", "").strip()
+
+        async def score_one(paper: dict) -> float:
+            async with sem:
+                try:
+                    interests_line = f"User interests: {user_interests}\n" if user_interests else ""
+                    prompt = (
+                        f"Rate the research relevance of this paper to the topics: "
+                        f"{', '.join(sorted(categories)) or 'AI/ML'}.\n"
+                        + interests_line
+                        + f"Title: {paper['title']}\nAbstract: {paper['abstract'][:800]}\n"
+                        'Reply with JSON only: {"score": <float 0.0-1.0>}'
+                    )
+                    resp = await llm.ainvoke([
+                        SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
+                        HumanMessage(content=prompt),
+                    ])
+                    text = resp.content if hasattr(resp, "content") else str(resp)
+                    start = text.find("{")
+                    end = text.rfind("}") + 1
+                    parsed = json.loads(text[start:end]) if start >= 0 else {}
+                    return float(parsed.get("score", 0.5))
+                except Exception:
+                    return 0.5
+
+        scores = await asyncio.gather(*[score_one(p) for p in need_scoring])
+        for paper, score in zip(need_scoring, scores):
+            paper["relevance_score"] = score
+
+    logger.info("digest.filter.scoring_done", count=len(need_scoring))
 
     filtered = [p for p in candidates if p["relevance_score"] >= min_score]
     filtered.sort(key=lambda p: p["relevance_score"], reverse=True)
-    logger.info("digest.filter.done", kept=len(filtered), total=len(state["raw_papers"]))
-    return {"filtered_papers": filtered[:20]}
+    kept = filtered[:config.get("max_papers", 50)]
+    logger.info("digest.filter.done", kept=len(kept), total=len(state["raw_papers"]))
+    hub = state.get("stream_hub")
+    if hub:
+        await hub.publish_global(state["workspace_id"], "digest.filter_done", {
+            "kept": len(kept), "total": len(state["raw_papers"]),
+        })
+    return {"filtered_papers": kept}
 
 
 # ── Node 3: summarize_papers ──────────────────────────────────────────────────
@@ -181,35 +244,46 @@ async def summarize_papers(state: DigestState) -> dict:
 
     settings = get_settings()
     fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
-    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model({"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.1}, fallback_keys)
+    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model({"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys)
     if llm is None:
         logger.warning("digest.summarize.no_llm_skipping")
         enriched = [dict(p, tldr=None, key_insights=None) for p in state["filtered_papers"]]
         return {"enriched_papers": enriched}
 
-    enriched = []
-    for paper in state["filtered_papers"]:
-        try:
-            messages = [
-                SystemMessage(content="You are a research assistant. Be concise."),
-                HumanMessage(
-                    content=(
-                        f"Paper: {paper['title']}\n\nAbstract: {paper['abstract'][:1500]}\n\n"
-                        "Reply with JSON: {\"tldr\": \"one sentence\", \"key_insights\": \"2-3 bullet points\"}"
-                    )
-                ),
-            ]
-            resp = await llm.ainvoke(messages)
-            text = resp.content if hasattr(resp, "content") else str(resp)
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            parsed = json.loads(text[start:end]) if start >= 0 else {}
-            paper = {**paper, "tldr": parsed.get("tldr"), "key_insights": parsed.get("key_insights")}
-        except Exception:
-            paper = {**paper, "tldr": None, "key_insights": None}
-        enriched.append(paper)
+    logger.info("digest.summarize.start", count=len(state["filtered_papers"]))
+
+    sem = asyncio.Semaphore(5)
+
+    async def summarize_one(paper: dict) -> dict:
+        async with sem:
+            try:
+                messages = [
+                    SystemMessage(content="You are a research assistant. Be concise."),
+                    HumanMessage(
+                        content=(
+                            f"Paper: {paper['title']}\n\nAbstract: {paper['abstract'][:1500]}\n\n"
+                            "Reply with JSON: {\"tldr\": \"one sentence\", \"key_insights\": \"2-3 bullet points\"}"
+                        )
+                    ),
+                ]
+                resp = await llm.ainvoke(messages)
+                text = resp.content if hasattr(resp, "content") else str(resp)
+                start = text.find("{")
+                end = text.rfind("}") + 1
+                parsed = json.loads(text[start:end]) if start >= 0 else {}
+                ki = parsed.get("key_insights")
+                if isinstance(ki, list):
+                    ki = "\n".join(f"- {item}" for item in ki)
+                return {**paper, "tldr": parsed.get("tldr"), "key_insights": ki}
+            except Exception:
+                return {**paper, "tldr": None, "key_insights": None}
+
+    enriched = list(await asyncio.gather(*[summarize_one(p) for p in state["filtered_papers"]]))
 
     logger.info("digest.summarize.done", count=len(enriched))
+    hub = state.get("stream_hub")
+    if hub:
+        await hub.publish_global(state["workspace_id"], "digest.summarize_done", {"count": len(enriched)})
     return {"enriched_papers": enriched}
 
 
@@ -349,13 +423,14 @@ async def persist(state: DigestState) -> dict:
     from flow.config import get_settings
 
     workspace_id = state["workspace_id"]
-    config = state["config"]
     settings = get_settings()
     pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
 
     persisted_ids: list[str] = []
     for note in state["obsidian_notes"]:
         paper = note["paper"]
+        if not paper:  # daily index note has empty paper dict
+            continue
         try:
             row = await pool.fetchrow(
                 """
@@ -364,7 +439,11 @@ async def persist(state: DigestState) -> dict:
                      authors, categories, relevance_score, tldr, key_insights,
                      summary_md, obsidian_path, status, published_at)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13)
-                ON CONFLICT (workspace_id, title) DO NOTHING
+                ON CONFLICT (workspace_id, title) DO UPDATE SET
+                    tldr = COALESCE(EXCLUDED.tldr, digest_papers.tldr),
+                    key_insights = COALESCE(EXCLUDED.key_insights, digest_papers.key_insights),
+                    relevance_score = EXCLUDED.relevance_score,
+                    status = 'unread'
                 RETURNING id
                 """,
                 UUID(workspace_id),
@@ -390,6 +469,8 @@ async def persist(state: DigestState) -> dict:
     paper_kg_ids: list[tuple[str, list[str]]] = []
     for note in state["obsidian_notes"]:
         paper = note["paper"]
+        if not paper:
+            continue
         try:
             row = await pool.fetchrow(
                 """
@@ -439,19 +520,9 @@ async def persist(state: DigestState) -> dict:
             except Exception:
                 pass
 
-    obsidian_mode = config.get("obsidian_mode", "filesystem")
-    if obsidian_mode == "filesystem":
-        vault_path = config.get("obsidian_vault_path", "/vault")
-        import os
-
-        for note in state["obsidian_notes"]:
-            full_path = os.path.join(vault_path, note["path"])
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            try:
-                with open(full_path, "w", encoding="utf-8") as f:
-                    f.write(note["content"])
-            except Exception:
-                logger.warning("digest.persist.vault_write_failed", path=full_path)
+    hub = state.get("stream_hub")
+    if hub:
+        await hub.publish_global(state["workspace_id"], "digest.persist_done", {"persisted": len(persisted_ids)})
 
     await pool.close()
     logger.info("digest.persist.done", persisted=len(persisted_ids))
@@ -492,16 +563,21 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
         "enriched_papers": [],
         "obsidian_notes": [],
         "persisted_ids": [],
+        "stream_hub": stream_hub,
     }
-    result = await graph.ainvoke(initial)
-    persisted = len(result.get("persisted_ids", []))
-
-    if stream_hub is not None:
-        await stream_hub.publish_global(workspace_id, "digest.complete", {
-            "workspace_id": workspace_id,
-            "persisted": persisted,
-            "fetched": len(result.get("raw_papers", [])),
-            "filtered": len(result.get("filtered_papers", [])),
-        })
+    result: dict = {}
+    try:
+        result = await graph.ainvoke(initial)
+    except Exception:
+        logger.exception("digest.run.failed", workspace_id=workspace_id)
+    finally:
+        persisted = len(result.get("persisted_ids", []))
+        if stream_hub is not None:
+            await stream_hub.publish_global(workspace_id, "digest.complete", {
+                "workspace_id": workspace_id,
+                "persisted": persisted,
+                "fetched": len(result.get("raw_papers", [])),
+                "filtered": len(result.get("filtered_papers", [])),
+            })
 
     return {"persisted": persisted}

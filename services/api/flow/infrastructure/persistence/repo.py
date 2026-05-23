@@ -1298,6 +1298,12 @@ class FlowRepository:
         )
 
     async def delete_kg_node(self, workspace_id: UUID, node_id: UUID) -> bool:
+        # Delete all incident edges first (cascade not guaranteed by DB constraints)
+        await self._pool.execute(
+            "DELETE FROM kg_edges WHERE workspace_id=$1 AND (source_id=$2 OR target_id=$2)",
+            workspace_id,
+            node_id,
+        )
         result = await self._pool.execute(
             "DELETE FROM kg_nodes WHERE id=$1 AND workspace_id=$2",
             node_id,

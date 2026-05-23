@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, X, Zap } from "lucide-react";
+import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
@@ -153,6 +153,19 @@ export default function GraphPage() {
       return next;
     });
   }, []);
+
+  const handleDeleteNode = useCallback(async (nodeId: string) => {
+    if (!workspaceId) return;
+    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+    setEdges((prev) => prev.filter((e) => e.source_id !== nodeId && e.target_id !== nodeId));
+    setSelectedNode(null);
+    try {
+      await apiFetch(`/api/v1/kg/node/${nodeId}?workspace_id=${workspaceId}`, { method: "DELETE" });
+    } catch (e) {
+      logger.warn("delete node failed", { error: String(e) });
+      fetchGraph();
+    }
+  }, [workspaceId, fetchGraph]);
 
   // Type counts (raw, pre-filter)
   const typeCounts = useMemo(() => {
@@ -492,6 +505,7 @@ export default function GraphPage() {
           onClose={() => setSelectedNode(null)}
           skill={skillDetail}
           onNavigate={(href) => router.push(href)}
+          onDeleteNode={handleDeleteNode}
         />
       )}
       {selectedNode && panelOpen && (
@@ -501,6 +515,7 @@ export default function GraphPage() {
           offset
           skill={skillDetail}
           onNavigate={(href) => router.push(href)}
+          onDeleteNode={handleDeleteNode}
         />
       )}
 
@@ -534,12 +549,14 @@ function NodeDetailPanel({
   offset,
   skill,
   onNavigate,
+  onDeleteNode,
 }: {
   node: KGNode;
   onClose: () => void;
   offset?: boolean;
   skill?: SkillNodeDetail | null;
   onNavigate?: (href: string) => void;
+  onDeleteNode?: (nodeId: string) => void;
 }) {
   const color = NODE_COLORS[node.node_type as keyof typeof NODE_COLORS] ?? TYPE_DOT_COLORS[node.node_type] ?? "#94a3b8";
   const skills = (node.metadata?.skills as string[] | undefined) ?? [];
@@ -581,12 +598,23 @@ function NodeDetailPanel({
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onDeleteNode && (
+              <button
+                onClick={() => onDeleteNode(node.id)}
+                className="shrink-0 rounded-lg p-1 text-red-700 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                title="Delete node and all connected edges"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-3 max-h-72 overflow-y-auto">

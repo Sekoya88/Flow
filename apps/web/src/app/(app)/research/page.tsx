@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  BookX,
+  BrainCircuit,
+  CheckCircle2,
+  Download,
   ExternalLink,
   Loader2,
   Play,
-  RefreshCw,
   Settings2,
   Sparkles,
+  Terminal,
+  Trash2,
+  Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { apiFetch } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -55,20 +62,184 @@ type DigestConfig = {
   schedule_hour: number;
   min_relevance_score: number;
   arxiv_categories: string[];
+  custom_sources: string[];
+  user_interests: string;
   obsidian_mode: string;
   obsidian_vault_path: string | null;
 };
+
+type KnowledgeItem = { id: string; title: string; tldr: string | null };
+type KnowledgePanel = { available: boolean; count: number; papers: KnowledgeItem[] };
+
+const ARXIV_CHIPS = [
+  { code: "cs.AI",   label: "AI" },
+  { code: "cs.LG",   label: "ML" },
+  { code: "cs.CL",   label: "NLP" },
+  { code: "cs.CV",   label: "Vision" },
+  { code: "cs.RO",   label: "Robotics" },
+  { code: "cs.CR",   label: "Security" },
+  { code: "cs.SE",   label: "Software Eng." },
+  { code: "stat.ML", label: "Stat ML" },
+  { code: "q-bio",   label: "Bio" },
+  { code: "math.OC", label: "Optimization" },
+];
+
+type SynthesisResult = {
+  topics: string[];
+  methods: string[];
+  datasets: string[];
+  key_findings: string;
+  open_questions: string[];
+  synthesis_md: string;
+  paper_count: number;
+};
+
+type ProgressEvent = {
+  id: string;
+  kind: string;
+  ts: number;
+  payload: Record<string, unknown>;
+};
+
+// ── Event kind display config ─────────────────────────────────────────
+
+const DIGEST_EVENT_CONFIG: Record<string, {
+  icon: React.FC<{ className?: string }>;
+  color: string;
+  label: string;
+  detail?: (p: Record<string, unknown>) => string;
+}> = {
+  "digest.start":         { icon: Play,         color: "text-violet-400", label: "Digest started" },
+  "digest.fetch_done":    { icon: BookOpen,      color: "text-sky-400",    label: "Papers fetched",    detail: (p) => `${p.count} papers` },
+  "digest.scoring":       { icon: Zap,           color: "text-amber-400",  label: "Scoring relevance", detail: (p) => `${p.count} papers` },
+  "digest.filter_done":   { icon: Zap,           color: "text-amber-400",  label: "Filtered",          detail: (p) => `${p.kept} relevant / ${p.total} total` },
+  "digest.summarize_done":{ icon: Sparkles,       color: "text-violet-400", label: "Summarized",        detail: (p) => `${p.count} papers` },
+  "digest.persist_done":  { icon: CheckCircle2,  color: "text-emerald-400",label: "Saved to DB",       detail: (p) => `${p.persisted} papers` },
+  "digest.complete":      { icon: CheckCircle2,  color: "text-emerald-400",label: "Complete",          detail: (p) => `${p.persisted} new · ${p.filtered} filtered · ${p.fetched} fetched` },
+};
+
+// ── Live digest progress panel ────────────────────────────────────────
+
+function DigestProgress({
+  wsId,
+  onComplete,
+}: {
+  wsId: string;
+  onComplete: () => void;
+}) {
+  const [events, setEvents] = useState<ProgressEvent[]>([]);
+  const [done, setDone] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!wsId) return;
+    const ctrl = new AbortController();
+    const apiBase = (process.env.NEXT_PUBLIC_FLOW_API_URL ?? "").replace(/\/$/, "");
+    const token = getToken();
+
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/stream?workspace_id=${wsId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) return;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            try {
+              const parsed = JSON.parse(line.slice(5).trim()) as Record<string, unknown>;
+              const kind = (parsed.kind as string) ?? "unknown";
+              setEvents((prev) => [
+                ...prev,
+                { id: `${Date.now()}-${Math.random()}`, kind, ts: Date.now(), payload: parsed },
+              ]);
+              if (kind === "digest.complete") {
+                setDone(true);
+                ctrl.abort();
+                onComplete();
+              }
+            } catch { /* malformed */ }
+          }
+        }
+      } catch (e) {
+        if ((e as Error)?.name !== "AbortError") {
+          // stream error — silently ignore, papers will reload on timeout
+        }
+      }
+    })();
+
+    return () => ctrl.abort();
+  }, [wsId, onComplete]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [events]);
+
+  return (
+    <div className="rounded border border-flow-800 bg-flow-950/80 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-flow-800 bg-flow-900/40">
+        <Terminal className="h-3 w-3 text-flow-500" />
+        <span className="font-mono text-[10px] uppercase tracking-widest text-flow-500">Live progress</span>
+        {!done && <Loader2 className="h-3 w-3 animate-spin text-flow-500 ml-auto" />}
+        {done && <CheckCircle2 className="h-3 w-3 text-emerald-400 ml-auto" />}
+      </div>
+      <div className="max-h-48 overflow-y-auto py-1">
+        {events.length === 0 && (
+          <div className="px-3 py-2 font-mono text-[11px] text-flow-600">
+            Connecting to stream…
+          </div>
+        )}
+        {events.map((ev) => {
+          const cfg = DIGEST_EVENT_CONFIG[ev.kind] ?? { icon: Terminal, color: "text-flow-500", label: ev.kind };
+          const Icon = cfg.icon;
+          const detail = cfg.detail?.(ev.payload) ?? "";
+          const ts = new Date(ev.ts).toLocaleTimeString(undefined, {
+            hour: "2-digit", minute: "2-digit", second: "2-digit",
+          });
+          return (
+            <div key={ev.id} className="flex items-center gap-2.5 px-3 py-1">
+              <span className="font-mono text-[10px] text-flow-700 shrink-0 w-[56px]">{ts}</span>
+              <Icon className={cn("h-3 w-3 shrink-0", cfg.color)} />
+              <span className={cn("font-mono text-[11px] font-semibold shrink-0", cfg.color)}>{cfg.label}</span>
+              {detail && <span className="font-mono text-[11px] text-flow-500">{detail}</span>}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+// ── Paper card ────────────────────────────────────────────────────────
 
 function PaperCard({
   paper,
   onStatusChange,
   onSummarize,
+  onDelete,
+  onDeleteFromVault,
   summarizing,
+  selected,
+  onToggleSelect,
 }: {
   paper: Paper;
   onStatusChange: (id: string, status: string) => void;
   onSummarize: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDeleteFromVault: (id: string) => void;
   summarizing: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const scoreColor =
     paper.relevance_score >= 0.8
@@ -86,6 +257,12 @@ function PaperCard({
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-3">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(paper.id)}
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-violet-500"
+          />
           <div className="min-w-0 flex-1">
             <CardTitle className="line-clamp-2 text-sm font-semibold leading-snug">
               {paper.title}
@@ -164,12 +341,28 @@ function PaperCard({
                 Archive
               </button>
             )}
+            <button
+              onClick={() => onDeleteFromVault(paper.id)}
+              className="rounded px-2 py-0.5 font-mono text-[10px] text-amber-700 hover:text-amber-400 hover:bg-flow-800 transition-colors"
+              title="Remove from Obsidian vault"
+            >
+              <BookX className="inline h-3 w-3" />
+            </button>
+            <button
+              onClick={() => onDelete(paper.id)}
+              className="rounded px-2 py-0.5 font-mono text-[10px] text-red-700 hover:text-red-400 hover:bg-flow-800 transition-colors"
+              title="Delete paper from DB"
+            >
+              <Trash2 className="inline h-3 w-3" />
+            </button>
           </div>
         </div>
       </CardContent>
     </Card>
   );
 }
+
+// ── Digest config modal ───────────────────────────────────────────────
 
 function DigestConfigModal({
   wsId,
@@ -184,12 +377,31 @@ function DigestConfigModal({
   const [enabled, setEnabled] = useState(config?.enabled ?? false);
   const [hour, setHour] = useState(String(config?.schedule_hour ?? 8));
   const [minScore, setMinScore] = useState(String(config?.min_relevance_score ?? 0.5));
-  const [categories, setCategories] = useState(
-    (config?.arxiv_categories ?? ["cs.AI", "cs.LG", "cs.CL"]).join(", "),
+  const [selectedCats, setSelectedCats] = useState<Set<string>>(
+    new Set(config?.arxiv_categories ?? ["cs.AI", "cs.LG", "cs.CL"]),
   );
+  const [customCats, setCustomCats] = useState(
+    (config?.arxiv_categories ?? []).filter((c) => !ARXIV_CHIPS.some((ch) => ch.code === c)).join(", "),
+  );
+  const [userInterests, setUserInterests] = useState(config?.user_interests ?? "");
   const [obsidianMode, setObsidianMode] = useState(config?.obsidian_mode ?? "none");
   const [vaultPath, setVaultPath] = useState(config?.obsidian_vault_path ?? "/vault");
+  const [customSources, setCustomSources] = useState((config?.custom_sources ?? []).join("\n"));
   const [saving, setSaving] = useState(false);
+
+  function toggleCat(code: string) {
+    setSelectedCats((prev) => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }
+
+  function buildCategories(): string[] {
+    const chips = Array.from(selectedCats);
+    const extra = customCats.split(",").map((s) => s.trim()).filter(Boolean);
+    return [...new Set([...chips, ...extra])];
+  }
 
   async function save() {
     if (!wsId) return;
@@ -202,10 +414,9 @@ function DigestConfigModal({
           enabled,
           schedule_hour: parseInt(hour) || 8,
           min_relevance_score: parseFloat(minScore) || 0.5,
-          arxiv_categories: categories
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
+          arxiv_categories: buildCategories(),
+          custom_sources: customSources.split("\n").map((s) => s.trim()).filter(Boolean),
+          user_interests: userInterests,
           obsidian_mode: obsidianMode,
           obsidian_vault_path: obsidianMode === "filesystem" ? vaultPath : null,
         },
@@ -225,7 +436,7 @@ function DigestConfigModal({
           Configure
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-mono text-sm">Digest Configuration</DialogTitle>
         </DialogHeader>
@@ -257,14 +468,57 @@ function DigestConfigModal({
               className="font-mono text-xs"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="font-mono text-xs">ArXiv categories (comma-separated)</Label>
+          <div className="space-y-2">
+            <Label className="font-mono text-xs">ArXiv topics</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {ARXIV_CHIPS.map(({ code, label }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => toggleCat(code)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-semibold transition-colors",
+                    selectedCats.has(code)
+                      ? "border-violet-500 bg-violet-500/20 text-violet-300"
+                      : "border-flow-700 bg-transparent text-flow-500 hover:border-flow-500 hover:text-flow-300",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Input
-              value={categories}
-              onChange={(e) => setCategories(e.target.value)}
-              placeholder="cs.AI, cs.LG, cs.CL"
+              value={customCats}
+              onChange={(e) => setCustomCats(e.target.value)}
+              placeholder="Extra: cs.DS, cs.NI, …"
               className="font-mono text-xs"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="font-mono text-xs">Research interests</Label>
+            <textarea
+              value={userInterests}
+              onChange={(e) => setUserInterests(e.target.value)}
+              rows={3}
+              placeholder="I work on LLM reasoning, tool use, and agent architectures…"
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-xs resize-none"
+            />
+            <p className="text-[10px] text-flow-500 leading-relaxed">
+              Plain-text description used by the AI when scoring paper relevance.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="font-mono text-xs">Custom source URLs (one per line)</Label>
+            <textarea
+              value={customSources}
+              onChange={(e) => setCustomSources(e.target.value)}
+              rows={3}
+              placeholder="https://huggingface.co/api/daily_papers"
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-xs resize-none"
+            />
+            <p className="text-[10px] text-flow-500 leading-relaxed">
+              JSON API returning a list or object with a <code className="text-flow-300">papers</code> array.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label className="font-mono text-xs">Obsidian sync</Label>
@@ -316,8 +570,16 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [digestQueued, setDigestQueued] = useState(false);
+  const [digestRunning, setDigestRunning] = useState(false);
   const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [embedding, setEmbedding] = useState(false);
+  const [synthesis, setSynthesis] = useState<SynthesisResult | null>(null);
+  const [synthesizing, setSynthesizing] = useState(false);
+  const [knowledge, setKnowledge] = useState<KnowledgePanel | null>(null);
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!wsId) return;
@@ -344,6 +606,15 @@ export default function ResearchPage() {
 
   useEffect(() => { loadPapers(); }, [loadPapers]);
 
+  const handleDigestComplete = useCallback(() => {
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+    setDigestRunning(false);
+    loadPapers();
+  }, [loadPapers]);
+
   async function runDigest() {
     if (!wsId) return;
     setRunning(true);
@@ -352,14 +623,85 @@ export default function ResearchPage() {
         method: "POST",
         json: { workspace_id: wsId },
       });
-      setDigestQueued(true);
-      setTimeout(() => {
-        setDigestQueued(false);
+      setDigestRunning(true);
+      // Fallback: if SSE never delivers digest.complete, reload after 300s
+      fallbackTimerRef.current = setTimeout(() => {
+        setDigestRunning(false);
         loadPapers();
-      }, 65_000);
+      }, 300_000);
     } finally {
       setRunning(false);
     }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function exportToObsidian() {
+    if (!wsId || selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      await apiFetch<{ written: number; skipped: number }>("/api/v1/digest/papers/export-obsidian", {
+        method: "POST",
+        json: { workspace_id: wsId, paper_ids: Array.from(selectedIds) },
+      });
+      setSelectedIds(new Set());
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function embedAsKnowledge() {
+    if (!wsId || selectedIds.size === 0) return;
+    setEmbedding(true);
+    try {
+      await apiFetch<{ embedded: number }>("/api/v1/digest/papers/embed-knowledge", {
+        method: "POST",
+        json: { workspace_id: wsId, paper_ids: Array.from(selectedIds) },
+      });
+      setSelectedIds(new Set());
+    } finally {
+      setEmbedding(false);
+    }
+  }
+
+  async function runSynthesis() {
+    if (!wsId) return;
+    setSynthesizing(true);
+    setSynthesis(null);
+    try {
+      const result = await apiFetch<SynthesisResult>("/api/v1/digest/synthesize", {
+        method: "POST",
+        json: { workspace_id: wsId, limit: 20 },
+      });
+      setSynthesis(result);
+    } finally {
+      setSynthesizing(false);
+    }
+  }
+
+  async function loadKnowledge() {
+    if (!wsId) return;
+    const data = await apiFetch<KnowledgePanel>(`/api/v1/digest/knowledge?workspace_id=${wsId}`).catch(() => null);
+    if (data) setKnowledge(data);
+    setKnowledgeOpen(true);
+  }
+
+  async function handleDelete(id: string) {
+    await apiFetch(`/api/v1/digest/papers/${id}`, { method: "DELETE" });
+    setPapers((prev) => prev.filter((p) => p.id !== id));
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  }
+
+  async function handleDeleteFromVault(id: string) {
+    await apiFetch(`/api/v1/digest/papers/${id}?delete_from_vault=true`, { method: "DELETE" });
+    setPapers((prev) => prev.filter((p) => p.id !== id));
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
   }
 
   async function handleStatusChange(id: string, newStatus: string) {
@@ -405,6 +747,30 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={loadKnowledge}
+            disabled={!wsId}
+            className="gap-1.5 font-mono text-xs"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Knowledge
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runSynthesis}
+            disabled={synthesizing || !wsId}
+            className="gap-1.5 font-mono text-xs"
+          >
+            {synthesizing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <BrainCircuit className="h-3.5 w-3.5" />
+            )}
+            Synthesize
+          </Button>
           <DigestConfigModal wsId={wsId} config={config} onSaved={setConfig} />
           <Button
             size="sm"
@@ -422,10 +788,159 @@ export default function ResearchPage() {
         </div>
       </div>
 
-      {digestQueued && (
-        <div className="flex items-center gap-2 rounded border border-flow-violet/30 bg-flow-violet/10 px-3 py-2 font-mono text-xs text-flow-violet">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Digest running — papers will appear in ~60s
+      {digestRunning && wsId && (
+        <DigestProgress wsId={wsId} onComplete={handleDigestComplete} />
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center gap-3 rounded-lg border border-flow-700 bg-flow-900/95 px-4 py-2 backdrop-blur">
+          <span className="font-mono text-xs text-flow-300">{selectedIds.size} selected</span>
+          <Button
+            size="sm"
+            onClick={exportToObsidian}
+            disabled={exporting}
+            className="gap-1.5 font-mono text-xs"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export to Obsidian
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={embedAsKnowledge}
+            disabled={embedding}
+            className="gap-1.5 font-mono text-xs"
+          >
+            {embedding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BrainCircuit className="h-3.5 w-3.5" />}
+            Embed as Knowledge
+          </Button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto font-mono text-[10px] text-flow-500 hover:text-flow-300 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {synthesis && (
+        <div className="rounded border border-flow-800 bg-flow-900/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="h-4 w-4 text-violet-400" />
+              <span className="font-mono text-xs uppercase tracking-widest text-flow-400">
+                Knowledge Synthesis
+              </span>
+              <span className="font-mono text-[10px] text-flow-600">
+                {synthesis.paper_count} papers
+              </span>
+            </div>
+            <button
+              onClick={() => setSynthesis(null)}
+              className="font-mono text-[10px] text-flow-600 hover:text-flow-400 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+
+          {synthesis.topics.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-flow-600">Topics</p>
+              <div className="flex flex-wrap gap-1">
+                {synthesis.topics.map((t) => (
+                  <Badge key={t} variant="outline" className="h-5 px-2 font-mono text-[10px] border-violet-500/30 text-violet-300">
+                    {t}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {synthesis.methods.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-flow-600">Methods & Approaches</p>
+              <div className="flex flex-wrap gap-1">
+                {synthesis.methods.map((m) => (
+                  <Badge key={m} variant="outline" className="h-5 px-2 font-mono text-[10px] border-amber-500/30 text-amber-300">
+                    {m}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {synthesis.key_findings && (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-flow-600">Key Findings</p>
+              <p className="text-xs leading-relaxed text-flow-300 rounded bg-flow-800/40 px-3 py-2">
+                {synthesis.key_findings}
+              </p>
+            </div>
+          )}
+
+          {synthesis.open_questions.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-flow-600">Open Questions</p>
+              <ul className="space-y-0.5">
+                {synthesis.open_questions.map((q) => (
+                  <li key={q} className="flex items-start gap-1.5 font-mono text-[11px] text-flow-400">
+                    <span className="text-flow-600 shrink-0">—</span>
+                    {q}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {knowledgeOpen && knowledge && (
+        <div className="rounded border border-flow-800 bg-flow-900/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-400" />
+              <span className="font-mono text-xs uppercase tracking-widest text-flow-400">
+                Qdrant Knowledge
+              </span>
+              {knowledge.available ? (
+                <span className="font-mono text-[10px] text-emerald-400">
+                  {knowledge.count} papers embedded
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] text-flow-600">Qdrant unavailable</span>
+              )}
+            </div>
+            <button
+              onClick={() => setKnowledgeOpen(false)}
+              className="font-mono text-[10px] text-flow-600 hover:text-flow-400 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+          {knowledge.available && knowledge.papers.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-wide text-flow-600">
+                Embedded papers — agents can search across these via hybrid RAG
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {knowledge.papers.map((p) => (
+                  <Badge
+                    key={p.id}
+                    variant="outline"
+                    className="h-5 max-w-[220px] truncate px-2 font-mono text-[10px] border-amber-500/30 text-amber-300"
+                    title={p.title}
+                  >
+                    {p.title}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          {knowledge.available && knowledge.papers.length === 0 && (
+            <p className="font-mono text-[11px] text-flow-600">
+              No papers embedded yet. Select papers and click "Embed as Knowledge".
+            </p>
+          )}
         </div>
       )}
 
@@ -467,12 +982,16 @@ export default function ResearchPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {papers.map((paper) => (
             <PaperCard
-                    key={paper.id}
-                    paper={paper}
-                    onStatusChange={handleStatusChange}
-                    onSummarize={summarizePaper}
-                    summarizing={summarizingIds.has(paper.id)}
-                  />
+              key={paper.id}
+              paper={paper}
+              onStatusChange={handleStatusChange}
+              onSummarize={summarizePaper}
+              onDelete={handleDelete}
+              onDeleteFromVault={handleDeleteFromVault}
+              summarizing={summarizingIds.has(paper.id)}
+              selected={selectedIds.has(paper.id)}
+              onToggleSelect={toggleSelect}
+            />
           ))}
         </div>
       )}

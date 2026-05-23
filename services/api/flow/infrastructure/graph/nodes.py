@@ -106,7 +106,7 @@ def _get_llm(ctx: GraphContext):
     cfg = ctx.agent_config or {}
     model_config = cfg.get("llm_config") or cfg.get("model") or {}
     if not model_config:
-        model_config = {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.2}
+        model_config = {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2}
     return get_chat_model(
         model_config,
         fallback_api_keys={"openai": ctx.openai_api_key, "anthropic": ctx.anthropic_api_key},
