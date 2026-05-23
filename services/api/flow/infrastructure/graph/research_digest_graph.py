@@ -1,4 +1,5 @@
 """5-node LangGraph for nightly research digest."""
+
 from __future__ import annotations
 
 import asyncio
@@ -62,13 +63,10 @@ async def fetch_sources(state: DigestState) -> dict:
             r = await client.get("https://huggingface.co/api/daily_papers")
             if r.status_code == 200:
                 data = r.json()
-                for item in (data[:20] if isinstance(data, list) else []):
+                for item in data[:20] if isinstance(data, list) else []:
                     paper = item.get("paper", item)
                     authors_raw = paper.get("authors", [])
-                    authors = [
-                        a.get("name", str(a)) if isinstance(a, dict) else str(a)
-                        for a in authors_raw[:5]
-                    ]
+                    authors = [a.get("name", str(a)) if isinstance(a, dict) else str(a) for a in authors_raw[:5]]
                     pub_str = paper.get("publishedAt")
                     try:
                         pub_dt: datetime | None = datetime.fromisoformat(pub_str.replace("Z", "+00:00")) if pub_str else None
@@ -91,6 +89,7 @@ async def fetch_sources(state: DigestState) -> dict:
     try:
         from flow.config import get_settings
         from flow.infrastructure.tools.web import run_tavily_search
+
         settings = get_settings()
         if settings.tavily_api_key:
             for cat in categories[:3]:
@@ -101,15 +100,17 @@ async def fetch_sources(state: DigestState) -> dict:
                 )
                 for r in results:
                     if r.get("title") and r.get("content"):
-                        papers.append({
-                            "title": r["title"],
-                            "abstract": r["content"][:800],
-                            "source_url": r.get("url", ""),
-                            "arxiv_id": None,
-                            "authors": [],
-                            "categories": [cat],
-                            "published_at": None,
-                        })
+                        papers.append(
+                            {
+                                "title": r["title"],
+                                "abstract": r["content"][:800],
+                                "source_url": r.get("url", ""),
+                                "arxiv_id": None,
+                                "authors": [],
+                                "categories": [cat],
+                                "published_at": None,
+                            }
+                        )
     except Exception:
         logger.warning("digest.fetch_sources.tavily_failed")
 
@@ -124,17 +125,19 @@ async def fetch_sources(state: DigestState) -> dict:
                     try:
                         data = r.json()
                         items = data if isinstance(data, list) else data.get("papers", data.get("results", []))
-                        for item in (items[:10] if isinstance(items, list) else []):
+                        for item in items[:10] if isinstance(items, list) else []:
                             if item.get("title"):
-                                papers.append({
-                                    "title": item.get("title", ""),
-                                    "abstract": item.get("abstract", item.get("summary", "")),
-                                    "source_url": item.get("url", url),
-                                    "arxiv_id": None,
-                                    "authors": item.get("authors", [])[:5],
-                                    "categories": [],
-                                    "published_at": None,
-                                })
+                                papers.append(
+                                    {
+                                        "title": item.get("title", ""),
+                                        "abstract": item.get("abstract", item.get("summary", "")),
+                                        "source_url": item.get("url", url),
+                                        "arxiv_id": None,
+                                        "authors": item.get("authors", [])[:5],
+                                        "categories": [],
+                                        "published_at": None,
+                                    }
+                                )
                     except Exception:
                         pass
                 except Exception:
@@ -175,9 +178,7 @@ async def filter_by_interest(state: DigestState) -> dict:
     llm = get_chat_model(
         {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.0},
         fallback_keys,
-    ) or get_chat_model(
-        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.0}, fallback_keys
-    )
+    ) or get_chat_model({"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.0}, fallback_keys)
 
     need_scoring = [p for p in candidates if p["relevance_score"] is None]
 
@@ -205,10 +206,12 @@ async def filter_by_interest(state: DigestState) -> dict:
                         + f"Title: {paper['title']}\nAbstract: {paper['abstract'][:800]}\n"
                         'Reply with JSON only: {"score": <float 0.0-1.0>}'
                     )
-                    resp = await llm.ainvoke([
-                        SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
-                        HumanMessage(content=prompt),
-                    ])
+                    resp = await llm.ainvoke(
+                        [
+                            SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
+                            HumanMessage(content=prompt),
+                        ]
+                    )
                     text = resp.content if hasattr(resp, "content") else str(resp)
                     start = text.find("{")
                     end = text.rfind("}") + 1
@@ -218,20 +221,25 @@ async def filter_by_interest(state: DigestState) -> dict:
                     return 0.5
 
         scores = await asyncio.gather(*[score_one(p) for p in need_scoring])
-        for paper, score in zip(need_scoring, scores):
+        for paper, score in zip(need_scoring, scores, strict=False):
             paper["relevance_score"] = score
 
     logger.info("digest.filter.scoring_done", count=len(need_scoring))
 
     filtered = [p for p in candidates if p["relevance_score"] >= min_score]
     filtered.sort(key=lambda p: p["relevance_score"], reverse=True)
-    kept = filtered[:config.get("max_papers", 50)]
+    kept = filtered[: config.get("max_papers", 50)]
     logger.info("digest.filter.done", kept=len(kept), total=len(state["raw_papers"]))
     hub = state.get("stream_hub")
     if hub:
-        await hub.publish_global(state["workspace_id"], "digest.filter_done", {
-            "kept": len(kept), "total": len(state["raw_papers"]),
-        })
+        await hub.publish_global(
+            state["workspace_id"],
+            "digest.filter_done",
+            {
+                "kept": len(kept),
+                "total": len(state["raw_papers"]),
+            },
+        )
     return {"filtered_papers": kept}
 
 
@@ -244,7 +252,9 @@ async def summarize_papers(state: DigestState) -> dict:
 
     settings = get_settings()
     fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
-    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model({"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys)
+    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.1}, fallback_keys) or get_chat_model(
+        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys
+    )
     if llm is None:
         logger.warning("digest.summarize.no_llm_skipping")
         enriched = [dict(p, tldr=None, key_insights=None) for p in state["filtered_papers"]]
@@ -262,7 +272,7 @@ async def summarize_papers(state: DigestState) -> dict:
                     HumanMessage(
                         content=(
                             f"Paper: {paper['title']}\n\nAbstract: {paper['abstract'][:1500]}\n\n"
-                            "Reply with JSON: {\"tldr\": \"one sentence\", \"key_insights\": \"2-3 bullet points\"}"
+                            'Reply with JSON: {"tldr": "one sentence", "key_insights": "2-3 bullet points"}'
                         )
                     ),
                 ]
@@ -302,15 +312,15 @@ async def format_obsidian(state: DigestState) -> dict:
         relevance = paper.get("relevance_score", 0.0)
 
         frontmatter = f"""---
-title: "{paper['title'].replace('"', "'")}"
+title: "{paper["title"].replace('"', "'")}"
 date: {today}
 created: {today}
-source: {paper.get('source_url', '')}
+source: {paper.get("source_url", "")}
 arxiv_id: {arxiv_id}
 authors:
-{authors_yaml or '  - Unknown'}
+{authors_yaml or "  - Unknown"}
 categories:
-{cats_yaml or '  - unknown'}
+{cats_yaml or "  - unknown"}
 tags:
   - research
   - digest
@@ -327,16 +337,12 @@ type: research-paper
         daily_link = f"[[Research/Digest/{today}/index]]"
 
         # Wikilinks for categories and authors (kepano/obsidian-skills style)
-        cat_links = " ".join(
-            f"[[Category/{c.replace('.', '-')}]]" for c in paper.get("categories", [])
-        )
-        author_links = " ".join(
-            f"[[Author/{a.replace(' ', '-')}]]" for a in paper.get("authors", [])[:3]
-        )
+        cat_links = " ".join(f"[[Category/{c.replace('.', '-')}]]" for c in paper.get("categories", []))
+        author_links = " ".join(f"[[Author/{a.replace(' ', '-')}]]" for a in paper.get("authors", [])[:3])
 
         content = f"""{frontmatter}
 
-# {paper['title']}
+# {paper["title"]}
 
 > [!abstract] TL;DR
 > {tldr}
@@ -354,20 +360,20 @@ _To be filled._
 _See paper for details._
 
 ## 🏷 Topics
-{cat_links or '_No categories._'}
+{cat_links or "_No categories._"}
 
 ## 👥 Authors
-{author_links or '_Unknown._'}
+{author_links or "_Unknown._"}
 
 ## 🔗 References
-- Source: {paper.get('source_url', 'N/A')}
-- ArXiv: {f'https://arxiv.org/abs/{arxiv_id}' if arxiv_id else 'N/A'}
+- Source: {paper.get("source_url", "N/A")}
+- ArXiv: {f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "N/A"}
 - Daily digest: {daily_link}
 
 ---
-#research #digest #{today.replace('-', '')}"""
+#research #digest #{today.replace("-", "")}"""
 
-        safe_name = arxiv_id or paper['title'][:40].replace("/", "-").replace(":", "")
+        safe_name = arxiv_id or paper["title"][:40].replace("/", "-").replace(":", "")
         notes.append(
             {
                 "paper": paper,
@@ -378,22 +384,13 @@ _See paper for details._
 
     # Second pass: add related papers section (shared categories)
     for i, note in enumerate(notes):
-        shared = [
-            n for j, n in enumerate(notes)
-            if j != i and set(n["paper"].get("categories", [])) & set(note["paper"].get("categories", []))
-        ]
+        shared = [n for j, n in enumerate(notes) if j != i and set(n["paper"].get("categories", [])) & set(note["paper"].get("categories", []))]
         if shared:
-            related_links = "\n".join(
-                f"- [[{n['path'].replace('.md', '')}|{n['paper']['title'][:60]}]]"
-                for n in shared[:5]
-            )
+            related_links = "\n".join(f"- [[{n['path'].replace('.md', '')}|{n['paper']['title'][:60]}]]" for n in shared[:5])
             note["content"] += f"\n\n## 🔗 Related Papers\n{related_links}"
 
     # Daily index file — links to all papers in this digest
-    paper_links = "\n".join(
-        f"- [[{note['path'].replace('.md', '')}|{note['paper']['title'][:70]}]]"
-        for note in notes
-    )
+    paper_links = "\n".join(f"- [[{note['path'].replace('.md', '')}|{note['paper']['title'][:70]}]]" for note in notes)
     index_content = f"""---
 date: {today}
 type: daily-digest
@@ -404,13 +401,15 @@ tags:
 ---
 # Research Digest — {today}
 
-{paper_links if paper_links else '_No papers in this digest._'}
+{paper_links if paper_links else "_No papers in this digest._"}
 """
-    notes.append({
-        "paper": {},
-        "path": f"Research/Digest/{today}/index.md",
-        "content": index_content,
-    })
+    notes.append(
+        {
+            "paper": {},
+            "path": f"Research/Digest/{today}/index.md",
+            "content": index_content,
+        }
+    )
 
     return {"obsidian_notes": notes}
 
@@ -420,6 +419,7 @@ tags:
 
 async def persist(state: DigestState) -> dict:
     import asyncpg
+
     from flow.config import get_settings
 
     workspace_id = state["workspace_id"]
@@ -486,11 +486,13 @@ async def persist(state: DigestState) -> dict:
                 paper["title"][:500],
                 (paper.get("tldr") or paper.get("abstract", ""))[:500],
                 paper.get("source_url"),
-                json.dumps({
-                    "arxiv_id": paper.get("arxiv_id"),
-                    "categories": paper.get("categories", []),
-                    "relevance_score": paper.get("relevance_score"),
-                }),
+                json.dumps(
+                    {
+                        "arxiv_id": paper.get("arxiv_id"),
+                        "categories": paper.get("categories", []),
+                        "relevance_score": paper.get("relevance_score"),
+                    }
+                ),
             )
             if row:
                 paper_kg_ids.append((str(row["id"]), paper.get("categories", [])))
@@ -499,7 +501,7 @@ async def persist(state: DigestState) -> dict:
 
     # ── Edges between papers sharing categories ───────────────────────────
     for i, (id_a, cats_a) in enumerate(paper_kg_ids):
-        for id_b, cats_b in paper_kg_ids[i + 1:]:
+        for id_b, cats_b in paper_kg_ids[i + 1 :]:
             shared = set(cats_a) & set(cats_b)
             if not shared:
                 continue
@@ -573,11 +575,15 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
     finally:
         persisted = len(result.get("persisted_ids", []))
         if stream_hub is not None:
-            await stream_hub.publish_global(workspace_id, "digest.complete", {
-                "workspace_id": workspace_id,
-                "persisted": persisted,
-                "fetched": len(result.get("raw_papers", [])),
-                "filtered": len(result.get("filtered_papers", [])),
-            })
+            await stream_hub.publish_global(
+                workspace_id,
+                "digest.complete",
+                {
+                    "workspace_id": workspace_id,
+                    "persisted": persisted,
+                    "fetched": len(result.get("raw_papers", [])),
+                    "filtered": len(result.get("filtered_papers", [])),
+                },
+            )
 
     return {"persisted": persisted}

@@ -14,12 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE agent_skills ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General'"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_agent_skills_category ON agent_skills (workspace_id, category)"
-    )
+    op.execute("ALTER TABLE agent_skills ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General'")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_agent_skills_category ON agent_skills (workspace_id, category)")
     # Backfill from metadata JSONB where already set
     op.execute(
         """

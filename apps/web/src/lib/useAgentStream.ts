@@ -41,6 +41,7 @@ export function useAgentStream(agentId: string | null): UseAgentStreamResult {
   const [connected, setConnected] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectRef = useRef<((id: string) => void) | null>(null)
 
   const connect = useCallback((id: string) => {
     if (wsRef.current) {
@@ -54,7 +55,7 @@ export function useAgentStream(agentId: string | null): UseAgentStreamResult {
     ws.onopen = () => setConnected(true)
     ws.onclose = () => {
       setConnected(false)
-      reconnectRef.current = setTimeout(() => { if (wsRef.current === ws) connect(id) }, 3000)
+      reconnectRef.current = setTimeout(() => { if (wsRef.current === ws) connectRef.current?.(id) }, 3000)
     }
     ws.onerror = () => ws.close()
 
@@ -99,6 +100,10 @@ export function useAgentStream(agentId: string | null): UseAgentStreamResult {
       }
     }
   }, [])
+
+  useEffect(() => {
+    connectRef.current = connect
+  })
 
   useEffect(() => {
     if (!agentId) {

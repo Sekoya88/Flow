@@ -35,8 +35,8 @@ from flow.interfaces.http.routes import (
     dashboard,
     digest,
     evaluations,
-    executions,
     evolution,
+    executions,
     feedback,
     golden_sets,
     graph,
@@ -140,7 +140,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(health.router)
-    app.include_router(local.router)   # no auth — desktop app discovery
+    app.include_router(local.router)  # no auth — desktop app discovery
     app.include_router(auth.router)
     app.include_router(analytics.router)
     app.include_router(dashboard.router)

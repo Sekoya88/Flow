@@ -1,4 +1,5 @@
 """Tests for /api/v1/digest routes."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -78,6 +79,7 @@ def _make_repo(config=None, papers=None) -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
     _app = create_app()
     _app.dependency_overrides[get_repo] = lambda: _make_repo()

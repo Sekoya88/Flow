@@ -233,10 +233,9 @@ def make_planner(ctx: GraphContext):
                     skills_block = loader.format_xml(matched)
                     matched_skill_dicts = loader.to_state_dicts(matched)
                     if ctx.stream_hub:
-                        ctx.stream_hub.publish_agent_event(ctx.agent_id, {
-                            "type": "skills_matched",
-                            "skills": [{"name": s.name, "version": s.version} for s in matched]
-                        })
+                        ctx.stream_hub.publish_agent_event(
+                            ctx.agent_id, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]}
+                        )
             except Exception:
                 pass
 
@@ -290,17 +289,16 @@ def make_planner(ctx: GraphContext):
 
             # Emit parsed plan as todo_update to agent observability channel
             if ctx.stream_hub and plan and ctx.agent_id:
-                todo_lines = [
-                    re.sub(r"^(\d+[\.\)]\s*|\*\s*|-\s*)", "", l).strip()
-                    for l in plan.split("\n")
-                    if l.strip()
-                ]
+                todo_lines = [re.sub(r"^(\d+[\.\)]\s*|\*\s*|-\s*)", "", ln).strip() for ln in plan.split("\n") if ln.strip()]
                 todos = [{"status": "pending", "content": t} for t in todo_lines if t]
                 if todos:
-                    ctx.stream_hub.publish_agent_event(ctx.agent_id, {
-                        "type": "todo_update",
-                        "todos": todos,
-                    })
+                    ctx.stream_hub.publish_agent_event(
+                        ctx.agent_id,
+                        {
+                            "type": "todo_update",
+                            "todos": todos,
+                        },
+                    )
 
             result: dict = {"plan": plan, "messages": [AIMessage(content=f"[planner]\n{plan}")]}
             if matched_skill_dicts:
@@ -660,22 +658,19 @@ Output ONLY valid JSON:
                     metacog_state = {
                         "grade": grade,
                         "calibration_error": cal_error,
-                        "skill_scores": [
-                            {"name": s.skill_name, "contribution": s.contribution}
-                            for s in skill_scores
-                        ],
+                        "skill_scores": [{"name": s.skill_name, "contribution": s.contribution} for s in skill_scores],
                         "mutations_count": len(mutations),
                     }
                     if ctx.stream_hub:
-                        ctx.stream_hub.publish_agent_event(ctx.agent_id, {
-                            "type": "metacog_evaluated",
-                            "grade": grade,
-                            "mutations_proposed": len(mutations),
-                            "skill_scores": [
-                                {"name": s.skill_name, "contribution": s.contribution}
-                                for s in skill_scores
-                            ]
-                        })
+                        ctx.stream_hub.publish_agent_event(
+                            ctx.agent_id,
+                            {
+                                "type": "metacog_evaluated",
+                                "grade": grade,
+                                "mutations_proposed": len(mutations),
+                                "skill_scores": [{"name": s.skill_name, "contribution": s.contribution} for s in skill_scores],
+                            },
+                        )
                 except Exception:
                     _node_logger.debug("metacog_service integration failed", exc_info=True)
 
@@ -692,11 +687,14 @@ Output ONLY valid JSON:
                         if sid:
                             await bandit.update(ctx.agent_id, _UUID(sid), reward)
                             if ctx.stream_hub:
-                                ctx.stream_hub.publish_agent_event(ctx.agent_id, {
-                                    "type": "skill_arm_updated",
-                                    "skill_id": sid,
-                                    "reward": reward,
-                                })
+                                ctx.stream_hub.publish_agent_event(
+                                    ctx.agent_id,
+                                    {
+                                        "type": "skill_arm_updated",
+                                        "skill_id": sid,
+                                        "reward": reward,
+                                    },
+                                )
                 except Exception:
                     pass  # bandit updates are best-effort
 
@@ -1039,16 +1037,19 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             except Exception:
                 pass
         if hub is not None and ctx.agent_id is not None:
-            hub.publish_agent_event(ctx.agent_id, {
-                "type": "subagent_call",
-                "id": call_id,
-                "status": "running",
-                "description": message[:500],
-                "subagent_type": agent_name,
-                "result": None,
-                "started_at": t0,
-                "completed_at": None,
-            })
+            hub.publish_agent_event(
+                ctx.agent_id,
+                {
+                    "type": "subagent_call",
+                    "id": call_id,
+                    "status": "running",
+                    "description": message[:500],
+                    "subagent_type": agent_name,
+                    "result": None,
+                    "started_at": t0,
+                    "completed_at": None,
+                },
+            )
         # Also persist a start row so a reload can replay it
         if parent_exec_id is not None and ctx.pool is not None:
             try:
@@ -1129,16 +1130,19 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 except Exception:
                     pass
             if hub is not None and ctx.agent_id is not None:
-                hub.publish_agent_event(ctx.agent_id, {
-                    "type": "subagent_call",
-                    "id": call_id,
-                    "status": "complete",
-                    "description": message[:500],
-                    "subagent_type": agent_name,
-                    "result": str(answer)[:2000],
-                    "started_at": t0,
-                    "completed_at": time.time(),
-                })
+                hub.publish_agent_event(
+                    ctx.agent_id,
+                    {
+                        "type": "subagent_call",
+                        "id": call_id,
+                        "status": "complete",
+                        "description": message[:500],
+                        "subagent_type": agent_name,
+                        "result": str(answer)[:2000],
+                        "started_at": t0,
+                        "completed_at": time.time(),
+                    },
+                )
             if parent_exec_id is not None and ctx.pool is not None:
                 try:
                     from flow.infrastructure.persistence.repo import FlowRepository as _RepoDone
@@ -1176,16 +1180,19 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 except Exception:
                     pass
             if hub is not None and ctx.agent_id is not None:
-                hub.publish_agent_event(ctx.agent_id, {
-                    "type": "subagent_call",
-                    "id": call_id,
-                    "status": "error",
-                    "description": message[:500],
-                    "subagent_type": agent_name,
-                    "result": str(exc),
-                    "started_at": t0,
-                    "completed_at": time.time(),
-                })
+                hub.publish_agent_event(
+                    ctx.agent_id,
+                    {
+                        "type": "subagent_call",
+                        "id": call_id,
+                        "status": "error",
+                        "description": message[:500],
+                        "subagent_type": agent_name,
+                        "result": str(exc),
+                        "started_at": t0,
+                        "completed_at": time.time(),
+                    },
+                )
             return f"[subagent_call] Error: {exc}"
 
     lc_tools.append(
@@ -1202,9 +1209,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
 
         try:
             jwt_token = ctx.agent_config.get("_jwt_token", "")
-            mcp_tools = await get_mcp_tools_for_agent(
-                uuid.UUID(str(ctx.workspace_id)), jwt_token, ctx.pool
-            )
+            mcp_tools = await get_mcp_tools_for_agent(uuid.UUID(str(ctx.workspace_id)), jwt_token, ctx.pool)
             lc_tools.extend(mcp_tools)
         except Exception:
             _node_logger.warning("mcp_client.tools_load_failed")

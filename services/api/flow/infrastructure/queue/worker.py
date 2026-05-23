@@ -12,10 +12,10 @@ from flow.application.execution_runner import run_deer_execution
 from flow.application.golden_evaluator import auto_eval_tick, auto_safety_eval_tick, skill_decay_tick
 from flow.application.persona_freshness import persona_freshness_tick
 from flow.application.scheduler import scheduler_tick
-from flow.infrastructure.graph.research_digest_graph import run_research_digest as _run_digest
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
+from flow.infrastructure.graph.research_digest_graph import run_research_digest as _run_digest
 from flow.infrastructure.observability.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -108,16 +108,16 @@ async def research_digest_tick(ctx: dict) -> None:
     pool = ctx.get("pool")
     if pool is None:
         return
-    rows = await pool.fetch(
-        "SELECT workspace_id, row_to_json(wdc)::text AS cfg FROM workspace_digest_config wdc WHERE enabled = true"
-    )
+    rows = await pool.fetch("SELECT workspace_id, row_to_json(wdc)::text AS cfg FROM workspace_digest_config wdc WHERE enabled = true")
     arq_pool = ctx.get("arq_pool")
     if arq_pool is None:
         from flow.infrastructure.queue.client import get_arq_pool
+
         arq_pool = await get_arq_pool()
 
     for row in rows:
         import json as _json
+
         config = _json.loads(row["cfg"]) if isinstance(row["cfg"], str) else dict(row)
         await arq_pool.enqueue_job("run_research_digest", str(row["workspace_id"]), config)
 

@@ -150,8 +150,8 @@ async def create_knowledge_from_image(
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="image too large (max 10 MB)")
 
-    from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage
+    from langchain_openai import ChatOpenAI
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     llm = ChatOpenAI(
@@ -160,21 +160,23 @@ async def create_knowledge_from_image(
         temperature=0,
         max_tokens=1024,
     )
-    msg = HumanMessage(content=[
-        {
-            "type": "image_url",
-            "image_url": {"url": f"data:{image.content_type};base64,{image_b64}"},
-        },
-        {
-            "type": "text",
-            "text": (
-                "Extract all key information, text, data, and insights from this image "
-                "as structured notes for a knowledge base. Be comprehensive but concise. "
-                "If the image contains text, include it verbatim. If it contains diagrams "
-                "or charts, describe them clearly."
-            ),
-        },
-    ])
+    msg = HumanMessage(
+        content=[
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{image.content_type};base64,{image_b64}"},
+            },
+            {
+                "type": "text",
+                "text": (
+                    "Extract all key information, text, data, and insights from this image "
+                    "as structured notes for a knowledge base. Be comprehensive but concise. "
+                    "If the image contains text, include it verbatim. If it contains diagrams "
+                    "or charts, describe them clearly."
+                ),
+            },
+        ]
+    )
     result = await llm.ainvoke([msg])
     notes: str = result.content  # type: ignore[assignment]
 

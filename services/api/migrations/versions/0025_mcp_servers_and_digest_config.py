@@ -6,9 +6,6 @@ Create Date: 2026-05-22
 """
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
-import sqlalchemy.dialects.postgresql as pg
 
 revision: str = "0025"
 down_revision: str = "0024"
@@ -32,9 +29,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_mcp_servers_workspace ON mcp_servers (workspace_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_mcp_servers_workspace ON mcp_servers (workspace_id)")
 
     op.execute(
         """

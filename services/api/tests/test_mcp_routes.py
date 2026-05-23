@@ -1,4 +1,5 @@
 """Tests for /api/v1/mcp routes."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -53,6 +54,7 @@ def _make_repo(server_row=None) -> FlowRepository:
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_JWT_SECRET", _SECRET)
     from flow import config as cfg
+
     cfg.get_settings.cache_clear()
     _app = create_app()
     _app.dependency_overrides[get_repo] = lambda: _make_repo()
@@ -61,11 +63,7 @@ def app(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_list_mcp_servers_empty(app):
-    app.dependency_overrides[get_repo] = lambda: (
-        r := _make_repo(),
-        setattr(r._pool, "fetch", AsyncMock(return_value=[])),
-        r
-    )[-1]
+    app.dependency_overrides[get_repo] = lambda: (r := _make_repo(), setattr(r._pool, "fetch", AsyncMock(return_value=[])), r)[-1]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(f"/api/v1/mcp/servers?workspace_id={_WS_ID}", headers=_auth())
     assert r.status_code == 200
@@ -103,11 +101,7 @@ async def test_delete_mcp_server(app):
 
 @pytest.mark.asyncio
 async def test_delete_mcp_server_not_found(app):
-    app.dependency_overrides[get_repo] = lambda: (
-        r := _make_repo(server_row=None),
-        setattr(r._pool, "fetchrow", AsyncMock(return_value=None)),
-        r
-    )[-1]
+    app.dependency_overrides[get_repo] = lambda: (r := _make_repo(server_row=None), setattr(r._pool, "fetchrow", AsyncMock(return_value=None)), r)[-1]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.delete(f"/api/v1/mcp/servers/{uuid4()}", headers=_auth())
     assert r.status_code == 404

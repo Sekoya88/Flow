@@ -7,8 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.interfaces.http.deps import get_current_user_id, get_repo
 
 router = APIRouter(prefix="/api/v1/stream", tags=["stream"])
 

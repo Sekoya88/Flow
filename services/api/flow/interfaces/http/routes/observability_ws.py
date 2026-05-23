@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from flow.infrastructure.execution_streams import ExecutionStreamHub
-from flow.interfaces.http.deps import get_current_user_id
 
 router = APIRouter(prefix="/api/v1/agents/{agent_id}", tags=["observability"])
 logger = logging.getLogger(__name__)
@@ -38,11 +36,7 @@ async def observability_websocket(
 
     try:
         # Send initial connection success
-        await websocket.send_json({
-            "type": "connection_established",
-            "agent_id": str(agent_id),
-            "status": "listening"
-        })
+        await websocket.send_json({"type": "connection_established", "agent_id": str(agent_id), "status": "listening"})
 
         async for message in pubsub.listen():
             if message["type"] == "message":

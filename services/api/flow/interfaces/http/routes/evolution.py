@@ -11,7 +11,6 @@ Adds:
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 from uuid import UUID
 

@@ -1,7 +1,7 @@
 """Unit tests for research_digest_graph nodes (no DB, no external calls)."""
+
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -70,8 +70,7 @@ async def test_fetch_sources_returns_raw_papers():
 @pytest.mark.asyncio
 async def test_fetch_sources_handles_arxiv_failure():
     """fetch_sources continues even when arxiv raises."""
-    with patch("arxiv.Client", side_effect=Exception("network down")), \
-         patch("httpx.AsyncClient") as mock_http:
+    with patch("arxiv.Client", side_effect=Exception("network down")), patch("httpx.AsyncClient") as mock_http:
         mock_resp = MagicMock(status_code=200)
         mock_resp.headers.get.return_value = "application/json"
         mock_resp.json.return_value = []
@@ -89,8 +88,7 @@ async def test_fetch_sources_handles_arxiv_failure():
 async def test_filter_drops_no_title():
     """Papers without title are excluded."""
     state = _make_state(raw_papers=[_paper(title=""), _paper()])
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
         mock_settings.return_value = MagicMock(openai_api_key=None, anthropic_api_key=None)
         result = await filter_by_interest(state)
     assert all(p["title"] for p in result["filtered_papers"])
@@ -103,8 +101,7 @@ async def test_filter_category_mismatch_scores_low():
         raw_papers=[_paper(categories=["econ.GN"])],
         config={"arxiv_categories": ["cs.AI"], "min_relevance_score": 0.5},
     )
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
         mock_settings.return_value = MagicMock(openai_api_key=None, anthropic_api_key=None)
         result = await filter_by_interest(state)
     # econ.GN != cs.AI → relevance_score 0.2 < 0.5 → filtered out
@@ -115,8 +112,7 @@ async def test_filter_category_mismatch_scores_low():
 async def test_filter_category_match_survives_without_llm():
     """Paper with matching category survives filter even when LLM unavailable."""
     state = _make_state(raw_papers=[_paper(categories=["cs.AI"])])
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
         mock_settings.return_value = MagicMock(openai_api_key=None, anthropic_api_key=None)
         result = await filter_by_interest(state)
     # No LLM → fallback score 0.6 ≥ 0.5 → kept
@@ -129,8 +125,7 @@ async def test_filter_uses_llm_score():
     state = _make_state(raw_papers=[_paper()])
     mock_llm = AsyncMock()
     mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content='{"score": 0.9}'))
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=mock_llm):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=mock_llm):
         mock_settings.return_value = MagicMock(openai_api_key="k", anthropic_api_key=None)
         result = await filter_by_interest(state)
     assert result["filtered_papers"][0]["relevance_score"] == pytest.approx(0.9)
@@ -143,8 +138,7 @@ async def test_filter_uses_llm_score():
 async def test_summarize_no_llm_returns_none_fields():
     """Without LLM, tldr and key_insights are None."""
     state = _make_state(filtered_papers=[_paper()])
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=None):
         mock_settings.return_value = MagicMock(openai_api_key=None, anthropic_api_key=None)
         result = await summarize_papers(state)
     assert result["enriched_papers"][0]["tldr"] is None
@@ -157,8 +151,7 @@ async def test_summarize_parses_llm_json():
     llm_response = MagicMock(content='{"tldr": "Short summary.", "key_insights": "- Point A"}')
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(return_value=llm_response)
-    with patch("flow.config.get_settings") as mock_settings, \
-         patch("flow.infrastructure.llm.providers.get_chat_model", return_value=mock_llm):
+    with patch("flow.config.get_settings") as mock_settings, patch("flow.infrastructure.llm.providers.get_chat_model", return_value=mock_llm):
         mock_settings.return_value = MagicMock(openai_api_key="k", anthropic_api_key=None)
         result = await summarize_papers(state)
     paper = result["enriched_papers"][0]

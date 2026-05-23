@@ -44,11 +44,11 @@ def build_kg_query_graph(config: QueryConfig):
     async def _text_search(query: str, k: int = 8) -> list[dict]:
         """Full-text keyword fallback — works even when embeddings are NULL."""
         import re as _re
+
         try:
             # Extract meaningful words (>2 chars, skip common stop words)
-            _STOPS = {"what", "are", "the", "about", "here", "this", "that",
-                      "with", "from", "have", "does", "for", "you", "your"}
-            raw_words = [w.lower().strip(".,?!:;\"'()") for w in _re.split(r'\s+', query)]
+            _STOPS = {"what", "are", "the", "about", "here", "this", "that", "with", "from", "have", "does", "for", "you", "your"}
+            raw_words = [w.lower().strip(".,?!:;\"'()") for w in _re.split(r"\s+", query)]
             keywords = [w for w in raw_words if len(w) > 2 and w not in _STOPS][:10]
             # Build OR-based ts_query so ANY keyword match is enough
             ts_terms = " | ".join(keywords) if keywords else query[:100]

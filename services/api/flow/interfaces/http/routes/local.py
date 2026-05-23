@@ -26,11 +26,7 @@ async def active_agents(request: Request) -> dict:
     if ids:
         return {"agents": [{"id": aid, "name": None} for aid in ids]}
     pool = request.app.state.pool
-    row = await pool.fetchrow(
-        "SELECT a.id, a.name FROM executions e "
-        "JOIN agents a ON a.id = e.agent_id "
-        "ORDER BY e.created_at DESC LIMIT 1"
-    )
+    row = await pool.fetchrow("SELECT a.id, a.name FROM executions e JOIN agents a ON a.id = e.agent_id ORDER BY e.created_at DESC LIMIT 1")
     if row:
         return {"agents": [{"id": str(row["id"]), "name": row["name"]}]}
     return {"agents": []}
@@ -94,9 +90,7 @@ async def agent_memory(agent_id: UUID, request: Request) -> dict:
 async def agent_graph(agent_id: UUID, request: Request) -> dict:
     """Full graph payload for one agent: skills + tools + system_prompt flag + memory count."""
     pool = request.app.state.pool
-    agent_row = await pool.fetchrow(
-        "SELECT id, name, template, config FROM agents WHERE id = $1", agent_id
-    )
+    agent_row = await pool.fetchrow("SELECT id, name, template, config FROM agents WHERE id = $1", agent_id)
     if not agent_row:
         return {"agent": None, "skills": [], "tools": [], "has_system_prompt": False, "memory_count": 0}
 
@@ -121,9 +115,7 @@ async def agent_graph(agent_id: UUID, request: Request) -> dict:
         agent_id,
     )
 
-    mem_count = await pool.fetchval(
-        "SELECT COUNT(*) FROM agent_memories WHERE agent_id = $1", agent_id
-    )
+    mem_count = await pool.fetchval("SELECT COUNT(*) FROM agent_memories WHERE agent_id = $1", agent_id)
 
     return {
         "agent": {

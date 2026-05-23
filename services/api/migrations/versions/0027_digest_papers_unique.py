@@ -22,6 +22,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "ALTER TABLE digest_papers DROP CONSTRAINT IF EXISTS digest_papers_workspace_title_key"
-    )
+    op.execute("ALTER TABLE digest_papers DROP CONSTRAINT IF EXISTS digest_papers_workspace_title_key")

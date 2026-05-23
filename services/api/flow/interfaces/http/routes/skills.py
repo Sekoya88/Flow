@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from flow.application.skill_parser import parse_skill_md
-from flow.infrastructure.persistence.skill_templates import SKILL_TEMPLATES
 from flow.application.skill_playground import run_skill_test
 from flow.config import Settings
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.infrastructure.persistence.skill_templates import SKILL_TEMPLATES
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.rate_limit import skill_test_rate_limit
 from flow.interfaces.http.schemas import (

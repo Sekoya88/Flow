@@ -126,7 +126,7 @@ class SkillBandit:
                 skill_id,
                 agent_id,
                 1.0 + alpha_inc,  # prior + increment
-                1.0 + beta_inc,   # prior + increment
+                1.0 + beta_inc,  # prior + increment
                 reward,
             )
         except Exception as exc:

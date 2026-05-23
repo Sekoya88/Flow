@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.interfaces.http.deps import get_current_user_id, get_repo
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/digest", tags=["Research Digest"])
@@ -26,9 +26,9 @@ class DigestConfigIn(BaseModel):
     custom_sources: list[str] = []
     user_interests: str = ""
     obsidian_mode: str = "filesystem"
-    obsidian_vault_path: Optional[str] = None
-    obsidian_api_url: Optional[str] = None
-    obsidian_cloud_bucket: Optional[str] = None
+    obsidian_vault_path: str | None = None
+    obsidian_api_url: str | None = None
+    obsidian_cloud_bucket: str | None = None
 
 
 class DigestRunIn(BaseModel):
@@ -57,9 +57,7 @@ class EmbedKnowledgeIn(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _assert_workspace(
-    user_id: UUID, workspace_id: UUID, repo: FlowRepository
-) -> None:
+async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowRepository) -> None:
     ws_rows = await repo.list_workspaces_for_user(user_id)
     if workspace_id not in {r["id"] for r in ws_rows}:
         raise HTTPException(status_code=403, detail="workspace not allowed")
@@ -75,9 +73,7 @@ async def get_digest_config(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM workspace_digest_config WHERE workspace_id = $1", workspace_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM workspace_digest_config WHERE workspace_id = $1", workspace_id)
     if not row:
         raise HTTPException(status_code=404, detail="Digest not configured for this workspace")
     return dict(row)
@@ -157,8 +153,8 @@ async def list_digest_papers(
     workspace_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
-    status: Optional[str] = None,
-    category: Optional[str] = None,
+    status: str | None = None,
+    category: str | None = None,
     relevance_min: float = Query(default=0.0, ge=0.0, le=1.0),
     limit: int = Query(default=20, le=100),
     offset: int = 0,
@@ -231,34 +227,36 @@ async def summarize_paper(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Re-run LLM summarization on a single paper and update tldr + key_insights."""
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM digest_papers WHERE id = $1", paper_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM digest_papers WHERE id = $1", paper_id)
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
 
     import json as _json
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+
     from flow.config import get_settings
     from flow.infrastructure.llm.providers import get_chat_model
-    from langchain_core.messages import HumanMessage, SystemMessage
 
     settings = get_settings()
     fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
-    llm = get_chat_model(
-        {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys
-    )
+    llm = get_chat_model({"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1}, fallback_keys)
     if llm is None:
         raise HTTPException(status_code=503, detail="No LLM provider configured")
 
     abstract = row["abstract"] or ""
-    resp = await llm.ainvoke([
-        SystemMessage(content="You are a research assistant. Be concise."),
-        HumanMessage(content=(
-            f"Paper: {row['title']}\n\nAbstract: {abstract[:1500]}\n\n"
-            'Reply with JSON only: {"tldr": "one sentence", "key_insights": "2-3 bullet points"}'
-        )),
-    ])
+    resp = await llm.ainvoke(
+        [
+            SystemMessage(content="You are a research assistant. Be concise."),
+            HumanMessage(
+                content=(
+                    f"Paper: {row['title']}\n\nAbstract: {abstract[:1500]}\n\n"
+                    'Reply with JSON only: {"tldr": "one sentence", "key_insights": "2-3 bullet points"}'
+                )
+            ),
+        ]
+    )
     text = resp.content if hasattr(resp, "content") else str(resp)
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -283,9 +281,7 @@ async def patch_digest_paper(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT workspace_id FROM digest_papers WHERE id = $1", paper_id
-    )
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM digest_papers WHERE id = $1", paper_id)
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
@@ -342,20 +338,20 @@ async def export_papers_to_obsidian(
             if isinstance(ki, list):
                 ki = "\n".join(f"- {item}" for item in ki)
             content = f"""---
-title: "{(row['title'] or '').replace('"', "'")}"
+title: "{(row["title"] or "").replace('"', "'")}"
 date: {today}
-source: {row['source_url'] or ''}
+source: {row["source_url"] or ""}
 arxiv_id: {arxiv_id}
 authors:
-{authors_yaml or '  - Unknown'}
+{authors_yaml or "  - Unknown"}
 categories:
-{cats_yaml or '  - unknown'}
-relevance_score: {float(row['relevance_score'] or 0):.2f}
+{cats_yaml or "  - unknown"}
+relevance_score: {float(row["relevance_score"] or 0):.2f}
 status: unread
 type: research-paper
 ---
 
-# {row['title']}
+# {row["title"]}
 
 > [!abstract] TL;DR
 > {tldr}
@@ -364,11 +360,11 @@ type: research-paper
 {ki}
 
 ## 📖 Abstract
-{(row['abstract'] or '')[:2000]}
+{(row["abstract"] or "")[:2000]}
 
 ## 🔗 References
-- Source: {row['source_url'] or 'N/A'}
-- ArXiv: {'https://arxiv.org/abs/' + arxiv_id if arxiv_id else 'N/A'}
+- Source: {row["source_url"] or "N/A"}
+- ArXiv: {"https://arxiv.org/abs/" + arxiv_id if arxiv_id else "N/A"}
 """
         obsidian_path = row["obsidian_path"]
         if not obsidian_path:
@@ -401,9 +397,10 @@ async def synthesize_knowledge(
     from datetime import date
     from uuid import UUID as _UUID
 
+    from langchain_core.messages import HumanMessage, SystemMessage
+
     from flow.config import get_settings
     from flow.infrastructure.llm.providers import get_chat_model
-    from langchain_core.messages import HumanMessage, SystemMessage
 
     await _assert_workspace(user_id, body.workspace_id, repo)
 
@@ -421,32 +418,31 @@ async def synthesize_knowledge(
     if not rows:
         raise HTTPException(status_code=404, detail="No summarized papers found — run a digest first")
 
-    papers_text = "\n\n".join(
-        f"**{r['title']}**\nTL;DR: {r['tldr'] or 'N/A'}\nInsights: {r['key_insights'] or 'N/A'}"
-        for r in rows
-    )
+    papers_text = "\n\n".join(f"**{r['title']}**\nTL;DR: {r['tldr'] or 'N/A'}\nInsights: {r['key_insights'] or 'N/A'}" for r in rows)
 
     settings = get_settings()
     fallback_keys = {"openai": settings.openai_api_key, "anthropic": settings.anthropic_api_key}
-    llm = get_chat_model(
-        {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.2}, fallback_keys
-    ) or get_chat_model(
+    llm = get_chat_model({"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "temperature": 0.2}, fallback_keys) or get_chat_model(
         {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2}, fallback_keys
     )
     if llm is None:
         raise HTTPException(status_code=503, detail="No LLM provider configured")
 
-    resp = await llm.ainvoke([
-        SystemMessage(content="You are a research synthesis assistant. Reply with JSON only."),
-        HumanMessage(content=(
-            f"Synthesize these {len(rows)} research papers into a structured knowledge summary.\n\n"
-            f"{papers_text[:6000]}\n\n"
-            'Reply with JSON only:\n'
-            '{"topics": ["theme1", "..."], "methods": ["method1", "..."], "datasets": ["ds1", "..."], '
-            '"key_findings": "3-5 paragraph synthesis of the research landscape", '
-            '"open_questions": ["q1", "..."]}'
-        )),
-    ])
+    resp = await llm.ainvoke(
+        [
+            SystemMessage(content="You are a research synthesis assistant. Reply with JSON only."),
+            HumanMessage(
+                content=(
+                    f"Synthesize these {len(rows)} research papers into a structured knowledge summary.\n\n"
+                    f"{papers_text[:6000]}\n\n"
+                    "Reply with JSON only:\n"
+                    '{"topics": ["theme1", "..."], "methods": ["method1", "..."], "datasets": ["ds1", "..."], '
+                    '"key_findings": "3-5 paragraph synthesis of the research landscape", '
+                    '"open_questions": ["q1", "..."]}'
+                )
+            ),
+        ]
+    )
     text = resp.content if hasattr(resp, "content") else str(resp)
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -466,19 +462,19 @@ paper_count: {len(rows)}
 # Research Synthesis — {today}
 
 ## 🏷 Topics
-{nl.join(f'- {t}' for t in parsed.get('topics', []))}
+{nl.join(f"- {t}" for t in parsed.get("topics", []))}
 
 ## 🛠 Methods & Approaches
-{nl.join(f'- {m}' for m in parsed.get('methods', []))}
+{nl.join(f"- {m}" for m in parsed.get("methods", []))}
 
 ## 📦 Datasets & Benchmarks
-{nl.join(f'- {d}' for d in parsed.get('datasets', []))}
+{nl.join(f"- {d}" for d in parsed.get("datasets", []))}
 
 ## 🔑 Key Findings
-{parsed.get('key_findings', '_No findings generated._')}
+{parsed.get("key_findings", "_No findings generated._")}
 
 ## ❓ Open Questions
-{nl.join(f'- {q}' for q in parsed.get('open_questions', []))}
+{nl.join(f"- {q}" for q in parsed.get("open_questions", []))}
 
 ---
 *Generated from {len(rows)} papers on {today}*
@@ -528,9 +524,7 @@ async def delete_digest_paper(
     """Delete a paper from the DB and optionally from the Obsidian vault."""
     import os
 
-    row = await repo._pool.fetchrow(
-        "SELECT workspace_id, obsidian_path, title FROM digest_papers WHERE id = $1", paper_id
-    )
+    row = await repo._pool.fetchrow("SELECT workspace_id, obsidian_path, title FROM digest_papers WHERE id = $1", paper_id)
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
@@ -549,7 +543,8 @@ async def delete_digest_paper(
 
     await repo._pool.execute(
         "DELETE FROM kg_nodes WHERE workspace_id = $1 AND label = $2 AND node_type = 'paper'",
-        row["workspace_id"], row["title"][:500],
+        row["workspace_id"],
+        row["title"][:500],
     )
     await repo._pool.execute("DELETE FROM digest_papers WHERE id = $1", paper_id)
     logger.info("digest.paper.deleted", paper_id=str(paper_id))
@@ -564,6 +559,8 @@ async def embed_papers_as_knowledge(
     """Embed selected papers as dense+sparse vectors into Qdrant for agent retrieval."""
     import asyncio as _asyncio
 
+    from langchain_openai import OpenAIEmbeddings
+
     from flow.config import get_settings
     from flow.infrastructure.agentic_rag.qdrant_hybrid import (
         get_qdrant_client,
@@ -571,7 +568,6 @@ async def embed_papers_as_knowledge(
         sparse_encode_text,
         upsert_knowledge_chunk_async,
     )
-    from langchain_openai import OpenAIEmbeddings
 
     await _assert_workspace(user_id, body.workspace_id, repo)
     settings = get_settings()
@@ -585,18 +581,14 @@ async def embed_papers_as_knowledge(
 
     placeholders = ", ".join(f"${i + 2}" for i in range(len(body.paper_ids)))
     rows = await repo._pool.fetch(
-        f"SELECT id, title, tldr, abstract FROM digest_papers"
-        f" WHERE workspace_id = $1 AND id IN ({placeholders})",
+        f"SELECT id, title, tldr, abstract FROM digest_papers WHERE workspace_id = $1 AND id IN ({placeholders})",
         body.workspace_id,
         *body.paper_ids,
     )
     if not rows:
         raise HTTPException(status_code=404, detail="No papers found")
 
-    texts = [
-        f"{r['title']}\n{r['tldr'] or ''}\n{r['abstract'] or ''}"
-        for r in rows
-    ]
+    texts = [f"{r['title']}\n{r['tldr'] or ''}\n{r['abstract'] or ''}" for r in rows]
 
     embedder = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=settings.openai_api_key)
     dense_vectors = await embedder.aembed_documents(texts)
@@ -618,7 +610,7 @@ async def embed_papers_as_knowledge(
                 workspace_id=body.workspace_id,
                 source_id=row["id"],
                 title=row["title"],
-                chunk_pk=row["id"].int % (2 ** 62),
+                chunk_pk=row["id"].int % (2**62),
                 content=texts[i],
                 dense_embedding=dense_vectors[i],
                 sparse_indices=si,
@@ -639,9 +631,10 @@ async def list_embedded_knowledge(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Return papers embedded in Qdrant for this workspace."""
+    from qdrant_client.http import models as qmodels
+
     from flow.config import get_settings
     from flow.infrastructure.agentic_rag.qdrant_hybrid import get_qdrant_client
-    from qdrant_client.http import models as qmodels
 
     await _assert_workspace(user_id, workspace_id, repo)
     settings = get_settings()
@@ -661,19 +654,18 @@ async def list_embedded_knowledge(
             client.scroll,
             collection_name=coll,
             scroll_filter=qmodels.Filter(
-                must=[qmodels.FieldCondition(
-                    key="workspace_id",
-                    match=qmodels.MatchValue(value=str(workspace_id)),
-                )]
+                must=[
+                    qmodels.FieldCondition(
+                        key="workspace_id",
+                        match=qmodels.MatchValue(value=str(workspace_id)),
+                    )
+                ]
             ),
             limit=100,
             with_payload=True,
             with_vectors=False,
         )
-        papers = [
-            {"id": str(r.id), "title": r.payload.get("title", ""), "tldr": r.payload.get("tldr")}
-            for r in results
-        ]
+        papers = [{"id": str(r.id), "title": r.payload.get("title", ""), "tldr": r.payload.get("tldr")} for r in results]
         return {"available": True, "count": len(papers), "papers": papers}
     except Exception:
         return {"available": False, "count": 0, "papers": []}

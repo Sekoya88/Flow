@@ -61,7 +61,7 @@ class GenomeEvolver:
         """
         try:
             from flow.application.genome_service import get_active_genome, snapshot_genome
-            from flow.domain.genome import MutationType, VersionStatus, VersionTrigger
+            from flow.domain.genome import VersionStatus, VersionTrigger
 
             # 1. Get current genome + score
             active = await get_active_genome(self._pool, agent_id)
@@ -192,24 +192,28 @@ class GenomeEvolver:
                 current_prompt=genome.system_prompt,
             )
             if rewritten and rewritten != genome.system_prompt:
-                candidates.append({
-                    "mutation_type": "prompt_rewrite",
-                    "system_prompt": rewritten,
-                    "tools": genome.tools,
-                    "temperature": genome.llm_config.temperature,
-                })
+                candidates.append(
+                    {
+                        "mutation_type": "prompt_rewrite",
+                        "system_prompt": rewritten,
+                        "tools": genome.tools,
+                        "temperature": genome.llm_config.temperature,
+                    }
+                )
         except Exception:
             logger.debug("mutation.prompt_rewrite failed", exc_info=True)
 
         # Mutation 2: Temperature sweep
         for temp in [0.1, 0.3, 0.5]:
             if abs(temp - genome.llm_config.temperature) > 0.05:
-                candidates.append({
-                    "mutation_type": "temperature_sweep",
-                    "system_prompt": genome.system_prompt,
-                    "tools": genome.tools,
-                    "temperature": temp,
-                })
+                candidates.append(
+                    {
+                        "mutation_type": "temperature_sweep",
+                        "system_prompt": genome.system_prompt,
+                        "tools": genome.tools,
+                        "temperature": temp,
+                    }
+                )
                 if len(candidates) >= n:
                     break
 

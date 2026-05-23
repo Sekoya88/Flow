@@ -131,7 +131,6 @@ Verdict: [Credible / Questionable / Misleading]. Confidence: [High/Medium/Low]. 
 </output_format>
 """,
     },
-
     # ── Code ──────────────────────────────────────────────────────
     {
         "name": "code-explanation",
@@ -252,7 +251,6 @@ Systematic debugging using hypothesis-driven investigation and root-cause analys
 </output_format>
 """,
     },
-
     # ── Communication ─────────────────────────────────────────────
     {
         "name": "email-drafter",
@@ -372,7 +370,6 @@ Slack-formatted message ready to paste.
 </output_format>
 """,
     },
-
     # ── Analysis ──────────────────────────────────────────────────
     {
         "name": "topic-clustering",
@@ -490,7 +487,6 @@ Produces accurate, faithful summaries at multiple granularities without hallucin
 </output_format>
 """,
     },
-
     # ── Memory ────────────────────────────────────────────────────
     {
         "name": "fact-extraction",
@@ -609,7 +605,6 @@ Maintains an up-to-date preference model from explicit and implicit feedback sig
 </output_format>
 """,
     },
-
     # ── Planning ──────────────────────────────────────────────────
     {
         "name": "task-decomposer",
@@ -729,7 +724,6 @@ Constructs realistic timelines by working backward from deadlines or forward fro
 </output_format>
 """,
     },
-
     # ── General ───────────────────────────────────────────────────
     {
         "name": "clarifying-questions",

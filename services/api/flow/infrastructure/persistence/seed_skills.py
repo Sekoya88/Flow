@@ -23,9 +23,7 @@ from flow.infrastructure.persistence.skill_templates import SKILL_TEMPLATES
 async def seed(agent_id: UUID, db_url: str) -> None:
     pool = await asyncpg.create_pool(db_url, min_size=1, max_size=3)
     try:
-        workspace_row = await pool.fetchrow(
-            "SELECT workspace_id FROM agents WHERE id = $1", agent_id
-        )
+        workspace_row = await pool.fetchrow("SELECT workspace_id FROM agents WHERE id = $1", agent_id)
         if not workspace_row:
             print(f"Agent {agent_id} not found.", file=sys.stderr)
             sys.exit(1)

@@ -12,7 +12,7 @@ Replaces the inline skill-loading logic in nodes.py:make_planner.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -123,11 +123,7 @@ class SkillLoader:
 
         lines = ["<skills>"]
         for s in skills:
-            lines.append(
-                f'  <skill name="{_xml_escape(s.name)}" '
-                f'version="{_xml_escape(s.version)}" '
-                f'score="{s.score:.2f}">'
-            )
+            lines.append(f'  <skill name="{_xml_escape(s.name)}" version="{_xml_escape(s.version)}" score="{s.score:.2f}">')
             if s.description:
                 lines.append(f"    <description>{_xml_escape(s.description)}</description>")
             if s.triggers:
@@ -174,9 +170,4 @@ class SkillLoader:
 
 def _xml_escape(text: str) -> str:
     """Minimal XML escaping for attribute values and text content."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

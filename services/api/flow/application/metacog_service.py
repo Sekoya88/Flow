@@ -78,10 +78,7 @@ class MetaCogService:
         if not matched_skills or llm is None:
             return []
 
-        skills_desc = "\n".join(
-            f"- {s['name']} (v{s.get('version', '?')}): triggers={s.get('triggers', [])}"
-            for s in matched_skills
-        )
+        skills_desc = "\n".join(f"- {s['name']} (v{s.get('version', '?')}): triggers={s.get('triggers', [])}" for s in matched_skills)
 
         prompt = f"""\
 You are evaluating which skills helped vs hurt in this AI interaction.
@@ -146,10 +143,9 @@ Return ONLY valid JSON array:
 
         # Identify worst-performing skills
         bad_skills = [s for s in skill_scores if s.contribution < 0]
-        bad_skills_desc = "\n".join(
-            f"- {s.skill_name}: contribution={s.contribution:.2f}, {s.rationale}"
-            for s in bad_skills
-        ) or "(no skills were harmful)"
+        bad_skills_desc = (
+            "\n".join(f"- {s.skill_name}: contribution={s.contribution:.2f}, {s.rationale}" for s in bad_skills) or "(no skills were harmful)"
+        )
 
         prompt = f"""\
 An AI agent scored {grade}/5 on this interaction. Propose 1-3 targeted mutations to improve it.

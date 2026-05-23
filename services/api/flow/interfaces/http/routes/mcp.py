@@ -8,8 +8,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from flow.interfaces.http.deps import get_current_user_id, get_repo
 from flow.infrastructure.persistence.repo import FlowRepository
+from flow.interfaces.http.deps import get_current_user_id, get_repo
 
 router = APIRouter(prefix="/api/v1/mcp", tags=["MCP"])
 
@@ -35,9 +35,7 @@ class MCPServerPatchIn(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _assert_workspace(
-    user_id: UUID, workspace_id: UUID, repo: FlowRepository
-) -> None:
+async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowRepository) -> None:
     ws_rows = await repo.list_workspaces_for_user(user_id)
     if workspace_id not in {r["id"] for r in ws_rows}:
         raise HTTPException(status_code=403, detail="workspace not allowed")
@@ -89,26 +87,19 @@ async def patch_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM mcp_servers WHERE id = $1", server_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM mcp_servers WHERE id = $1", server_id)
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
 
-    updates = {
-        k: v for k, v in body.model_dump(exclude_none=True).items()
-    }
+    updates = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if "metadata" in updates:
         updates["metadata"] = json.dumps(updates["metadata"])
     if not updates:
         return dict(row)
 
     _JSONB_COLS = {"metadata"}
-    set_clauses = ", ".join(
-        f"{col} = ${i + 2}::jsonb" if col in _JSONB_COLS else f"{col} = ${i + 2}"
-        for i, col in enumerate(updates)
-    )
+    set_clauses = ", ".join(f"{col} = ${i + 2}::jsonb" if col in _JSONB_COLS else f"{col} = ${i + 2}" for i, col in enumerate(updates))
     values = [server_id, *updates.values()]
     updated = await repo._pool.fetchrow(
         f"UPDATE mcp_servers SET {set_clauses}, updated_at = now() WHERE id = $1 RETURNING *",
@@ -123,9 +114,7 @@ async def delete_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> None:
-    row = await repo._pool.fetchrow(
-        "SELECT workspace_id FROM mcp_servers WHERE id = $1", server_id
-    )
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM mcp_servers WHERE id = $1", server_id)
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
@@ -138,9 +127,7 @@ async def ping_mcp_server(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM mcp_servers WHERE id = $1", server_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM mcp_servers WHERE id = $1", server_id)
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
@@ -161,9 +148,7 @@ async def list_mcp_server_tools(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> list:
     """List tools available on an MCP server by reading the tool assignment table."""
-    row = await repo.pool.fetchrow(
-        "SELECT * FROM mcp_servers WHERE id = $1", server_id
-    )
+    row = await repo.pool.fetchrow("SELECT * FROM mcp_servers WHERE id = $1", server_id)
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
@@ -184,9 +169,7 @@ async def invoke_mcp_tool(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Playground: invoke a tool on an MCP server with arbitrary JSON arguments."""
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM mcp_servers WHERE id = $1", server_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM mcp_servers WHERE id = $1", server_id)
     if not row:
         raise HTTPException(status_code=404, detail="MCP server not found")
     await _assert_workspace(user_id, row["workspace_id"], repo)
