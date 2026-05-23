@@ -294,6 +294,55 @@ select.field { cursor: pointer; appearance: none; -webkit-appearance: none; }
 .paper-link { font-size: 9px; color: var(--f-500); text-decoration: none; transition: color 120ms; }
 .paper-link:hover { color: var(--f-violet); }
 
+/* ── Paper actions row ───────────────────────────────────────── */
+.paper-actions { display: flex; align-items: center; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.paper-action {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 9px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  border-radius: 4px; padding: 2px 7px;
+  transition: all 100ms;
+}
+.paper-action-read  { color: var(--f-500); }
+.paper-action-read:hover  { color: var(--f-200); background: var(--f-800); }
+.paper-action-del   { color: var(--f-600); }
+.paper-action-del:hover   { color: var(--f-red); background: color-mix(in srgb, var(--f-red) 10%, transparent); }
+
+/* ── Digest toolbar ──────────────────────────────────────────── */
+.digest-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px; border-bottom: 1px solid var(--f-800); margin-bottom: 4px;
+}
+
+/* ── Status sub-tabs ─────────────────────────────────────────── */
+.status-tabs { display: flex; gap: 2px; margin-bottom: 8px; }
+.status-tab {
+  flex: 1; padding: 5px 0; background: none; border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--f-600); cursor: pointer; font-family: var(--font);
+  font-size: 9px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; transition: all 100ms;
+}
+.status-tab:hover { color: var(--f-300); }
+.status-tab-active { border-bottom-color: var(--f-violet); color: var(--f-violet); }
+
+/* ── SSE log panel ───────────────────────────────────────────── */
+.log-panel {
+  background: var(--f-950); border: 1px solid var(--f-800);
+  border-radius: var(--radius); padding: 8px;
+  max-height: 130px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.log-entry {
+  font-size: 9px; color: var(--f-500); line-height: 1.4;
+  display: flex; align-items: center; gap: 6px;
+}
+.log-entry-ts { color: var(--f-700); flex-shrink: 0; }
+.log-entry-label { font-weight: 600; }
+.log-entry-ok  { color: var(--f-emerald); }
+.log-entry-run { color: var(--f-violet); }
+.log-entry-info { color: var(--f-amber); }
+
 /* ── MCP rows ────────────────────────────────────────────────── */
 .mcp-header { display: flex; align-items: center; justify-content: space-between; }
 .mcp-row {

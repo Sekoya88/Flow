@@ -15,6 +15,7 @@ import {
   Gauge,
   MessageSquare,
   Radio,
+  Sparkles,
   Terminal,
   Zap,
 } from "lucide-react";
@@ -317,13 +318,16 @@ type LiveEvent = {
 };
 
 const LIVE_KIND_CONFIG: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
-  "digest.start":    { icon: BookOpen,     color: "text-violet-400",  label: "Digest started" },
-  "digest.complete": { icon: CheckCircle2, color: "text-emerald-400", label: "Digest complete" },
-  "digest.fetch":    { icon: BookOpen,     color: "text-sky-400",     label: "Papers fetched" },
-  "digest.filter":   { icon: Zap,          color: "text-amber-400",   label: "Papers filtered" },
-  "knowledge.ingest":{ icon: BookOpen,     color: "text-sky-400",     label: "Knowledge ingested" },
-  "execution.start": { icon: Activity,     color: "text-blue-400",    label: "Execution started" },
-  "execution.done":  { icon: CheckCircle2, color: "text-emerald-400", label: "Execution done" },
+  "digest.start":         { icon: BookOpen,     color: "text-violet-400",  label: "Digest started" },
+  "digest.fetch_done":    { icon: BookOpen,     color: "text-sky-400",     label: "Papers fetched" },
+  "digest.scoring":       { icon: Zap,          color: "text-amber-400",   label: "Scoring relevance" },
+  "digest.filter_done":   { icon: Zap,          color: "text-amber-400",   label: "Papers filtered" },
+  "digest.summarize_done":{ icon: Sparkles,     color: "text-violet-400",  label: "Papers summarized" },
+  "digest.persist_done":  { icon: CheckCircle2, color: "text-emerald-400", label: "Papers saved" },
+  "digest.complete":      { icon: CheckCircle2, color: "text-emerald-400", label: "Digest complete" },
+  "knowledge.ingest":     { icon: BookOpen,     color: "text-sky-400",     label: "Knowledge ingested" },
+  "execution.start":      { icon: Activity,     color: "text-blue-400",    label: "Execution started" },
+  "execution.done":       { icon: CheckCircle2, color: "text-emerald-400", label: "Execution done" },
 };
 
 function LiveFeed({ wsId }: { wsId: string }) {

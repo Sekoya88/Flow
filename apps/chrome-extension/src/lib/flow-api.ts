@@ -44,10 +44,28 @@ export async function listAgents(workspaceId: string): Promise<Agent[]> {
   return res.agents;
 }
 
-export async function listPapers(workspaceId: string): Promise<Paper[]> {
-  return flowFetch(
-    `/api/v1/digest/papers?workspace_id=${workspaceId}&status=unread&limit=10`
-  );
+export async function listPapers(workspaceId: string, status?: string): Promise<Paper[]> {
+  const params = new URLSearchParams({ workspace_id: workspaceId, limit: "50" });
+  if (status) params.set("status", status);
+  return flowFetch(`/api/v1/digest/papers?${params}`);
+}
+
+export async function deletePaper(paperId: string): Promise<void> {
+  await flowFetch(`/api/v1/digest/papers/${paperId}`, { method: "DELETE" });
+}
+
+export async function patchPaper(paperId: string, status: string): Promise<void> {
+  await flowFetch(`/api/v1/digest/papers/${paperId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function runDigest(workspaceId: string): Promise<{ job_id: string }> {
+  return flowFetch("/api/v1/digest/run", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId }),
+  });
 }
 
 export async function runAgent(
