@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "obsidian-vault": {
+      "command": "bash",
+      "args": ["scripts/run-obsidian-vault-mcp.sh"]
+    },
+    "flow": {
+      "url": "http://localhost:18001/sse?token=REPLACE_WITH_JWT"
+    }
+  }
+}

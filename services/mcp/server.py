@@ -1,13 +1,33 @@
 from __future__ import annotations
 
+import contextlib
+from collections.abc import AsyncIterator
+
 from fastapi import FastAPI, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 from .auth import current_mcp_context, verify_jwt_token
 from .mcp_app import mcp
 
-app = FastAPI(title="Flow MCP Server", version="1.0.0")
+sse_transport = SseServerTransport("/messages/")
+
+# Stateless: each request carries its own JWT — no cross-request session state to manage.
+_session_manager = StreamableHTTPSessionManager(
+    app=mcp._mcp_server,
+    stateless=True,
+    json_response=False,
+)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async with _session_manager.run():
+        yield
+
+
+app = FastAPI(title="Flow MCP Server", version="1.0.0", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,8 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-sse_transport = SseServerTransport("/messages/")
 
 
 @app.get("/sse")
@@ -51,6 +69,20 @@ async def handle_post_message(request: Request, token: str = Query(default="")) 
     await sse_transport.handle_post_message(
         request.scope, request.receive, request._send  # type: ignore[attr-defined]
     )
+
+
+@app.api_route("/mcp", methods=["GET", "POST", "DELETE"])
+async def handle_mcp_streamable(request: Request) -> None:
+    """Streamable HTTP MCP endpoint — authenticated via Flow JWT query param or Bearer header."""
+    token = request.query_params.get("token") or request.headers.get(
+        "Authorization", ""
+    ).removeprefix("Bearer ")
+    try:
+        context = await verify_jwt_token(token)
+    except ValueError as e:
+        return Response(str(e), status_code=401)  # type: ignore[return-value]
+    current_mcp_context.set(context)
+    await _session_manager.handle_request(request.scope, request.receive, request._send)  # type: ignore[attr-defined]
 
 
 @app.get("/health")

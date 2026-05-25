@@ -117,6 +117,103 @@ cd apps/web && npm test
 
 ---
 
+## MCP — Connect Claude / Cursor / Windsurf to Flow
+
+Flow exposes a [Model Context Protocol](https://modelcontextprotocol.io) server with **33 tools** covering agents, knowledge, research digest, skills, memory, and the knowledge graph.
+
+Transports: **SSE** (`/sse`) and **Streamable HTTP** (`/mcp`) — both on port `18001`.
+
+### 1. Start the stack
+
+```bash
+docker compose up -d   # MCP server starts automatically on port 18001
+curl http://localhost:18001/health
+# → {"status":"ok","service":"flow-mcp"}
+```
+
+### 2. Get a JWT token
+
+```bash
+FLOW_EMAIL=you@example.com FLOW_PASSWORD=secret bash scripts/get-flow-token.sh
+```
+
+The script prints ready-to-paste config snippets for every client.
+
+> Manual: `curl -s -X POST http://localhost:18000/api/v1/auth/login -H "Content-Type: application/json" -d '{"email":"...","password":"..."}' | jq -r .access_token`
+
+### 3. Connect your client
+
+**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "flow": {
+      "url": "http://localhost:18001/sse?token=<YOUR_JWT>"
+    }
+  }
+}
+```
+
+**Claude Code** (CLI) — `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "flow": {
+      "type": "sse",
+      "url": "http://localhost:18001/sse?token=<YOUR_JWT>"
+    }
+  }
+}
+```
+
+**Cursor** — `.cursor/mcp.json` (already present in this repo, update the token):
+
+```json
+{
+  "mcpServers": {
+    "flow": {
+      "url": "http://localhost:18001/sse?token=<YOUR_JWT>"
+    }
+  }
+}
+```
+
+**Windsurf / clients supporting Streamable HTTP**:
+
+```text
+http://localhost:18001/mcp?token=<YOUR_JWT>
+```
+
+### 4. Available tools
+
+| Category | Tools |
+| -------- | ----- |
+| **Agents** | `flow_run_agent`, `flow_get_execution`, `flow_list_agents` |
+| **Skills** | `flow_create_skill`, `flow_patch_skill`, `flow_list_skills` |
+| **Knowledge** | `flow_ingest_knowledge`, `flow_search_knowledge` |
+| **Memory** | `flow_memory_write`, `flow_memory_read` |
+| **Knowledge Graph** | `flow_kg_query`, `flow_kg_add_node` |
+| **Workspace** | `flow_workspace_snapshot`, `flow_list_executions`, `flow_get_thread`, `flow_list_schedules` |
+| **Research Digest** | `flow_digest_papers`, `flow_trigger_digest`, `flow_get_digest_config` |
+| **GitHub** | `github_trigger_workflow`, `github_get_run_status`, `github_list_recent_runs`, `github_get_run_logs` |
+| **Obsidian** | `obsidian_create_note`, `obsidian_append_note`, `obsidian_read_note`, `obsidian_list_notes` |
+| **Research** | `arxiv_search`, `arxiv_fetch_abstract`, `hf_search_papers`, `hf_get_paper_details` |
+| **Web** | `web_crawl_article`, `web_search_tavily` |
+
+Start with `flow_workspace_snapshot` to orient yourself — it returns all agents, recent executions, and cron jobs in one call.
+
+### 5. Resources
+
+| URI | Contents |
+| --- | -------- |
+| `flow://workspace` | Full workspace JSON: agents, skills count, recent executions |
+| `flow://agents` | Active agents list (JSON) |
+| `flow://skills` | Skill catalog with scores |
+
+---
+
 ## License
 
 MIT

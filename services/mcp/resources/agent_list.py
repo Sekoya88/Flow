@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 
 from ..auth import get_current_context
@@ -10,7 +12,11 @@ def register_agent_list_resource(mcp):  # type: ignore[no-untyped-def]
 
     @mcp.resource("flow://agents")
     async def agent_list_resource() -> str:
-        """Active agents in the current workspace."""
+        """Active agents in the current workspace — structured JSON.
+
+        Returns [{id, name, template, created_at}].
+        Use agent 'id' with the flow_run_agent tool to execute an agent.
+        """
         ctx = get_current_context()
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
@@ -20,5 +26,10 @@ def register_agent_list_resource(mcp):  # type: ignore[no-untyped-def]
             )
             r.raise_for_status()
             agents = r.json()
-        lines = [f"- [{a['name']}] id={a['id']}" for a in agents]
-        return "\n".join(lines) if lines else "No agents found."
+        return json.dumps(
+            [
+                {"id": a.get("id"), "name": a.get("name"), "template": a.get("template")}
+                for a in agents
+            ],
+            indent=2,
+        )
