@@ -38,6 +38,14 @@ async def get_current_user_id(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
 
 
+async def get_bearer_token(
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> str:
+    if creds is None or creds.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
+    return creds.credentials
+
+
 async def get_repo(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> FlowRepository:
     return FlowRepository(pool)
 

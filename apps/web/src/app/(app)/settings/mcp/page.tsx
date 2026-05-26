@@ -7,6 +7,7 @@ import {
   Loader2,
   Plug,
   Plus,
+  RefreshCw,
   Server,
   Trash2,
   Wifi,
@@ -41,6 +42,7 @@ type MCPServer = {
   url: string;
   transport: string;
   active: boolean;
+  tool_count: number;
   metadata: Record<string, unknown>;
   created_at: string;
 };
@@ -48,6 +50,7 @@ type MCPServer = {
 type ToolAssignment = {
   id: string;
   tool_name: string;
+  description: string | null;
   enabled: boolean;
 };
 
@@ -146,12 +149,15 @@ function AddMCPServerModal({
 function ToolsDrawer({
   server,
   onClose,
+  onSynced,
 }: {
   server: MCPServer | null;
   onClose: () => void;
+  onSynced: (serverId: string, count: number) => void;
 }) {
   const [tools, setTools] = useState<ToolAssignment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (!server) return;
@@ -162,6 +168,25 @@ function ToolsDrawer({
       .finally(() => setLoading(false));
   }, [server?.id]);
 
+  async function handleSync() {
+    if (!server) return;
+    setSyncing(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; tool_count: number; tools: ToolAssignment[] }>(
+        `/api/v1/mcp/servers/${server.id}/tools/sync`,
+        { method: "POST" },
+      );
+      if (res.ok) {
+        setTools(res.tools);
+        onSynced(server.id, res.tool_count);
+      }
+    } catch {
+      // error shown implicitly — syncing state reverts
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <Sheet open={server !== null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
@@ -169,9 +194,23 @@ function ToolsDrawer({
         className="flex w-[min(100vw-1rem,28rem)] flex-col gap-0"
       >
         <SheetHeader className="border-b border-flow-800 pb-4 text-left">
-          <SheetTitle className="font-mono text-sm">
-            Tools — {server?.name}
-          </SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="font-mono text-sm">
+              Tools — {server?.name}
+            </SheetTitle>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-flow-700 px-2 font-mono text-[10px] text-flow-400 hover:bg-flow-800 hover:text-flow-200 transition-colors disabled:opacity-50"
+            >
+              {syncing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              Sync
+            </button>
+          </div>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-4">
           {loading ? (
@@ -179,23 +218,40 @@ function ToolsDrawer({
               <Loader2 className="h-4 w-4 animate-spin text-flow-500" />
             </div>
           ) : tools.length === 0 ? (
-            <p className="text-center font-mono text-xs text-flow-500 py-8">
-              No tool assignments configured yet.
-            </p>
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <p className="font-mono text-xs text-flow-500">
+                No tools discovered yet.
+              </p>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-flow-700 px-3 font-mono text-[10px] text-flow-400 hover:bg-flow-800 hover:text-flow-200 transition-colors disabled:opacity-50"
+              >
+                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Sync from server
+              </button>
+            </div>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {tools.map((t) => (
                 <li
-                  key={t.id}
-                  className="flex items-center justify-between rounded-[6px] border border-flow-800 bg-flow-900/50 px-3 py-2"
+                  key={t.id ?? t.tool_name}
+                  className="rounded-[6px] border border-flow-800 bg-flow-900/50 px-3 py-2.5 space-y-0.5"
                 >
-                  <span className="font-mono text-xs">{t.tool_name}</span>
-                  <Badge
-                    variant={t.enabled ? "secondary" : "outline"}
-                    className="font-mono text-[9px]"
-                  >
-                    {t.enabled ? "enabled" : "disabled"}
-                  </Badge>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-medium">{t.tool_name}</span>
+                    <Badge
+                      variant={t.enabled ? "secondary" : "outline"}
+                      className="font-mono text-[9px] shrink-0"
+                    >
+                      {t.enabled ? "enabled" : "disabled"}
+                    </Badge>
+                  </div>
+                  {t.description && (
+                    <p className="text-[11px] text-flow-500 leading-relaxed line-clamp-2">
+                      {t.description}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -215,6 +271,7 @@ function MCPServerCard({
   onDelete: (id: string) => void;
   onToggleTools: (s: MCPServer) => void;
 }) {
+  const toolCount = server.tool_count ?? 0;
   const [pingStatus, setPingStatus] = useState<"idle" | "ok" | "error">("idle");
   const [pinging, setPinging] = useState(false);
 
@@ -246,7 +303,14 @@ function MCPServerCard({
           <Server className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-mono text-xs font-semibold">{server.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate font-mono text-xs font-semibold">{server.name}</p>
+            {toolCount > 0 && (
+              <Badge variant="outline" className="font-mono text-[9px] shrink-0 border-flow-700">
+                {toolCount} tools
+              </Badge>
+            )}
+          </div>
           <p className="truncate font-mono text-[10px] text-flow-500">{server.url}</p>
         </div>
       </div>
@@ -289,6 +353,12 @@ export default function MCPSettingsPage() {
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
   const [toolsServer, setToolsServer] = useState<MCPServer | null>(null);
+
+  function handleSynced(serverId: string, count: number) {
+    setServers((prev) =>
+      prev.map((s) => (s.id === serverId ? { ...s, tool_count: count } : s)),
+    );
+  }
 
   useEffect(() => {
     if (!wsId) return;
@@ -340,7 +410,7 @@ export default function MCPSettingsPage() {
         </div>
       )}
 
-      <ToolsDrawer server={toolsServer} onClose={() => setToolsServer(null)} />
+      <ToolsDrawer server={toolsServer} onClose={() => setToolsServer(null)} onSynced={handleSynced} />
     </div>
   );
 }
