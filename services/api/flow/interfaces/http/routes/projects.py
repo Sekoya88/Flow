@@ -173,6 +173,15 @@ async def trigger_project(
     await _assert_workspace_access(user_id, row["workspace_id"], repo)
 
     project = dict(row)
+    workspace_id_str = str(project["workspace_id"])
+
+    # KG node count before run
+    nodes_before_row = await repo._pool.fetchrow(
+        "SELECT COUNT(*) AS cnt FROM kg_nodes WHERE workspace_id = $1",
+        project["workspace_id"],
+    )
+    nodes_before = int(nodes_before_row["cnt"]) if nodes_before_row else 0
+
     try:
         from flow.infrastructure.graph.research_digest_graph import run_research_digest
 
@@ -185,15 +194,75 @@ async def trigger_project(
         if project["kg_namespace"]:
             config["kg_namespace"] = project["kg_namespace"]
 
-        result = await run_research_digest(
-            workspace_id=str(project["workspace_id"]),
-            config=config,
+        result = await run_research_digest(workspace_id=workspace_id_str, config=config)
+        persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
+
+        # KG node count after run
+        nodes_after_row = await repo._pool.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM kg_nodes WHERE workspace_id = $1",
+            project["workspace_id"],
         )
+        nodes_after = int(nodes_after_row["cnt"]) if nodes_after_row else 0
+
+        # Update project + record run
         await repo._pool.execute(
             "UPDATE research_projects SET last_run_at = now() WHERE id = $1", project_id
         )
-        persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
+        await repo._pool.execute(
+            """
+            INSERT INTO project_runs
+                (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status)
+            VALUES ($1, $2, $3, $4, 'completed')
+            """,
+            project_id, persisted, nodes_before, nodes_after,
+        )
         return {"status": "ok", "papers_processed": persisted}
     except Exception as exc:
+        await repo._pool.execute(
+            """
+            INSERT INTO project_runs
+                (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status, error_message)
+            VALUES ($1, 0, $2, $2, 'failed', $3)
+            """,
+            project_id, nodes_before, str(exc)[:500],
+        )
         logger.warning("project.trigger.failed", exc_info=True, project_id=str(project_id))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/runs")
+async def list_project_runs(
+    project_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    row = await repo._pool.fetchrow(
+        "SELECT workspace_id FROM research_projects WHERE id = $1", project_id
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="project not found")
+    await _assert_workspace_access(user_id, row["workspace_id"], repo)
+
+    runs = await repo._pool.fetch(
+        """
+        SELECT id, papers_processed, kg_nodes_before, kg_nodes_after, status, error_message, created_at
+        FROM project_runs WHERE project_id = $1
+        ORDER BY created_at DESC LIMIT 50
+        """,
+        project_id,
+    )
+    return {
+        "runs": [
+            {
+                "id": str(r["id"]),
+                "papers_processed": r["papers_processed"],
+                "kg_nodes_before": r["kg_nodes_before"],
+                "kg_nodes_after": r["kg_nodes_after"],
+                "kg_nodes_added": r["kg_nodes_after"] - r["kg_nodes_before"],
+                "status": r["status"],
+                "error_message": r["error_message"],
+                "created_at": r["created_at"].isoformat(),
+            }
+            for r in runs
+        ]
+    }

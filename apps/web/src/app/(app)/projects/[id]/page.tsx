@@ -9,11 +9,14 @@ import {
   BookOpen,
   CalendarClock,
   CheckCircle2,
+  Layers,
   Loader2,
   Play,
   Tag,
   ToggleLeft,
   ToggleRight,
+  TrendingUp,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +39,39 @@ type Project = {
   last_run_at: string | null;
 };
 
+type ProjectRun = {
+  id: string;
+  papers_processed: number;
+  kg_nodes_before: number;
+  kg_nodes_after: number;
+  kg_nodes_added: number;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+};
+
+// ── Inline SVG sparkline ──────────────────────────────────────────────────────
+function RunSparkline({ runs }: { runs: ProjectRun[] }) {
+  const data = [...runs].reverse().map((r) => r.papers_processed);
+  if (data.length < 2) return <span className="text-[10px] text-muted-foreground/40 italic">no history</span>;
+  const W = 120; const H = 28; const pad = 3;
+  const w = W - pad * 2; const h = H - pad * 2;
+  const max = Math.max(...data, 1);
+  const pts = data
+    .map((v, i) => `${(pad + (i / (data.length - 1)) * w).toFixed(1)},${(pad + (1 - v / max) * h).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {data.map((v, i) => {
+        const cx = pad + (i / (data.length - 1)) * w;
+        const cy = pad + (1 - v / max) * h;
+        return <circle key={i} cx={cx} cy={cy} r="2.5" fill="#a78bfa" />;
+      })}
+    </svg>
+  );
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -47,13 +83,20 @@ export default function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", goal: "", arxiv_categories: "", cadence_cron: "", kg_namespace: "" });
   const [saving, setSaving] = useState(false);
+  const [runs, setRuns] = useState<ProjectRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
 
   async function load() {
     if (!id) return;
     setLoading(true);
+    setRunsLoading(true);
     try {
-      const p = await apiFetch<Project>(`/api/v1/projects/${id}`);
+      const [p, runsData] = await Promise.all([
+        apiFetch<Project>(`/api/v1/projects/${id}`),
+        apiFetch<{ runs: ProjectRun[] }>(`/api/v1/projects/${id}/runs`).catch(() => ({ runs: [] })),
+      ]);
       setProject(p);
+      setRuns(runsData.runs);
       setForm({
         name: p.name,
         goal: p.goal,
@@ -65,6 +108,7 @@ export default function ProjectDetailPage() {
       setError(String(e));
     } finally {
       setLoading(false);
+      setRunsLoading(false);
     }
   }
 
@@ -320,6 +364,80 @@ export default function ProjectDetailPage() {
             </p>
           )}
         </div>
+      </div>
+
+      {/* Run history timeline */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            <TrendingUp className="h-3 w-3" />
+            Run History
+          </h2>
+          {runs.length >= 2 && (
+            <RunSparkline runs={runs} />
+          )}
+        </div>
+
+        {runsLoading && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/50">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Loading…
+          </div>
+        )}
+
+        {!runsLoading && runs.length === 0 && (
+          <p className="rounded-[6px] border border-flow-800 p-4 text-center font-mono text-[11px] text-muted-foreground/40">
+            No runs yet. Use &quot;Run Now&quot; above to start.
+          </p>
+        )}
+
+        {!runsLoading && runs.length > 0 && (
+          <div className="space-y-2">
+            {runs.slice(0, 10).map((run) => (
+              <div
+                key={run.id}
+                className={cn(
+                  "flex items-start justify-between gap-4 rounded-[6px] border p-3",
+                  run.status === "completed"
+                    ? "border-flow-800 bg-flow-900/30"
+                    : "border-destructive/20 bg-destructive/5",
+                )}
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  {run.status === "completed" ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-destructive" />
+                  )}
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs font-medium text-foreground">
+                        {run.papers_processed} paper{run.papers_processed !== 1 ? "s" : ""} ingested
+                      </span>
+                      {run.kg_nodes_added > 0 && (
+                        <span className="flex items-center gap-0.5 font-mono text-[10px] text-flow-violet">
+                          <Layers className="h-2.5 w-2.5" />
+                          +{run.kg_nodes_added} KG nodes
+                        </span>
+                      )}
+                    </div>
+                    {run.error_message && (
+                      <p className="font-mono text-[10px] text-destructive truncate max-w-xs">
+                        {run.error_message}
+                      </p>
+                    )}
+                    <p className="font-mono text-[10px] text-muted-foreground/50">
+                      {new Date(run.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right font-mono text-[10px] text-muted-foreground/40">
+                  {run.kg_nodes_before} → {run.kg_nodes_after}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
