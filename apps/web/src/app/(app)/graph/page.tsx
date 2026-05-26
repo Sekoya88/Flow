@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, Trash2, X, Zap } from "lucide-react";
+import { Box, BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, Square, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
@@ -76,6 +76,7 @@ export default function GraphPage() {
   const [seeding, setSeeding] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
   const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
 
   // Quartz-style controls
@@ -351,6 +352,7 @@ export default function GraphPage() {
           highlightedPath={pathLabels}
           className="flex-1 h-full w-full"
           onNodeClick={handleNodeClick}
+          mode={graphMode}
         />
       )}
 
@@ -470,6 +472,19 @@ export default function GraphPage() {
             onClick={() => setPanelOpen(!panelOpen)}
           >
             {panelOpen ? "Hide panel" : "Query & Import"}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 bg-card border-flow-800"
+            onClick={() => setGraphMode(graphMode === "2d" ? "3d" : "2d")}
+            title={graphMode === "2d" ? "Switch to 3D" : "Switch to 2D"}
+          >
+            {graphMode === "2d" ? (
+              <Box className="h-3.5 w-3.5" />
+            ) : (
+              <Square className="h-3.5 w-3.5" />
+            )}
           </Button>
           <Button
             variant="outline"
