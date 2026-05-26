@@ -935,6 +935,40 @@ function NodeDetailPanel({
               </span>
             </div>
           )}
+
+          {node.node_type === 'paper' && (
+            <div className="mt-3 space-y-2 border-t border-border/30 pt-3">
+              {node.metadata?.categories && Array.isArray(node.metadata.categories) && node.metadata.categories.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {(node.metadata.categories as string[]).map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-mono font-medium"
+                      style={{ backgroundColor: "#f9731614", color: "#fb923c", border: "1px solid #f9731630" }}
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {node.metadata?.relevance_score != null && (
+                <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground/60">
+                  <span>Relevance</span>
+                  <span className="tabular-nums">{Number(node.metadata.relevance_score).toFixed(2)}</span>
+                </div>
+              )}
+              {node.metadata?.arxiv_id && (
+                <a
+                  href={`https://arxiv.org/abs/${node.metadata.arxiv_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-center text-xs text-orange-400 hover:bg-orange-500/15 transition-colors"
+                >
+                  Open on arXiv ↗
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
