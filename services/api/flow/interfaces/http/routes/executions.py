@@ -89,6 +89,64 @@ async def get_execution(
     }
 
 
+@router.get("/{execution_id}/replay")
+async def get_execution_replay(
+    execution_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Return a DAG-structured replay derived from stored node_update events."""
+    row = await repo.get_execution_for_user(execution_id, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="execution not found")
+
+    events = await repo.list_events(execution_id)
+    node_updates = [e for e in events if e["kind"] == "node_update"]
+
+    node_first_visit: dict[str, int] = {}
+    node_visit_count: dict[str, int] = {}
+    timeline = []
+
+    for ev in node_updates:
+        payload = dict(ev["payload"])
+        node_name = payload.get("node", "unknown")
+        if node_name not in node_first_visit:
+            node_first_visit[node_name] = len(node_first_visit)
+        node_visit_count[node_name] = node_visit_count.get(node_name, 0) + 1
+        timeline.append({
+            "seq": len(timeline) + 1,
+            "node": node_name,
+            "created_at": ev["created_at"].isoformat() if ev["created_at"] else None,
+        })
+
+    edge_set: set[tuple[str, str]] = set()
+    edges = []
+    for i in range(1, len(timeline)):
+        src, dst = timeline[i - 1]["node"], timeline[i]["node"]
+        if src != dst and (src, dst) not in edge_set:
+            edge_set.add((src, dst))
+            edges.append({"source": src, "target": dst})
+
+    nodes = [
+        {"id": name, "label": name, "visit_count": node_visit_count[name], "order": order}
+        for name, order in sorted(node_first_visit.items(), key=lambda x: x[1])
+    ]
+
+    return {
+        "execution_id": str(execution_id),
+        "status": row["status"],
+        "agent_id": str(row["agent_id"]),
+        "agent_name": row["agent_name"] or row["agent_template"],
+        "user_message": row["user_message"],
+        "answer": row["answer"],
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
+        "nodes": nodes,
+        "edges": edges,
+        "timeline": timeline,
+    }
+
+
 @router.post("/{execution_id}/stream-token")
 async def mint_stream_token(
     execution_id: UUID,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -284,6 +285,15 @@ function ExecutionLogRow({ exec }: { exec: ExecutionRow }) {
               <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                 <Zap className="h-3 w-3" />{exec.node_count} nodes
               </span>
+            )}
+            {exec.node_count > 0 && (
+              <Link
+                href={`/executions/${exec.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] text-flow-400 hover:text-flow-200 flex items-center gap-1 transition-colors"
+              >
+                <Activity className="h-3 w-3" />Replay
+              </Link>
             )}
             {exec.tool_count > 0 && (
               <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">

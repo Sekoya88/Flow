@@ -17,6 +17,10 @@ coverage/
 .superpowers/
 test.md
 
+# Vendored obsidian-vault MCP (clone via scripts/setup-obsidian-vault-mcp.sh)
+obsidian-vault-mcp/.venv
+obsidian-vault-mcp/**/__pycache__
+
 # Xcode user-specific state (never commit)
 *.xcuserstate
 xcuserdata/

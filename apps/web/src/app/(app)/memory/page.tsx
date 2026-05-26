@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Brain, Clock, Loader2, MessageSquare, Sparkles } from "lucide-react";
+import { Activity, AlertCircle, Brain, Clock, Loader2, MessageSquare, Search, Sparkles } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -45,6 +46,7 @@ export default function MemoryPage() {
   const [episodic, setEpisodic] = useState<MemoryEntry[]>([]);
   const [semantic, setSemantic] = useState<MemoryEntry[]>([]);
   const [loadingMem, setLoadingMem] = useState(false);
+  const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -200,6 +202,17 @@ export default function MemoryPage() {
         </Link>
       </section>
 
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-flow-600" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search memories…"
+          className="pl-9 font-mono text-xs"
+        />
+      </div>
+
       {/* Tiers */}
       <Tabs defaultValue="episodic">
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -228,9 +241,11 @@ export default function MemoryPage() {
             />
           ) : (
             <AnimatedList className="space-y-3">
-              {episodic.map((m) => (
-                <MemoryCard key={m.id} entry={m} tier="episodic" />
-              ))}
+              {episodic
+                .filter((m) => !search || m.content.toLowerCase().includes(search.toLowerCase()))
+                .map((m) => (
+                  <MemoryCard key={m.id} entry={m} tier="episodic" />
+                ))}
             </AnimatedList>
           )}
         </TabsContent>
@@ -296,9 +311,11 @@ export default function MemoryPage() {
             />
           ) : (
             <AnimatedList className="space-y-3">
-              {semantic.map((m) => (
-                <MemoryCard key={m.id} entry={m} tier="semantic" />
-              ))}
+              {semantic
+                .filter((m) => !search || m.content.toLowerCase().includes(search.toLowerCase()))
+                .map((m) => (
+                  <MemoryCard key={m.id} entry={m} tier="semantic" />
+                ))}
             </AnimatedList>
           )}
         </TabsContent>
@@ -330,9 +347,13 @@ function MemoryCard({ entry, tier }: { entry: MemoryEntry; tier: "episodic" | "s
       <p className="text-foreground/90">{entry.content}</p>
       <div className="mt-3 flex items-center gap-3 text-[11px]">
         {entry.execution_id && (
-          <span className="font-mono text-muted-foreground/70">
+          <Link
+            href={`/executions/${entry.execution_id}`}
+            className="flex items-center gap-1 font-mono text-flow-500 hover:text-flow-200 transition-colors"
+          >
+            <Activity className="h-3 w-3" />
             run {entry.execution_id.slice(0, 8)}…
-          </span>
+          </Link>
         )}
         {entry.execution_id && entry.created_at && (
           <span className="text-muted-foreground/30">·</span>

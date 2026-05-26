@@ -22,6 +22,7 @@ import {
   Wand2,
   Workflow,
   CheckCircle,
+  FlaskConical,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -53,6 +54,7 @@ const primaryNav = [
   { href: "/memory", label: "Memory", icon: Brain },
   { href: "/agents", label: "Agents", icon: Workflow },
   { href: "/graph", label: "Graph", icon: Network },
+  { href: "/workbench", label: "Workbench", icon: FlaskConical },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/evals", label: "Evals", icon: CheckCircle },
