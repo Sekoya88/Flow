@@ -61,6 +61,17 @@ const TYPE_COLORS: Record<string, string> = {
   paper: "#f97316",
 };
 
+// 12 visually distinct hues cycling across cluster IDs
+const CLUSTER_PALETTE = [
+  "#5eead4", "#818cf8", "#fb923c", "#4ade80",
+  "#f472b6", "#facc15", "#38bdf8", "#a78bfa",
+  "#34d399", "#f87171", "#67e8f9", "#c084fc",
+];
+
+function clusterColor(clusterId: number): string {
+  return CLUSTER_PALETTE[Math.abs(clusterId) % CLUSTER_PALETTE.length];
+}
+
 interface Props {
   nodes: KGNode[];
   edges: KGEdge[];
@@ -69,6 +80,7 @@ interface Props {
   className?: string;
   onNodeClick?: (node: KGNode) => void;
   mode?: GraphMode;
+  colorByCluster?: boolean;
 }
 
 interface KGGraphNode extends BaseGraphNode {
@@ -112,6 +124,7 @@ export function KnowledgeGraphCanvas({
   className,
   onNodeClick,
   mode = "2d",
+  colorByCluster = false,
 }: Props) {
   const graphNodes = useMemo<KGGraphNode[]>(
     () =>
@@ -123,15 +136,17 @@ export function KnowledgeGraphCanvas({
         pagerank: n.pagerank,
         cluster_id: n.cluster_id,
         color:
-          NODE_COLORS[n.node_type as keyof typeof NODE_COLORS] ??
-          TYPE_COLORS[n.node_type] ??
-          "#8b9cb7",
+          colorByCluster && n.cluster_id !== null
+            ? clusterColor(n.cluster_id)
+            : (NODE_COLORS[n.node_type as keyof typeof NODE_COLORS] ??
+              TYPE_COLORS[n.node_type] ??
+              "#8b9cb7"),
         val:
           NODE_SIZE[n.node_type as keyof typeof NODE_SIZE] ??
           Math.max(2, n.pagerank * 25 + 3),
         _raw: n,
       })),
-    [nodes],
+    [nodes, colorByCluster],
   );
 
   const graphLinks = useMemo<KGGraphLink[]>(() => {

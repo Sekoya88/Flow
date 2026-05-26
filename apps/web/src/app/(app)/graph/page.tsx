@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, BookOpen, Cpu, GitBranch, Maximize2, Minimize2, Network, RefreshCw, Sparkles, Square, Trash2, X, Zap } from "lucide-react";
+import { Box, BookOpen, Cpu, GitBranch, Layers, Maximize2, Minimize2, Network, RefreshCw, Sparkles, Square, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KnowledgeGraphCanvas, type KGEdge, type KGNode } from "@/components/kg/KnowledgeGraphCanvas";
@@ -77,6 +77,8 @@ export default function GraphPage() {
   const [syncing, setSyncing] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
+  const [colorByCluster, setColorByCluster] = useState(false);
+  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string> | null>(null); // null = all
   const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
 
   // Quartz-style controls
@@ -177,6 +179,32 @@ export default function GraphPage() {
     return counts;
   }, [nodes]);
 
+  // Edge type counts
+  const edgeTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of edges) {
+      counts[e.edge_type] = (counts[e.edge_type] || 0) + 1;
+    }
+    return counts;
+  }, [edges]);
+
+  const sortedEdgeTypes = useMemo(
+    () => Object.keys(edgeTypeCounts).sort((a, b) => edgeTypeCounts[b] - edgeTypeCounts[a]),
+    [edgeTypeCounts],
+  );
+
+  const toggleEdgeType = useCallback((t: string) => {
+    setActiveEdgeTypes((prev) => {
+      // null means "all active" — initialize from full set first
+      const current = prev ?? new Set(Object.keys(edgeTypeCounts));
+      const next = new Set(current);
+      next.has(t) ? next.delete(t) : next.add(t);
+      // If everything active again, reset to null (all)
+      if (next.size === sortedEdgeTypes.length) return null;
+      return next;
+    });
+  }, [edgeTypeCounts, sortedEdgeTypes.length]);
+
   // BFS depth + local-mode filter. Active only when a focus node is selected.
   const filteredView = useMemo(() => {
     const hasFocus = selectedNode != null;
@@ -221,7 +249,10 @@ export default function GraphPage() {
   }, [nodes, edges, depth, localMode, selectedNode]);
 
   const displayNodes = filteredView.nodes;
-  const displayEdges = filteredView.edges;
+  const displayEdges = useMemo(() => {
+    if (!activeEdgeTypes) return filteredView.edges;
+    return filteredView.edges.filter((e) => activeEdgeTypes.has(e.edge_type));
+  }, [filteredView.edges, activeEdgeTypes]);
 
   // Cmd+G / Ctrl+G shortcut for graph search overlay (browser hijacks Cmd+F; G is free).
   useEffect(() => {
@@ -353,6 +384,7 @@ export default function GraphPage() {
           className="flex-1 h-full w-full"
           onNodeClick={handleNodeClick}
           mode={graphMode}
+          colorByCluster={colorByCluster}
         />
       )}
 
@@ -440,6 +472,45 @@ export default function GraphPage() {
                 );
               })}
             </div>
+
+            {/* Edge type filter */}
+            {sortedEdgeTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1 border-t border-border/30">
+                <span className="w-full text-[9px] uppercase tracking-wider text-muted-foreground/40 font-mono mb-0.5">
+                  edge types
+                </span>
+                {sortedEdgeTypes.map((t) => {
+                  const active = !activeEdgeTypes || activeEdgeTypes.has(t);
+                  const count = edgeTypeCounts[t] || 0;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => toggleEdgeType(t)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition-all",
+                        active
+                          ? "bg-card text-foreground border border-flow-800"
+                          : "text-muted-foreground/40 hover:text-muted-foreground border border-transparent",
+                      )}
+                    >
+                      <span
+                        className="h-1.5 w-3 rounded-full shrink-0"
+                        style={{
+                          backgroundColor: active ? "rgba(148,163,184,0.5)" : "transparent",
+                          border: active ? "none" : "1px solid rgba(148,163,184,0.3)",
+                        }}
+                      />
+                      {t.replace("_", " ")}
+                      {count > 0 && active && (
+                        <span className="text-[9px] text-muted-foreground tabular-nums">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -472,6 +543,18 @@ export default function GraphPage() {
             onClick={() => setPanelOpen(!panelOpen)}
           >
             {panelOpen ? "Hide panel" : "Query & Import"}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className={cn(
+              "h-8 w-8 bg-card border-flow-800",
+              colorByCluster && "border-flow-violet/60 bg-flow-violet/10",
+            )}
+            onClick={() => setColorByCluster((v) => !v)}
+            title={colorByCluster ? "Color by type" : "Color by cluster"}
+          >
+            <Layers className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="outline"
