@@ -933,6 +933,14 @@ function NodeDetailPanel({
               }`}>
                 {String(node.metadata?.status ?? '—')}
               </span>
+              {node.ref_id && onNavigate && (
+                <button
+                  onClick={() => onNavigate(`/executions/${node.ref_id}`)}
+                  className="mt-1 block w-full rounded-lg border border-flow-700 bg-flow-900 px-3 py-1.5 text-center text-xs text-flow-300 hover:bg-flow-800 transition-colors"
+                >
+                  View replay ↗
+                </button>
+              )}
             </div>
           )}
 
