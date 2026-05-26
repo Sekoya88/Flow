@@ -14,7 +14,7 @@ from flow.application.genome_service import snapshot_genome
 from flow.config import Settings
 from flow.domain.genome import VersionStatus, VersionTrigger
 from flow.infrastructure.persistence.repo import FlowRepository
-from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
+from flow.interfaces.http.deps import get_bearer_token, get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.schemas import AgentCreateIn, AgentPatchIn, ExecuteIn, VibeIn
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
@@ -109,6 +109,7 @@ async def execute_agent(
     agent_id: UUID,
     body: ExecuteIn,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
+    token: Annotated[str, Depends(get_bearer_token)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     ws_rows = await repo.list_workspaces_for_user(user_id)
@@ -132,7 +133,19 @@ async def execute_agent(
     eid, resolved_thread = await repo.create_execution(agent_id, workspace_id, body.message, thread_id=thread_id)
     raw_cfg = agent["config"]
     agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
-    # SSE uses Redis pub/sub per execution id — no hub registration needed.
+
+    # Inject JWT so MCP client can auth with outbound servers in the worker.
+    # Auto-enable use_mcp when workspace has at least one active MCP server.
+    active_mcp = await repo._pool.fetchval(
+        "SELECT COUNT(*) FROM mcp_servers WHERE workspace_id = $1 AND active = true",
+        workspace_id,
+    )
+    if active_mcp:
+        tools_cfg = dict(agent_config.get("tools") or {})
+        tools_cfg["use_mcp"] = True
+        agent_config["tools"] = tools_cfg
+        agent_config["_jwt_token"] = token
+
     from flow.infrastructure.queue.client import enqueue_execution
 
     await enqueue_execution(
