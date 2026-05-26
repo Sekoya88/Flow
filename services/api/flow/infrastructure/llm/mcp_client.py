@@ -1,4 +1,9 @@
-"""LangChain MCP adapter — loads tools from registered MCP servers for a workspace."""
+"""LangChain MCP adapter — loads tools from registered MCP servers for a workspace.
+
+Uses Streamable HTTP transport (/mcp endpoint) rather than SSE (/sse endpoint).
+Streamable HTTP is stateless — each JSON-RPC call is one HTTP POST, no long-lived
+connection to keep alive, which is far more reliable for server-to-server calls.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +14,21 @@ from flow.infrastructure.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
-_CONNECT_TIMEOUT = 10.0
+_CONNECT_TIMEOUT = 15.0
 
 
-def _sse_url(url: str, jwt_token: str = "") -> str:
-    sse = url if url.endswith("/sse") else f"{url.rstrip('/')}/sse"
-    return f"{sse}?token={jwt_token}" if jwt_token else sse
+def _http_url(url: str, jwt_token: str = "") -> str:
+    """Derive the Streamable HTTP MCP endpoint from any registered URL.
+
+    Handles: /sse → /mcp, /mcp → /mcp, or bare base URL → /mcp.
+    """
+    base = url.rstrip("/")
+    for suffix in ("/sse", "/mcp"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+            break
+    endpoint = f"{base}/mcp"
+    return f"{endpoint}?token={jwt_token}" if jwt_token else endpoint
 
 
 async def get_mcp_tools_for_agent(
@@ -37,7 +51,7 @@ async def get_mcp_tools_for_agent(
         return []
 
     server_configs: dict[str, dict] = {
-        str(row["id"]): {"transport": "sse", "url": _sse_url(row["url"], jwt_token)}
+        str(row["id"]): {"transport": "http", "url": _http_url(row["url"], jwt_token)}
         for row in rows
     }
 
@@ -59,7 +73,7 @@ async def list_tools_for_server(url: str, jwt_token: str = "") -> list[dict]:
         logger.warning("mcp_client.langchain_mcp_adapters_not_installed")
         return []
 
-    config = {"_server": {"transport": "sse", "url": _sse_url(url, jwt_token)}}
+    config = {"_server": {"transport": "http", "url": _http_url(url, jwt_token)}}
     try:
         async with asyncio.timeout(_CONNECT_TIMEOUT):
             client = MultiServerMCPClient(config)
@@ -76,13 +90,13 @@ async def list_tools_for_server(url: str, jwt_token: str = "") -> list[dict]:
 async def invoke_tool_on_server(
     url: str, tool_name: str, args: dict, jwt_token: str = ""
 ) -> dict:
-    """Invoke a named tool on an MCP server via the real MCP protocol."""
+    """Invoke a named tool on an MCP server via Streamable HTTP."""
     try:
         from langchain_mcp_adapters.client import MultiServerMCPClient
     except ImportError:
         return {"ok": False, "error": "langchain_mcp_adapters not installed"}
 
-    config = {"_server": {"transport": "sse", "url": _sse_url(url, jwt_token)}}
+    config = {"_server": {"transport": "http", "url": _http_url(url, jwt_token)}}
     try:
         async with asyncio.timeout(_CONNECT_TIMEOUT):
             client = MultiServerMCPClient(config)
