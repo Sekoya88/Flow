@@ -55,6 +55,7 @@ const primaryNav = [
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/proposals", label: "Proposals", icon: Sparkles },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
+  { href: "/projects", label: "Projects", icon: BookOpen },
   { href: "/evals", label: "Evals", icon: CheckCircle },
   { href: "/logs", label: "Logs", icon: Terminal },
   { href: "/research", label: "Research", icon: Newspaper },

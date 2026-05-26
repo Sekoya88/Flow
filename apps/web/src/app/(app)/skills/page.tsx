@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   BarChart2,
   Brain,
@@ -11,6 +12,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Store,
   Target,
   Workflow,
 } from 'lucide-react'
@@ -162,6 +164,13 @@ export default function SkillsHubPage() {
                 {agentOptions.length} agents
               </span>
             </div>
+            <Link
+              href="/skills/marketplace"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-flow-700 bg-flow-900 px-3 font-mono text-xs text-flow-300 hover:bg-flow-800 hover:text-flow-100 transition-colors"
+            >
+              <Store className="h-3 w-3" />
+              Import
+            </Link>
             <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5 h-8 text-xs">
               <Plus className="h-3.5 w-3.5" />
               New Skill

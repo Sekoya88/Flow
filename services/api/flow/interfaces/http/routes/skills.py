@@ -5,8 +5,9 @@ import os
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from flow.application.skill_parser import parse_skill_md
 from flow.application.skill_playground import run_skill_test
@@ -99,6 +100,38 @@ async def skill_history(
             }
             for r in rows
         ]
+    }
+
+
+@router.get("/{skill_id}")
+async def get_skill(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+    parsed = parse_skill_md(skill["content_md"])
+    return {
+        "id": str(skill["id"]),
+        "agent_id": str(skill["agent_id"]),
+        "workspace_id": str(skill["workspace_id"]),
+        "name": parsed.name if parsed.name != "unnamed" else skill["name"],
+        "version": skill["version"],
+        "description": parsed.description or "",
+        "category": parsed.category or "General",
+        "triggers": parsed.triggers,
+        "allowed_tools": parsed.allowed_tools,
+        "metadata": parsed.metadata,
+        "content_md": skill["content_md"],
+        "active": skill["active"],
+        "score": float(skill.get("score", 1.0)),
+        "use_count": int(skill.get("use_count", 0)),
+        "created_at": skill["created_at"].isoformat(),
     }
 
 
@@ -455,3 +488,79 @@ async def vibe_modify_skill(
         yield f"data: {json.dumps({'done': True, 'skill_id': str(new_id), 'original_skill_id': str(skill_id)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+# ── Gist import ──────────────────────────────────────────────────────────────
+
+class GistImportIn(BaseModel):
+    gist_url: str  # e.g. "https://gist.github.com/user/abc123" or just "abc123"
+    agent_id: UUID
+    workspace_id: UUID
+
+
+@router.post("/import/gist", status_code=status.HTTP_201_CREATED)
+async def import_skill_from_gist(
+    body: GistImportIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Fetch a public GitHub Gist and install its first .md file as a skill."""
+    import re
+    import httpx
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if body.workspace_id not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    # Accept full URL or bare gist ID
+    gist_id_match = re.search(r"([0-9a-f]{20,})", body.gist_url)
+    if not gist_id_match:
+        raise HTTPException(status_code=422, detail="could not extract gist ID from URL")
+    gist_id = gist_id_match.group(1)
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"https://api.github.com/gists/{gist_id}",
+                headers={"Accept": "application/vnd.github.v3+json"},
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"gist fetch failed: {exc}") from exc
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="gist not found or not public")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"github API error {resp.status_code}")
+
+    data = resp.json()
+    files = data.get("files", {})
+
+    # Prefer .md files; fall back to .txt or first file
+    md_files = [v for v in files.values() if v["filename"].endswith(".md")]
+    txt_files = [v for v in files.values() if v["filename"].endswith(".txt")]
+    file_entry = (md_files or txt_files or list(files.values()) or [None])[0]
+    if not file_entry:
+        raise HTTPException(status_code=422, detail="gist contains no files")
+
+    content_md = file_entry.get("content") or ""
+    if not content_md.strip():
+        raise HTTPException(status_code=422, detail="gist file is empty")
+
+    parsed = parse_skill_md(content_md)
+    skill_name = parsed.name if parsed.name != "unnamed" else file_entry["filename"].replace(".md", "")
+
+    skill_id = await repo.upsert_agent_skill(
+        agent_id=body.agent_id,
+        workspace_id=body.workspace_id,
+        name=skill_name,
+        content_md=content_md,
+        category=parsed.category or "General",
+        initial_active=True,
+    )
+
+    return {
+        "skill_id": str(skill_id),
+        "name": skill_name,
+        "gist_id": gist_id,
+        "source_file": file_entry["filename"],
+    }

@@ -48,6 +48,7 @@ from flow.interfaces.http.routes import (
     mcp,
     memory,
     meta,
+    projects,
     observability_ws,
     personas,
     preferences,
@@ -169,6 +170,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(mcp.router)
     app.include_router(digest.router)
+    app.include_router(projects.router)
     app.include_router(stream.router)
     return app
 
