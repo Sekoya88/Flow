@@ -42,10 +42,10 @@ async def get_mcp_tools_for_agent(
     }
 
     try:
-        async with MultiServerMCPClient(server_configs) as client:
-            tools = client.get_tools()
-            logger.info("mcp_client.tools_loaded", count=len(tools), workspace_id=str(workspace_id))
-            return tools
+        client = MultiServerMCPClient(server_configs)
+        tools = await client.get_tools()
+        logger.info("mcp_client.tools_loaded", count=len(tools), workspace_id=str(workspace_id))
+        return tools
     except Exception:
         logger.exception("mcp_client.failed_to_load_tools", workspace_id=str(workspace_id))
         return []
@@ -62,9 +62,9 @@ async def list_tools_for_server(url: str, jwt_token: str = "") -> list[dict]:
     config = {"_server": {"transport": "sse", "url": _sse_url(url, jwt_token)}}
     try:
         async with asyncio.timeout(_CONNECT_TIMEOUT):
-            async with MultiServerMCPClient(config) as client:
-                tools = client.get_tools()
-                return [{"tool_name": t.name, "description": t.description or ""} for t in tools]
+            client = MultiServerMCPClient(config)
+            tools = await client.get_tools()
+            return [{"tool_name": t.name, "description": t.description or ""} for t in tools]
     except TimeoutError:
         logger.warning("mcp_client.list_tools_timeout", url=url)
         return []
@@ -85,13 +85,13 @@ async def invoke_tool_on_server(
     config = {"_server": {"transport": "sse", "url": _sse_url(url, jwt_token)}}
     try:
         async with asyncio.timeout(_CONNECT_TIMEOUT):
-            async with MultiServerMCPClient(config) as client:
-                tools = client.get_tools()
-                tool = next((t for t in tools if t.name == tool_name), None)
-                if tool is None:
-                    return {"ok": False, "error": f"tool '{tool_name}' not found on server"}
-                result = await tool.ainvoke(args)
-                return {"ok": True, "result": result}
+            client = MultiServerMCPClient(config)
+            tools = await client.get_tools()
+            tool = next((t for t in tools if t.name == tool_name), None)
+            if tool is None:
+                return {"ok": False, "error": f"tool '{tool_name}' not found on server"}
+            result = await tool.ainvoke(args)
+            return {"ok": True, "result": result}
     except TimeoutError:
         return {"ok": False, "error": "MCP server connection timed out"}
     except Exception as exc:
