@@ -47,10 +47,96 @@ After first boot: open <http://localhost:13000> → register → complete onboar
 | **Agents** | Create agents, genome versions, golden sets, A/B tests, auto-improve loop |
 | **Research Digest** | Daily arXiv + HuggingFace papers, AI-scored, exportable to Obsidian |
 | **Graph** | Knowledge graph of agents, skills, papers — queryable via natural language |
-| **Skills** | Reusable skill instructions per agent, versioned, in-browser playground |
+| **Skills** | Reusable skill instructions per agent, versioned, in-browser playground, auto-trainable via ReflACT |
 | **Memory** | Long-term facts via `AsyncPostgresStore`, visible at `/memory` |
 | **Evals** | Golden set runs + LLM judge + nightly prompt rewriting |
 | **Agentic RAG** | Qdrant hybrid search (BM25 + dense) fused via RRF when enabled |
+
+---
+
+## Skill Training — ReflACT optimizer (SkillOpt)
+
+Flow implements Microsoft's [SkillOpt](https://arxiv.org/abs/2605.23904) **ReflACT** pipeline: a text-space optimizer that trains skill documents (markdown prompts) via bounded structured edits, without touching model weights. Inspired by gradient descent but operating on text — each epoch proposes patches, ranks them by impact, applies within a budget, and validates via golden-set eval before accepting.
+
+### How it works
+
+```text
+ROLLOUT  → run agent on golden items, collect failures
+REFLECT  → LLM analyzes failures → structured patches [{op, target, content, impact_score}]
+AGGREGATE → merge patches targeting the same section heading (keep highest impact)
+SELECT   → rank by impact_score DESC, cap at edit_budget (the "learning rate")
+UPDATE   → apply bounded text edits anchored to ## SectionName headings
+EVALUATE → validate: accept if eval_score > baseline + 0.02, else reject + buffer the failed edits
+```
+
+Rejected edits are buffered cross-epoch — the LLM won't re-propose them in future runs.
+
+### Enable training on a skill
+
+Via API:
+
+```bash
+# Enable nightly auto-training (runs every day at 05:00 UTC)
+curl -X PATCH http://localhost:18000/api/v1/skills/{skill_id} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"training_mode": "react"}'
+
+# Trigger a manual training run immediately
+curl -X POST http://localhost:18000/api/v1/skills/{skill_id}/train \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "...", "workspace_id": "...", "edit_budget": 5, "max_epochs": 3}'
+# → {"run_id": "uuid"}
+
+# Poll status
+curl http://localhost:18000/api/v1/skills/{skill_id}/training-runs/{run_id} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### View training in the UI
+
+Navigate to **Agents → [Your Agent] → Skills → Training** (`/agents/{id}/skills/training`).
+
+The training panel shows:
+
+- **Toggle** — enable/disable nightly `react` auto-training per skill
+- **Train Now** — trigger an immediate run (disabled while a run is active)
+- **Epoch timeline** — each epoch shows eval score, baseline score, improvement delta, patch count, and accept/reject status
+- **Run history** — all past runs with status badges (pending / running / done / failed)
+
+Training results also appear in the **Knowledge Graph** as `improved_by` edges between skill versions, and trigger a new **genome snapshot** with `trigger=skill_train`.
+
+### Test it
+
+```bash
+cd services/api
+
+# Unit tests — each ReflACT stage isolated
+.venv/bin/pytest tests/test_skill_trainer.py -v
+
+# Repo integration tests — training run CRUD
+.venv/bin/pytest tests/test_repo_training.py -v
+
+# API route tests
+.venv/bin/pytest tests/test_routes_skill_training.py tests/test_patch_skill.py -v
+
+# Worker task tests
+.venv/bin/pytest tests/test_worker_training.py -v
+
+# Full suite
+.venv/bin/pytest tests/ -v   # 38 skill-training tests + all others
+```
+
+### Database tables added
+
+| Table | Purpose |
+| ----- | ------- |
+| `skill_training_runs` | One row per training run (multi-epoch), tracks status, scores, edit budget |
+| `skill_raw_patches` | Individual patch proposals from each Reflect stage; rejected ones buffered |
+| `skill_training_epochs` | Per-epoch results: candidate skill, eval score, acceptance decision |
+
+Migration: `services/api/migrations/versions/0031_skillopt.py`
 
 ---
 
