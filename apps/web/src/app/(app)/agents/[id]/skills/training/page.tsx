@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { FlowPageHeader } from '@/components/layout/FlowPageHeader'
 import { SkillTrainingPanel } from '@/components/skills/SkillTrainingPanel'
 import { apiFetch } from '@/lib/api'
@@ -21,6 +21,7 @@ type AgentResponse = { id: string; workspace_id: string; name: string }
 export default function SkillTrainingPage() {
   const params = useParams<{ id: string }>()
   const agentId = params.id
+  const router = useRouter()
 
   const [skills, setSkills] = useState<SkillRow[]>([])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -43,7 +44,19 @@ export default function SkillTrainingPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <FlowPageHeader title="Skill Training" description="ReflACT optimizer — improve skills via bounded text edits." />
+      <FlowPageHeader
+        title="Skill Training"
+        description="ReflACT optimizer — improve skills via bounded text edits."
+        eyebrow={
+          <button
+            onClick={() => router.push(`/agents/${agentId}/skills`)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Skills
+          </button>
+        }
+      />
 
       {loading && (
         <div className="flex items-center gap-2 text-muted-foreground">
