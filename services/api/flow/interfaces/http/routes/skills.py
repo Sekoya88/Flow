@@ -110,64 +110,7 @@ async def skill_history(
     }
 
 
-@router.get("/{skill_id}")
-async def get_skill(
-    skill_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-    repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
-    skill = await repo.get_skill_by_id(skill_id)
-    if skill is None:
-        raise HTTPException(status_code=404, detail="skill not found")
-    ws_rows = await repo.list_workspaces_for_user(user_id)
-    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
-        raise HTTPException(status_code=403, detail="workspace access denied")
-    parsed = parse_skill_md(skill["content_md"])
-    return {
-        "id": str(skill["id"]),
-        "agent_id": str(skill["agent_id"]),
-        "workspace_id": str(skill["workspace_id"]),
-        "name": parsed.name if parsed.name != "unnamed" else skill["name"],
-        "version": skill["version"],
-        "description": parsed.description or "",
-        "category": parsed.category or "General",
-        "triggers": parsed.triggers,
-        "allowed_tools": parsed.allowed_tools,
-        "metadata": parsed.metadata,
-        "content_md": skill["content_md"],
-        "active": skill["active"],
-        "score": float(skill.get("score", 1.0)),
-        "use_count": int(skill.get("use_count", 0)),
-        "created_at": skill["created_at"].isoformat(),
-    }
-
-
-@router.delete("/{skill_id}", response_model=DeactivateOut)
-async def deactivate_skill(
-    skill_id: UUID,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-    repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> DeactivateOut:
-    await repo._pool.execute("UPDATE agent_skills SET active = false WHERE id = $1", skill_id)
-    return {"deactivated": True}
-
-
-@router.patch("/{skill_id}", response_model=dict)
-async def patch_skill(
-    skill_id: UUID,
-    body: SkillPatchIn,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
-    repo: Annotated[FlowRepository, Depends(get_repo)],
-) -> dict:
-    """Update training_mode (and potentially other patchable fields) on a skill."""
-    if body.training_mode is not None or "training_mode" in body.model_fields_set:
-        found = await repo.patch_skill_training_mode(skill_id, body.training_mode)
-        if not found:
-            raise HTTPException(status_code=404, detail="Skill not found")
-    return {"skill_id": str(skill_id), "training_mode": body.training_mode}
-
-
-# ── Skills Hub ───────────────────────────────────────────────────────────────
+# ── Skills Hub (static paths — must precede /{skill_id} catch-all) ──────────
 
 
 def _catalog_row_to_out(row) -> dict:
@@ -223,6 +166,63 @@ async def list_skill_templates(
             for t in SKILL_TEMPLATES
         ]
     }
+
+
+@router.get("/{skill_id}")
+async def get_skill(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+    parsed = parse_skill_md(skill["content_md"])
+    return {
+        "id": str(skill["id"]),
+        "agent_id": str(skill["agent_id"]),
+        "workspace_id": str(skill["workspace_id"]),
+        "name": parsed.name if parsed.name != "unnamed" else skill["name"],
+        "version": skill["version"],
+        "description": parsed.description or "",
+        "category": parsed.category or "General",
+        "triggers": parsed.triggers,
+        "allowed_tools": parsed.allowed_tools,
+        "metadata": parsed.metadata,
+        "content_md": skill["content_md"],
+        "active": skill["active"],
+        "score": float(skill.get("score", 1.0)),
+        "use_count": int(skill.get("use_count", 0)),
+        "created_at": skill["created_at"].isoformat(),
+    }
+
+
+@router.delete("/{skill_id}", response_model=DeactivateOut)
+async def deactivate_skill(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> DeactivateOut:
+    await repo._pool.execute("UPDATE agent_skills SET active = false WHERE id = $1", skill_id)
+    return {"deactivated": True}
+
+
+@router.patch("/{skill_id}", response_model=dict)
+async def patch_skill(
+    skill_id: UUID,
+    body: SkillPatchIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Update training_mode (and potentially other patchable fields) on a skill."""
+    if body.training_mode is not None or "training_mode" in body.model_fields_set:
+        found = await repo.patch_skill_training_mode(skill_id, body.training_mode)
+        if not found:
+            raise HTTPException(status_code=404, detail="Skill not found")
+    return {"skill_id": str(skill_id), "training_mode": body.training_mode}
 
 
 @router.post("/{skill_id}/activate", response_model=SkillActivateOut)

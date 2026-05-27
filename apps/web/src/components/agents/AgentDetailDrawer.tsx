@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -139,6 +139,7 @@ export function AgentDetailDrawer({
   const router = useRouter();
   const [localTools, setLocalTools] = useState<Record<string, boolean>>({});
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const isTogglingRef = useRef(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ── Skills state ──
@@ -147,8 +148,7 @@ export function AgentDetailDrawer({
   const [skillsLoaded, setSkillsLoaded] = useState(false);
 
   useEffect(() => {
-    if (agent) setLocalTools(getTools(agent.config));
-    // Reset skills when agent changes
+    if (agent && !isTogglingRef.current) setLocalTools(getTools(agent.config));
     setSkills([]);
     setSkillsLoaded(false);
   }, [agent]);
@@ -330,7 +330,7 @@ export function AgentDetailDrawer({
 
             {/* Tabs */}
             <Tabs defaultValue="tools" className="flex-1">
-              <TabsList className="w-full justify-start border-b border-flow-800 px-6" variant="line">
+              <TabsList className="w-full justify-start overflow-x-auto flex-nowrap border-b border-flow-800 px-6" variant="line">
                 <TabsTrigger value="tools">Tools</TabsTrigger>
                 <TabsTrigger value="intelligence">Intelligence</TabsTrigger>
                 <TabsTrigger value="versions" onClick={() => { if (versions.length === 0) void loadVersions(); }}>Versions</TabsTrigger>
@@ -382,12 +382,16 @@ export function AgentDetailDrawer({
                           checked={enabled}
                           onCheckedChange={(checked: boolean) => {
                             const prev = localTools;
+                            isTogglingRef.current = true;
                             setLocalTools((p) => ({ ...p, [key]: checked }));
                             setToggleError(null);
-                            void onToolToggle?.(agent.id, key, checked)?.catch(() => {
-                              setLocalTools(prev);
-                              setToggleError(`Failed to ${checked ? "enable" : "disable"} ${label}. Try again.`);
-                            });
+                            void onToolToggle?.(agent.id, key, checked)
+                              ?.then(() => { isTogglingRef.current = false; })
+                              ?.catch(() => {
+                                isTogglingRef.current = false;
+                                setLocalTools(prev);
+                                setToggleError(`Failed to ${checked ? "enable" : "disable"} ${label}. Try again.`);
+                              });
                           }}
                         />
                       </div>

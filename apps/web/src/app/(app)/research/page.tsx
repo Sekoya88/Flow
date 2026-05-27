@@ -704,6 +704,13 @@ export default function ResearchPage() {
     setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
   }
 
+  async function handleDeleteSelected() {
+    const ids = Array.from(selectedIds);
+    await Promise.all(ids.map((id) => apiFetch(`/api/v1/digest/papers/${id}`, { method: "DELETE" }).catch(() => null)));
+    setPapers((prev) => prev.filter((p) => !selectedIds.has(p.id)));
+    setSelectedIds(new Set());
+  }
+
   async function handleStatusChange(id: string, newStatus: string) {
     await apiFetch(`/api/v1/digest/papers/${id}`, {
       method: "PATCH",
@@ -813,6 +820,15 @@ export default function ResearchPage() {
           >
             {embedding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BrainCircuit className="h-3.5 w-3.5" />}
             Embed as Knowledge
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleDeleteSelected}
+            className="gap-1.5 font-mono text-xs"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Selected
           </Button>
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -979,7 +995,17 @@ export default function ResearchPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <>
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[11px] text-flow-500">{papers.length} paper{papers.length !== 1 ? "s" : ""}</span>
+            <button
+              onClick={() => setSelectedIds(selectedIds.size === papers.length ? new Set() : new Set(papers.map((p) => p.id)))}
+              className="font-mono text-[11px] text-flow-400 hover:text-flow-200 transition-colors"
+            >
+              {selectedIds.size === papers.length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {papers.map((paper) => (
             <PaperCard
               key={paper.id}
@@ -993,7 +1019,8 @@ export default function ResearchPage() {
               onToggleSelect={toggleSelect}
             />
           ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
