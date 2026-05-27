@@ -1,0 +1,73 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
+import { FlowPageHeader } from '@/components/layout/FlowPageHeader'
+import { SkillTrainingPanel } from '@/components/skills/SkillTrainingPanel'
+import { apiFetch } from '@/lib/api'
+
+type SkillRow = {
+  id: string
+  name: string
+  training_mode: string | null
+  workspace_id: string
+}
+
+type SkillsResponse = { skills: SkillRow[] }
+
+// The agent detail API returns workspace_id on the agent
+type AgentResponse = { id: string; workspace_id: string; name: string }
+
+export default function SkillTrainingPage() {
+  const params = useParams<{ id: string }>()
+  const agentId = params.id
+
+  const [skills, setSkills] = useState<SkillRow[]>([])
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!agentId) return
+    Promise.all([
+      apiFetch<AgentResponse>(`/api/v1/agents/${agentId}`),
+      // We need workspace_id to list skills
+    ])
+      .then(([agent]) => {
+        setWorkspaceId(agent.workspace_id)
+        return apiFetch<SkillsResponse>(`/api/v1/skills?agent_id=${agentId}&workspace_id=${agent.workspace_id}`)
+      })
+      .then(res => setSkills(res.skills ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [agentId])
+
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      <FlowPageHeader title="Skill Training" description="ReflACT optimizer — improve skills via bounded text edits." />
+
+      {loading && (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading skills…</span>
+        </div>
+      )}
+
+      {!loading && skills.length === 0 && (
+        <p className="text-sm text-muted-foreground">No skills found. Create a skill first.</p>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {skills.map(skill => (
+          <SkillTrainingPanel
+            key={skill.id}
+            skillId={skill.id}
+            skillName={skill.name}
+            agentId={agentId}
+            workspaceId={workspaceId ?? ''}
+            trainingMode={skill.training_mode ?? null}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
