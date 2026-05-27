@@ -15,6 +15,7 @@ import {
   Sparkles,
   User,
   Zap,
+  BrainCircuit,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { SkillEditor } from "@/components/agents/SkillEditor";
 import { SkillDiffView } from "@/components/agents/SkillDiffView";
 import { EntityGraphButton } from "@/components/graph/EntityGraphButton";
+import { ObsidianImportDialog } from "@/components/skills/ObsidianImportDialog";
 import { apiFetch } from "@/lib/api";
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
@@ -175,10 +177,16 @@ export default function SkillsPage() {
       }
       void load();
     } catch (e) {
-      setImproveMessage((prev) => ({
-        ...prev,
-        [skillId]: "Failed to generate improvement proposal.",
-      }));
+      let msg = "Failed to generate improvement proposal.";
+      if (e instanceof Error && "body" in e) {
+        try {
+          const parsed = JSON.parse((e as { body: string }).body);
+          if (parsed?.detail) msg = parsed.detail;
+        } catch {
+          /* leave default */
+        }
+      }
+      setImproveMessage((prev) => ({ ...prev, [skillId]: msg }));
       logger.warn("skill improve failed", { error: String(e) });
     } finally {
       setImproving(null);
@@ -271,6 +279,17 @@ export default function SkillsPage() {
                 refId={agentId}
               />
             )}
+            {wsId && (
+              <ObsidianImportDialog
+                agentId={agentId}
+                workspaceId={wsId}
+                onImported={load}
+              />
+            )}
+            <Button variant="outline" onClick={() => router.push(`/agents/${agentId}/skills/training`)} className="gap-1.5">
+              <BrainCircuit className="h-4 w-4" />
+              Training
+            </Button>
             <Button onClick={() => setCreating(true)} className="gap-1.5">
               <Plus className="h-4 w-4" />
               New skill
