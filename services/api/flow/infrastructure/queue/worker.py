@@ -203,6 +203,50 @@ async def task_run_skill_training(
                         "UPDATE agent_skills SET last_training_run_id = $1 WHERE id = $2",
                         _run_id, _skill_id,
                     )
+                    # KG tracking: upsert node for improved skill, edge from original
+                    try:
+                        eval_score = result.get("eval_score", 0.0)
+                        baseline_score = result.get("baseline_score", 0.0)
+                        delta = eval_score - baseline_score
+                        new_node_id = await repo.upsert_kg_node(
+                            workspace_id=_workspace_id,
+                            label=f"skill:{candidate_id}",
+                            node_type="skill",
+                            summary=f"ReflACT epoch {epoch}, Δ+{delta:.3f} → {eval_score:.3f}",
+                            metadata={
+                                "run_id": str(_run_id),
+                                "epoch": epoch,
+                                "eval_score": eval_score,
+                                "baseline_score": baseline_score,
+                                "patches_applied": result.get("patches_applied", 0),
+                            },
+                        )
+                        old_node = await repo.get_kg_node_by_label(
+                            _workspace_id, f"skill:{_skill_id}", "skill"
+                        )
+                        if old_node:
+                            await repo.upsert_kg_edge(
+                                workspace_id=_workspace_id,
+                                source_id=old_node["id"],
+                                target_id=new_node_id,
+                                edge_type="improved_by",
+                                metadata={"trigger": "reflact", "epoch": epoch},
+                            )
+                    except Exception as _kg_exc:
+                        logger.warning("skill training KG update failed: %s", _kg_exc)
+                    # Genome snapshot
+                    try:
+                        from flow.application.genome_service import snapshot_genome
+                        from flow.domain.genome import VersionTrigger
+                        await snapshot_genome(
+                            pool=pool,
+                            agent_id=_agent_id,
+                            workspace_id=_workspace_id,
+                            trigger=VersionTrigger.SKILL_TRAIN,
+                            version_label=f"reflact-{run_id[:8]}",
+                        )
+                    except Exception as _snap_exc:
+                        logger.warning("skill training genome snapshot failed: %s", _snap_exc)
                 break  # early stop after acceptance
 
         await repo.update_training_run(
