@@ -23,7 +23,7 @@ def _serialize_node(r: Any) -> dict[str, Any]:
         "ref_id": r["ref_id"],
         "ref_type": r["ref_type"],
         "label": r["label"],
-        "metadata": dict(r["metadata"]) if r["metadata"] else {},
+        "metadata": r["metadata"] or {},
         "pos_x": r["pos_x"],
         "pos_y": r["pos_y"],
     }
