@@ -1825,3 +1825,16 @@ class FlowRepository:
                ORDER BY epoch""",
             run_id,
         )
+
+    async def patch_skill_training_mode(
+        self,
+        skill_id: UUID,
+        training_mode: str | None,
+    ) -> bool:
+        """Set training_mode on an agent_skills row. Returns True if found and updated."""
+        result = await self._pool.execute(
+            "UPDATE agent_skills SET training_mode = $1 WHERE id = $2",
+            training_mode,
+            skill_id,
+        )
+        return result == "UPDATE 1"

@@ -25,6 +25,7 @@ from flow.interfaces.http.schemas import (
     SkillHistoryOut,
     SkillImproveOut,
     SkillListOut,
+    SkillPatchIn,
     SkillTestIn,
     SkillUsageOut,
     SkillVibeCreateIn,
@@ -149,6 +150,21 @@ async def deactivate_skill(
 ) -> DeactivateOut:
     await repo._pool.execute("UPDATE agent_skills SET active = false WHERE id = $1", skill_id)
     return {"deactivated": True}
+
+
+@router.patch("/{skill_id}", response_model=dict)
+async def patch_skill(
+    skill_id: UUID,
+    body: SkillPatchIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Update training_mode (and potentially other patchable fields) on a skill."""
+    if body.training_mode is not None or "training_mode" in body.model_fields_set:
+        found = await repo.patch_skill_training_mode(skill_id, body.training_mode)
+        if not found:
+            raise HTTPException(status_code=404, detail="Skill not found")
+    return {"skill_id": str(skill_id), "training_mode": body.training_mode}
 
 
 # ── Skills Hub ───────────────────────────────────────────────────────────────

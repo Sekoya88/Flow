@@ -31,6 +31,10 @@ class SkillVibeModifyIn(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
 
 
+class SkillPatchIn(BaseModel):
+    training_mode: str | None = None  # "react" | null to disable
+
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
 

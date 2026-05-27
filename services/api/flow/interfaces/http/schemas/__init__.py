@@ -113,6 +113,7 @@ from flow.interfaces.http.schemas.skills import (
     SkillImproveOut,
     SkillListOut,
     SkillOut,
+    SkillPatchIn,
     SkillTestIn,
     SkillUsageDataPoint,
     SkillUsageOut,
@@ -200,6 +201,7 @@ __all__ = [
     "ProposalActionOut",
     # skills
     "SkillCreateIn",
+    "SkillPatchIn",
     "SkillTestIn",
     "SkillOut",
     "SkillListOut",
