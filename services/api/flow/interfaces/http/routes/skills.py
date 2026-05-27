@@ -125,7 +125,7 @@ def _catalog_row_to_out(row) -> dict:
         "category": parsed.category if parsed.category != "General" else (row.get("category") or "General"),
         "triggers": parsed.triggers or list(row["triggers"] or []),
         "allowed_tools": parsed.allowed_tools or list(row["allowed_tools"] or []),
-        "metadata": parsed.metadata or dict(row["metadata"] or {}),
+        "metadata": parsed.metadata or (row["metadata"] or {}),
         "score": float(row["score"] or 0.0),
         "use_count": int(row["use_count"] or 0),
         "created_at": row["created_at"].isoformat(),
