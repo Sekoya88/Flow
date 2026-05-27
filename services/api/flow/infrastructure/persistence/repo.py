@@ -1660,3 +1660,168 @@ class FlowRepository:
             workspace_id,
         )
         return [r["label"] for r in rows]
+
+    # ── Skill Training Runs ───────────────────────────────────────────────
+
+    async def create_training_run(
+        self,
+        skill_id: UUID,
+        agent_id: UUID,
+        workspace_id: UUID,
+        edit_budget: int,
+        created_by: UUID | None = None,
+    ) -> UUID:
+        """Insert a new skill_training_runs row (status='pending') and return its id."""
+        row = await self._pool.fetchrow(
+            """INSERT INTO skill_training_runs
+                   (skill_id, agent_id, workspace_id, edit_budget, status)
+               VALUES ($1, $2, $3, $4, 'pending')
+               RETURNING id""",
+            skill_id, agent_id, workspace_id, edit_budget,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def update_training_run(
+        self,
+        run_id: UUID,
+        *,
+        status: str | None = None,
+        epoch: int | None = None,
+        edits_used: int | None = None,
+        best_score: float | None = None,
+        accepted: bool | None = None,
+        started_at: bool = False,
+        completed_at: bool = False,
+    ) -> None:
+        """Partial update on skill_training_runs — only non-None kwargs are applied."""
+        parts: list[str] = []
+        values: list = [run_id]  # $1 is always run_id
+
+        if status is not None:
+            values.append(status)
+            parts.append(f"status = ${len(values)}")
+        if epoch is not None:
+            values.append(epoch)
+            parts.append(f"epoch = ${len(values)}")
+        if edits_used is not None:
+            values.append(edits_used)
+            parts.append(f"edits_used = ${len(values)}")
+        if best_score is not None:
+            values.append(best_score)
+            parts.append(f"best_score = ${len(values)}")
+        if accepted is not None:
+            values.append(accepted)
+            parts.append(f"accepted = ${len(values)}")
+        if started_at:
+            parts.append("started_at = now()")
+        if completed_at:
+            parts.append("completed_at = now()")
+
+        if not parts:
+            return
+        await self._pool.execute(
+            f"UPDATE skill_training_runs SET {', '.join(parts)} WHERE id = $1",
+            *values,
+        )
+
+    async def list_training_runs(self, skill_id: UUID) -> list[asyncpg.Record]:
+        """Return all training runs for a skill, newest first."""
+        return await self._pool.fetch(
+            """SELECT id, status, epoch, edit_budget, edits_used, baseline_score,
+                      best_score, accepted, started_at, completed_at, created_at
+               FROM skill_training_runs
+               WHERE skill_id = $1
+               ORDER BY created_at DESC""",
+            skill_id,
+        )
+
+    async def get_training_run(self, run_id: UUID) -> asyncpg.Record | None:
+        """Return a single training run row."""
+        return await self._pool.fetchrow(
+            """SELECT id, skill_id, agent_id, workspace_id, status, epoch,
+                      edit_budget, edits_used, baseline_score, best_score,
+                      accepted, started_at, completed_at, created_at
+               FROM skill_training_runs WHERE id = $1""",
+            run_id,
+        )
+
+    async def insert_raw_patch(
+        self,
+        run_id: UUID,
+        epoch: int,
+        patch_json: dict,
+    ) -> UUID:
+        """Store one patch candidate from the Reflect stage."""
+        import json as _json
+        row = await self._pool.fetchrow(
+            """INSERT INTO skill_raw_patches (run_id, epoch, patch_json)
+               VALUES ($1, $2, $3)
+               RETURNING id""",
+            run_id, epoch, _json.dumps(patch_json),
+        )
+        assert row is not None
+        return row["id"]
+
+    async def mark_patch_rejected(self, patch_id: UUID) -> None:
+        """Mark a raw patch as rejected (validation gate failed)."""
+        await self._pool.execute(
+            "UPDATE skill_raw_patches SET rejected = true WHERE id = $1",
+            patch_id,
+        )
+
+    async def get_rejected_patches(self, skill_id: UUID) -> list[dict]:
+        """Return all rejected patch targets across all runs for a skill.
+
+        Used to build the cross-epoch rejected-edit buffer for _stage_reflect.
+        Returns list of {op, target} dicts.
+        """
+        rows = await self._pool.fetch(
+            """SELECT srp.patch_json
+               FROM skill_raw_patches srp
+               JOIN skill_training_runs str ON srp.run_id = str.id
+               WHERE str.skill_id = $1 AND srp.rejected = true""",
+            skill_id,
+        )
+        import json as _json
+        result = []
+        for r in rows:
+            pj = r["patch_json"]
+            if isinstance(pj, str):
+                pj = _json.loads(pj)
+            result.append({"op": pj.get("op", ""), "target": pj.get("target", "")})
+        return result
+
+    async def insert_training_epoch(
+        self,
+        run_id: UUID,
+        epoch: int,
+        candidate_skill_id: UUID | None,
+        eval_score: float,
+        baseline_score: float,
+        accepted: bool,
+        patch_count: int,
+    ) -> UUID:
+        """Record the result of one training epoch."""
+        row = await self._pool.fetchrow(
+            """INSERT INTO skill_training_epochs
+                   (run_id, epoch, candidate_skill_id, eval_score, baseline_score,
+                    accepted, patch_count)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING id""",
+            run_id, epoch, candidate_skill_id, eval_score, baseline_score,
+            accepted, patch_count,
+        )
+        assert row is not None
+        return row["id"]
+
+    async def list_training_epochs(self, run_id: UUID) -> list[asyncpg.Record]:
+        """Return all epoch results for a training run, ordered by epoch."""
+        return await self._pool.fetch(
+            """SELECT id, epoch, candidate_skill_id, eval_score, baseline_score,
+                      accepted, patch_count, created_at
+               FROM skill_training_epochs
+               WHERE run_id = $1
+               ORDER BY epoch""",
+            run_id,
+        )
