@@ -70,7 +70,7 @@ def upgrade() -> None:
     op.execute("""
         ALTER TABLE agent_skills
             ADD COLUMN IF NOT EXISTS training_mode TEXT DEFAULT NULL,
-            ADD COLUMN IF NOT EXISTS last_training_run_id UUID REFERENCES skill_training_runs(id);
+            ADD COLUMN IF NOT EXISTS last_training_run_id UUID REFERENCES skill_training_runs(id) ON DELETE SET NULL;
     """)
 
 
