@@ -122,10 +122,162 @@ async def research_digest_tick(ctx: dict) -> None:
         await arq_pool.enqueue_job("run_research_digest", str(row["workspace_id"]), config)
 
 
+async def task_run_skill_training(
+    ctx: dict,
+    run_id: str,
+    skill_id: str,
+    agent_id: str,
+    workspace_id: str,
+    config_dict: dict,
+) -> dict:
+    """Run a ReflACT training epoch for a skill.
+
+    All ID args are str (ARQ serializes UUIDs as strings).
+    Runs all epochs in config_dict['max_epochs'], stops early if accepted=True.
+    Updates skill_training_runs status throughout.
+    """
+    from uuid import UUID as _UUID
+
+    from flow.application.skill_trainer import SkillTrainer, TrainingConfig
+    from flow.infrastructure.persistence.repo import FlowRepository
+
+    pool = ctx["pool"]
+    repo = FlowRepository(pool)
+    trainer = SkillTrainer(pool)
+    config = TrainingConfig(**config_dict)
+
+    _run_id = _UUID(run_id)
+    _skill_id = _UUID(skill_id)
+    _agent_id = _UUID(agent_id)
+    _workspace_id = _UUID(workspace_id)
+
+    await repo.update_training_run(_run_id, status="running", started_at=True)
+
+    best_score = None
+    final_accepted = False
+
+    try:
+        for epoch in range(config.max_epochs):
+            await repo.update_training_run(_run_id, epoch=epoch)
+
+            result = await trainer.run_training_epoch(
+                run_id=_run_id,
+                skill_id=_skill_id,
+                agent_id=_agent_id,
+                workspace_id=_workspace_id,
+                config=config,
+                pool=pool,
+            )
+
+            await repo.insert_training_epoch(
+                run_id=_run_id,
+                epoch=epoch,
+                candidate_skill_id=result.get("candidate_skill_id"),
+                eval_score=result.get("eval_score", 0.0),
+                baseline_score=result.get("baseline_score", 0.0),
+                accepted=result.get("accepted", False),
+                patch_count=result.get("patches_applied", 0),
+            )
+
+            eval_score = result.get("eval_score", 0.0)
+            if best_score is None or eval_score > best_score:
+                best_score = eval_score
+
+            await repo.update_training_run(
+                _run_id,
+                edits_used=result.get("patches_applied", 0),
+                best_score=best_score,
+                accepted=result.get("accepted", False),
+            )
+
+            if result.get("accepted"):
+                final_accepted = True
+                # Activate the candidate skill
+                candidate_id = result.get("candidate_skill_id")
+                if candidate_id:
+                    await pool.execute(
+                        "UPDATE agent_skills SET active = true WHERE id = $1",
+                        candidate_id,
+                    )
+                    await pool.execute(
+                        "UPDATE agent_skills SET last_training_run_id = $1 WHERE id = $2",
+                        _run_id, _skill_id,
+                    )
+                break  # early stop after acceptance
+
+        await repo.update_training_run(
+            _run_id,
+            status="done",
+            accepted=final_accepted,
+            completed_at=True,
+        )
+
+    except Exception as exc:
+        logger.error("task_run_skill_training failed: run_id=%s err=%s", run_id, exc)
+        await repo.update_training_run(_run_id, status="failed", completed_at=True)
+        raise
+
+    return {"run_id": run_id, "accepted": final_accepted, "best_score": best_score}
+
+
+async def skill_training_tick(ctx: dict) -> None:
+    """Daily cron (05:00 UTC): enqueue training for skills with training_mode='react'.
+
+    Only enqueues skills not trained in the last 24 hours.
+    """
+    pool = ctx.get("pool")
+    if pool is None:
+        return
+
+    rows = await pool.fetch(
+        """
+        SELECT s.id AS skill_id, s.agent_id, s.workspace_id
+        FROM agent_skills s
+        WHERE s.training_mode = 'react'
+          AND s.active = true
+          AND (
+              s.last_training_run_id IS NULL
+              OR (
+                  SELECT completed_at FROM skill_training_runs
+                  WHERE id = s.last_training_run_id
+              ) < now() - interval '24 hours'
+          )
+        """
+    )
+
+    if not rows:
+        return
+
+    from flow.infrastructure.queue.client import get_arq_pool
+
+    arq_pool = await get_arq_pool()
+    default_config = {"edit_budget": 5, "max_epochs": 3}
+
+    for row in rows:
+        from flow.infrastructure.persistence.repo import FlowRepository
+
+        repo = FlowRepository(pool)
+        created_run_id = await repo.create_training_run(
+            skill_id=row["skill_id"],
+            agent_id=row["agent_id"],
+            workspace_id=row["workspace_id"],
+            edit_budget=default_config["edit_budget"],
+        )
+        await arq_pool.enqueue_job(
+            "run_skill_training",
+            str(created_run_id),
+            str(row["skill_id"]),
+            str(row["agent_id"]),
+            str(row["workspace_id"]),
+            default_config,
+        )
+
+
 class WorkerSettings:
     functions = [
         arq.func(task_run_deer_execution, name="run_deer_execution"),
         arq.func(task_run_research_digest, name="run_research_digest"),
+        arq.func(task_run_skill_training, name="run_skill_training"),
     ]
     cron_jobs = [
         arq.cron(scheduler_tick, minute=set(range(60)), run_at_startup=False),
@@ -134,6 +286,7 @@ class WorkerSettings:
         arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
         arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
         arq.cron(research_digest_tick, hour=8, minute=0, run_at_startup=False),
+        arq.cron(skill_training_tick, hour=5, minute=0, run_at_startup=False),
     ]
     on_startup = startup
     on_shutdown = shutdown
