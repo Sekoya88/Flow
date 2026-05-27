@@ -120,3 +120,57 @@ class SkillCatalogOut(BaseModel):
 
 class DeactivateOut(BaseModel):
     deactivated: bool
+
+
+# ── Training schemas ──────────────────────────────────────────────────────────
+
+
+class TrainingConfigIn(BaseModel):
+    agent_id: UUID
+    workspace_id: UUID
+    edit_budget: int = Field(default=5, ge=1, le=20)
+    max_epochs: int = Field(default=3, ge=1, le=10)
+    golden_set_id: UUID | None = None
+    min_val_improvement: float = Field(default=0.02, ge=0.0, le=1.0)
+
+
+class TrainingStartOut(BaseModel):
+    run_id: str
+    skill_id: str
+    status: str
+
+
+class TrainingEpochOut(BaseModel):
+    epoch: int
+    eval_score: float
+    baseline_score: float
+    accepted: bool
+    patch_count: int
+    created_at: str  # ISO format
+
+
+class TrainingRunOut(BaseModel):
+    id: str
+    status: str
+    epoch: int
+    baseline_score: float | None
+    best_score: float | None
+    accepted: bool | None
+    created_at: str  # ISO format
+
+
+class TrainingRunsOut(BaseModel):
+    runs: list[TrainingRunOut]
+
+
+class TrainingRunDetailOut(BaseModel):
+    id: str
+    status: str
+    epoch: int
+    baseline_score: float | None
+    best_score: float | None
+    accepted: bool | None
+    created_at: str
+    epochs: list[TrainingEpochOut]
+    patches_applied: int
+    patches_rejected: int

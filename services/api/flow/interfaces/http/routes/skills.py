@@ -29,6 +29,12 @@ from flow.interfaces.http.schemas import (
     SkillUsageOut,
     SkillVibeCreateIn,
     SkillVibeModifyIn,
+    TrainingConfigIn,
+    TrainingEpochOut,
+    TrainingRunDetailOut,
+    TrainingRunOut,
+    TrainingRunsOut,
+    TrainingStartOut,
 )
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"])
@@ -564,3 +570,97 @@ async def import_skill_from_gist(
         "gist_id": gist_id,
         "source_file": file_entry["filename"],
     }
+
+
+# ── Skill training ────────────────────────────────────────────────────────────
+
+
+@router.post("/{skill_id}/train", response_model=TrainingStartOut)
+async def start_skill_training(
+    skill_id: UUID,
+    body: TrainingConfigIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> TrainingStartOut:
+    """Create a training run and enqueue the ARQ job."""
+    run_id = await repo.create_training_run(
+        skill_id=skill_id,
+        agent_id=body.agent_id,
+        workspace_id=body.workspace_id,
+        edit_budget=body.edit_budget,
+    )
+    from flow.infrastructure.queue.client import get_arq_pool
+
+    arq_pool = await get_arq_pool()
+    await arq_pool.enqueue_job(
+        "run_skill_training",
+        str(run_id),
+        str(skill_id),
+        str(body.agent_id),
+        str(body.workspace_id),
+        {
+            "edit_budget": body.edit_budget,
+            "max_epochs": body.max_epochs,
+            "min_val_improvement": body.min_val_improvement,
+        },
+    )
+    return TrainingStartOut(run_id=str(run_id), skill_id=str(skill_id), status="pending")
+
+
+@router.get("/{skill_id}/training-runs", response_model=TrainingRunsOut)
+async def list_skill_training_runs(
+    skill_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> TrainingRunsOut:
+    rows = await repo.list_training_runs(skill_id)
+    runs = [
+        TrainingRunOut(
+            id=str(r["id"]),
+            status=r["status"],
+            epoch=r["epoch"],
+            baseline_score=r["baseline_score"],
+            best_score=r["best_score"],
+            accepted=r["accepted"],
+            created_at=r["created_at"].isoformat(),
+        )
+        for r in rows
+    ]
+    return TrainingRunsOut(runs=runs)
+
+
+@router.get("/{skill_id}/training-runs/{run_id}", response_model=TrainingRunDetailOut)
+async def get_skill_training_run(
+    skill_id: UUID,
+    run_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> TrainingRunDetailOut:
+    run = await repo.get_training_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    epochs = await repo.list_training_epochs(run_id)
+    epoch_outs = [
+        TrainingEpochOut(
+            epoch=e["epoch"],
+            eval_score=e["eval_score"],
+            baseline_score=e["baseline_score"],
+            accepted=e["accepted"],
+            patch_count=e["patch_count"],
+            created_at=e["created_at"].isoformat(),
+        )
+        for e in epochs
+    ]
+    patches_applied = sum(e["patch_count"] for e in epochs)
+    return TrainingRunDetailOut(
+        id=str(run["id"]),
+        status=run["status"],
+        epoch=run["epoch"],
+        baseline_score=run["baseline_score"],
+        best_score=run["best_score"],
+        accepted=run["accepted"],
+        created_at=run["created_at"].isoformat(),
+        epochs=epoch_outs,
+        patches_applied=patches_applied,
+        patches_rejected=0,
+    )
