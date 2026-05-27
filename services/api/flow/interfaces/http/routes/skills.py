@@ -588,6 +588,81 @@ async def import_skill_from_gist(
     }
 
 
+# ── Obsidian Skills import ───────────────────────────────────────────────────
+
+_OBSIDIAN_SKILLS_TREE_URL = (
+    "https://api.github.com/repos/kepano/obsidian-skills/git/trees/main?recursive=1"
+)
+_OBSIDIAN_RAW_BASE = "https://raw.githubusercontent.com/kepano/obsidian-skills/main/"
+
+
+class ObsidianSkillsImportIn(BaseModel):
+    agent_id: UUID
+    workspace_id: UUID
+    skills: list[str] | None = None  # None = import all; list of names to filter
+
+
+@router.post("/import/obsidian-skills", status_code=status.HTTP_201_CREATED)
+async def import_obsidian_skills(
+    body: ObsidianSkillsImportIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Fetch skills from kepano/obsidian-skills on GitHub and install them as Flow skills."""
+    import httpx
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if body.workspace_id not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            tree_resp = await client.get(
+                _OBSIDIAN_SKILLS_TREE_URL,
+                headers={"Accept": "application/vnd.github.v3+json"},
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub fetch failed: {exc}") from exc
+
+    if tree_resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"GitHub API error {tree_resp.status_code}")
+
+    skill_paths = [
+        item["path"]
+        for item in tree_resp.json().get("tree", [])
+        if item["path"].endswith("SKILL.md")
+    ]
+
+    if body.skills:
+        skill_paths = [p for p in skill_paths if any(s in p for s in body.skills)]
+
+    imported: list[dict] = []
+    errors: list[str] = []
+    async with httpx.AsyncClient(timeout=30) as client:
+        for path in skill_paths:
+            try:
+                r = await client.get(_OBSIDIAN_RAW_BASE + path)
+                if r.status_code != 200:
+                    errors.append(f"{path}: HTTP {r.status_code}")
+                    continue
+                content_md = r.text
+                parsed = parse_skill_md(content_md)
+                name = parsed.name if parsed.name != "unnamed" else path.split("/")[0]
+                skill_id = await repo.upsert_agent_skill(
+                    agent_id=body.agent_id,
+                    workspace_id=body.workspace_id,
+                    name=name,
+                    content_md=content_md,
+                    category=parsed.category or "Obsidian",
+                    initial_active=True,
+                )
+                imported.append({"id": str(skill_id), "name": name})
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{path}: {exc}")
+
+    return {"imported_count": len(imported), "skills": imported, "errors": errors}
+
+
 # ── Skill training ────────────────────────────────────────────────────────────
 
 
