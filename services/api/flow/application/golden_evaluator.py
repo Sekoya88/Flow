@@ -1,6 +1,6 @@
 """LLM-judge evaluator for golden set items.
 
-Uses gpt-5.4-mini to score actual vs expected output on a 0.0–1.0 scale.
+Uses gpt-4o-mini to score actual vs expected output on a 0.0–1.0 scale.
 
 Evaluation flow:
   1. For each golden item, invoke the agent's own LLM with its system prompt.
@@ -51,7 +51,9 @@ async def judge_single(
 ) -> dict[str, Any]:
     """Score one golden item. Returns {"score": float, "rationale": str}."""
     if client is None:
-        client = AsyncOpenAI()
+        client = AsyncOpenAI(
+            api_key=os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        )
 
     criteria_block = f"\nScoring criteria: {scoring_criteria}" if scoring_criteria else ""
     user_content = f"""\
@@ -66,7 +68,7 @@ Actual answer:
 
     try:
         resp = await client.chat.completions.create(
-            model="gpt-5.4-mini",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": _JUDGE_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -92,6 +94,7 @@ async def run_agent_on_item(
     *,
     openai_api_key: str | None = None,
     anthropic_api_key: str | None = None,
+    langsmith_extra: dict[str, Any] | None = None,
 ) -> str:
     """Invoke the agent's own LLM on a single golden item input.
 
@@ -99,6 +102,7 @@ async def run_agent_on_item(
     Returns the model text response.
     """
     from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.runnables import RunnableConfig
 
     from flow.infrastructure.llm.providers import get_chat_model
 
@@ -117,8 +121,10 @@ async def run_agent_on_item(
         messages.append(SystemMessage(content=system_prompt))
     messages.append(HumanMessage(content=input_text))
 
+    invoke_config = RunnableConfig(metadata=langsmith_extra) if langsmith_extra else None
+
     try:
-        result = await llm.ainvoke(messages)
+        result = await llm.ainvoke(messages, config=invoke_config)
         return str(result.content)
     except Exception as exc:
         logger.warning("run_agent_on_item failed: %s", exc)
@@ -150,7 +156,7 @@ async def evaluate_golden_set(
         client = AsyncOpenAI(api_key=openai_api_key or os.environ.get("FLOW_OPENAI_API_KEY"))
 
     run_id = eval_run_id or uuid4()
-    effective_llm_config = llm_config or {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
+    effective_llm_config = llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
 
     items = await pool.fetch(
         """
@@ -295,7 +301,7 @@ async def auto_eval_tick(ctx: dict) -> None:
                 user_id=user_id,
                 client=client,
                 system_prompt=system_prompt,
-                llm_config=llm_config or {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
+                llm_config=llm_config or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
                 openai_api_key=openai_key,
             )
             candidate_id_str = result.get("candidate_version_id")
