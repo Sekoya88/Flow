@@ -6,7 +6,7 @@ the expected shape for type checkers without runtime overhead.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, TypedDict
+from typing import TypedDict
 from uuid import UUID
 
 
@@ -38,7 +38,7 @@ class DigestPaperRecord(TypedDict):
     summary_md: str | None
     obsidian_path: str | None
     status: str
-    published_at: str | None
+    published_at: datetime | None
     digest_run_id: UUID | None
 
 
@@ -49,7 +49,6 @@ class TrainingRunRecord(TypedDict):
     skill_name: str
     status: str            # "pending" | "running" | "done" | "failed"
     best_score: float | None
-    epochs: list[Any]      # JSONB epoch results
     error_message: str | None
     created_at: datetime
     completed_at: datetime | None
