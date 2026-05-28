@@ -152,6 +152,7 @@ async def test_list_training_runs_returns_runs(app):
         "best_score": 0.82,
         "accepted": True,
         "created_at": _TS,
+        "error_message": None,
     }[k]
 
     repo = _make_repo_mock()
@@ -212,6 +213,7 @@ async def test_get_training_run_detail_returns_run_with_epochs(app):
         best_score=0.75,
         accepted=True,
         created_at=_TS,
+        error_message=None,
     )
     epoch_row = _row(
         epoch=1,
