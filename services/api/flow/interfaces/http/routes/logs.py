@@ -108,6 +108,98 @@ async def list_logs(
     }
 
 
+@router.get("/training")
+async def list_training_logs(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = Query(50, ge=1, le=200),
+    skill_id: UUID | None = Query(None),
+) -> dict:
+    """Return recent skill training runs."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if not ws_rows:
+        return {"runs": []}
+    ws_id = ws_rows[0]["id"]
+
+    skill_filter = "AND str.skill_id = $3" if skill_id else ""
+    params: list = [ws_id, limit]
+    if skill_id:
+        params.append(skill_id)
+
+    rows = await repo._pool.fetch(
+        f"""
+        SELECT
+            str.id,
+            str.skill_id,
+            s.name AS skill_name,
+            str.status,
+            str.best_score,
+            str.epoch,
+            str.error_message,
+            str.created_at,
+            str.completed_at,
+            COALESCE(EXTRACT(EPOCH FROM (str.completed_at - str.created_at)) * 1000, 0) AS duration_ms
+        FROM skill_training_runs str
+        JOIN agent_skills s ON s.id = str.skill_id
+        JOIN agents a ON a.id = s.agent_id
+        WHERE a.workspace_id = $1
+          {skill_filter}
+        ORDER BY str.created_at DESC
+        LIMIT $2
+        """,
+        *params,
+    )
+
+    return {
+        "runs": [
+            {
+                "id": str(r["id"]),
+                "skill_id": str(r["skill_id"]),
+                "skill_name": r["skill_name"] or "unknown",
+                "status": r["status"],
+                "best_score": float(r["best_score"]) if r["best_score"] is not None else None,
+                "epoch": r["epoch"],
+                "error_message": r["error_message"],
+                "created_at": r["created_at"].isoformat(),
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+                "duration_ms": int(r["duration_ms"]) if r["duration_ms"] is not None else 0,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/research")
+async def list_research_logs(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """Return recent research digest runs."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if not ws_rows:
+        return {"runs": []}
+    ws_id = ws_rows[0]["id"]
+
+    rows = await repo.list_digest_runs(ws_id, limit=limit)
+
+    return {
+        "runs": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "source": r["source"],
+                "paper_count": r["paper_count"],
+                "error": r["error"],
+                "started_at": r["started_at"].isoformat(),
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+                "duration_ms": int(r["duration_ms"]) if r["duration_ms"] is not None else 0,
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/{execution_id}")
 async def get_log_detail(
     execution_id: UUID,
