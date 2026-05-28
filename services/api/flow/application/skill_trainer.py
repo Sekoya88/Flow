@@ -476,7 +476,7 @@ class SkillTrainer:
             await _emit(_pool, run_id, "reflect", "patch_proposed",
                 f"{p.op.upper()} `{p.target}` (impact: {p.impact_score:.2f})",
                 {"op": p.op, "target": p.target,
-                 "content": p.content[:200], "impact_score": p.impact_score})
+                 "content": p.content[:500], "impact_score": p.impact_score})
 
         # 7. Aggregate + Select — track count before capping for patches_rejected
         raw_patch_count = len(patches)

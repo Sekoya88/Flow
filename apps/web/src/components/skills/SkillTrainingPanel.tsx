@@ -232,6 +232,43 @@ function SkillDiff({ original, candidate }: { original: string; candidate: strin
   )
 }
 
+function PatchItem({ p }: { p: TrainingPatch }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className={cn(
+      "rounded border px-2 py-1.5 text-[10px]",
+      p.applied ? "border-emerald-500/20 bg-emerald-500/5" :
+      p.rejected ? "border-red-500/20 bg-red-500/5" :
+      "border-flow-800 bg-flow-900"
+    )}>
+      <button
+        className="flex w-full items-center gap-1.5 text-left"
+        onClick={() => p.content && setExpanded(x => !x)}
+      >
+        <span className={cn(
+          "rounded px-1 py-px font-mono text-[9px] font-bold uppercase shrink-0",
+          p.op === 'replace' ? "bg-amber-500/20 text-amber-400" :
+          p.op === 'append' ? "bg-blue-500/20 text-blue-400" :
+          p.op === 'insert' ? "bg-emerald-500/20 text-emerald-400" :
+          "bg-red-500/20 text-red-400"
+        )}>{p.op}</span>
+        <span className="font-mono text-flow-400 truncate flex-1">{p.target}</span>
+        {p.impact_score != null && (
+          <span className="shrink-0 font-mono text-[9px] text-flow-600">{p.impact_score.toFixed(2)}</span>
+        )}
+        {p.content && (
+          <span className="shrink-0 text-flow-700 ml-1">{expanded ? '▲' : '▼'}</span>
+        )}
+      </button>
+      {expanded && p.content && (
+        <pre className="mt-1.5 overflow-x-auto rounded border border-flow-800 bg-flow-950 p-2 font-mono text-[10px] leading-relaxed text-flow-300 whitespace-pre-wrap break-words">
+          {p.content}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 function PatchList({ patches }: { patches: TrainingPatch[] }) {
   if (patches.length === 0) return null
   const applied = patches.filter(p => p.applied)
@@ -241,31 +278,7 @@ function PatchList({ patches }: { patches: TrainingPatch[] }) {
       <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-flow-500">
         Patches · {applied.length} applied · {rejected.length} rejected
       </p>
-      {patches.map((p, i) => (
-        <div key={i} className={cn(
-          "rounded border px-2 py-1.5 text-[10px]",
-          p.applied ? "border-emerald-500/20 bg-emerald-500/5" :
-          p.rejected ? "border-red-500/20 bg-red-500/5" :
-          "border-flow-800 bg-flow-900"
-        )}>
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className={cn(
-              "rounded px-1 py-px font-mono text-[9px] font-bold uppercase",
-              p.op === 'replace' ? "bg-amber-500/20 text-amber-400" :
-              p.op === 'append' ? "bg-blue-500/20 text-blue-400" :
-              p.op === 'insert' ? "bg-emerald-500/20 text-emerald-400" :
-              "bg-red-500/20 text-red-400"
-            )}>{p.op}</span>
-            <span className="font-mono text-flow-400 truncate">{p.target}</span>
-            {p.impact_score != null && (
-              <span className="ml-auto shrink-0 font-mono text-[9px] text-flow-600">{p.impact_score.toFixed(2)}</span>
-            )}
-          </div>
-          {p.content && (
-            <p className="font-mono text-[10px] leading-relaxed text-flow-500 line-clamp-2 break-all">{p.content}</p>
-          )}
-        </div>
-      ))}
+      {patches.map((p, i) => <PatchItem key={i} p={p} />)}
     </div>
   )
 }

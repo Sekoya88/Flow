@@ -1067,12 +1067,17 @@ async def get_skill_training_run(
     # Fetch original skill content
     original_content = await repo.get_skill_content(skill_id)
 
-    # Fetch candidate skill content from the best accepted epoch
+    # Fetch candidate skill content — accepted first, fall back to any epoch with a candidate
     candidate_content: str | None = None
     for ep in reversed(epochs):
         if ep["accepted"] and ep["candidate_skill_id"]:
             candidate_content = await repo.get_skill_content(ep["candidate_skill_id"])
             break
+    if candidate_content is None:
+        for ep in reversed(epochs):
+            if ep["candidate_skill_id"]:
+                candidate_content = await repo.get_skill_content(ep["candidate_skill_id"])
+                break
 
     return TrainingRunDetailOut(
         id=str(run["id"]),
