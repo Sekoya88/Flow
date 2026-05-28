@@ -16,7 +16,7 @@ from flow.application.skill_parser import parse_skill_md
 
 
 def _build_skill_llm(settings: Any) -> Any | None:
-    """Anthropic Haiku → OpenAI gpt-5.4-mini → None. Mirrors persona_service."""
+    """Anthropic Haiku → OpenAI gpt-4o-mini → None. Mirrors persona_service."""
     if getattr(settings, "anthropic_api_key", None):
         try:
             from langchain_anthropic import ChatAnthropic
@@ -33,7 +33,7 @@ def _build_skill_llm(settings: Any) -> Any | None:
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model="gpt-5.4-mini",
+                model="gpt-4o-mini",
                 api_key=settings.openai_api_key,
                 streaming=True,
             )

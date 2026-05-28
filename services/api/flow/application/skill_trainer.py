@@ -92,6 +92,8 @@ class SkillTrainer:
         self,
         skill_content_md: str,
         items: list[dict],
+        *,
+        langsmith_extra: dict | None = None,
     ) -> list[dict]:
         """Run agent on golden items; return scored results.
 
@@ -103,7 +105,8 @@ class SkillTrainer:
             actual = await run_agent_on_item(
                 input_text=item["input_text"],
                 system_prompt=skill_content_md,
-                llm_config={"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
+                llm_config={"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
+                langsmith_extra=langsmith_extra,
             )
             judgment = await judge_single(
                 input_text=item["input_text"],
@@ -168,7 +171,7 @@ class SkillTrainer:
 
         try:
             resp = await client.chat.completions.create(
-                model="gpt-5.4-mini",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": _REFLECT_SYSTEM},
                     {"role": "user", "content": user_content},
@@ -350,7 +353,11 @@ class SkillTrainer:
 
         # 2. Get baseline score (last golden eval for this skill, or 0.0 if none)
         baseline_row = await _pool.fetchrow(
-            "SELECT AVG(score) as avg FROM golden_results WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 50",
+            """
+            SELECT AVG(score) AS avg
+            FROM (SELECT score FROM golden_results WHERE agent_id = $1
+                  ORDER BY created_at DESC LIMIT 50) recent
+            """,
             agent_id,
         )
         baseline_score = float(baseline_row["avg"] or 0.0) if baseline_row else 0.0
@@ -392,7 +399,17 @@ class SkillTrainer:
             effective_golden_set_id,
             config.mini_batch_size,
         )
-        rollout_results = await self._stage_rollout(skill_row["content_md"], list(items))
+        rollout_results = await self._stage_rollout(
+            skill_row["content_md"],
+            list(items),
+            langsmith_extra={
+                "kind": "skill_training",
+                "run_id": str(run_id),
+                "skill_id": str(skill_id),
+                "agent_id": str(agent_id),
+                "workspace_id": str(workspace_id),
+            },
+        )
         failures = [r for r in rollout_results if r["score"] < 0.7]
 
         if not failures:

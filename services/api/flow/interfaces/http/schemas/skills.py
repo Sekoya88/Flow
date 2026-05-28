@@ -161,6 +161,7 @@ class TrainingRunOut(BaseModel):
     best_score: float | None
     accepted: bool | None
     created_at: str  # ISO format
+    error_message: str | None = None
 
 
 class TrainingRunsOut(BaseModel):
