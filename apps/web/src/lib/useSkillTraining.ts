@@ -19,6 +19,7 @@ export interface TrainingRun {
   best_score: number | null
   accepted: boolean | null
   created_at: string
+  error_message?: string | null
   epochs?: TrainingEpoch[]
   patches_applied?: number
   patches_rejected?: number

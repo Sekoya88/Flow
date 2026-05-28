@@ -8,6 +8,7 @@ import {
   Brain,
   CalendarClock,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   MessageSquare,
@@ -22,6 +23,7 @@ import {
   Wand2,
   Workflow,
   CheckCircle,
+  X,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -68,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const setWorkspaces = useStore((s) => s.setWorkspaces);
   const setUser = useStore((s) => s.setUser);
+  const activeTask = useStore((s) => s.activeTask);
 
   useEffect(() => {
     apiFetch<{ user: { id: string; email: string }; workspaces: { id: string; name: string }[] }>(
@@ -117,6 +120,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
+          {activeTask && (
+            <Link
+              href={activeTask.href}
+              className="hidden md:flex items-center gap-1.5 rounded-full border border-flow-violet/30 bg-flow-violet/10 px-2.5 py-0.5 font-mono text-[10px] text-flow-violet animate-pulse hover:bg-flow-violet/20 transition-colors"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {activeTask.label}
+            </Link>
+          )}
           <button
             type="button"
             aria-label="Open command palette (⌘K)"
@@ -247,6 +259,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-flow-800 bg-flow-950 py-3 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-flow-600">
         Flow · agent workspace
       </footer>
+
+      <FloatingTaskIndicator />
+    </div>
+  );
+}
+
+function FloatingTaskIndicator() {
+  const activeTask = useStore((s) => s.activeTask);
+  const setActiveTask = useStore((s) => s.setActiveTask);
+  if (!activeTask) return null;
+  return (
+    <div className="fixed bottom-6 right-5 z-50 flex items-center gap-3 rounded-full border border-flow-violet/40 bg-flow-950/95 px-4 py-2.5 shadow-xl shadow-flow-violet/10 backdrop-blur-md animate-fade-in">
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-flow-violet shrink-0" />
+      <Link
+        href={activeTask.href}
+        className="font-mono text-xs text-flow-200 hover:text-flow-50 transition-colors"
+      >
+        {activeTask.label}
+      </Link>
+      <button
+        onClick={() => setActiveTask(null)}
+        aria-label="Dismiss"
+        className="ml-0.5 rounded-full p-0.5 text-flow-600 hover:text-flow-300 transition-colors"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 }
