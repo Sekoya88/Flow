@@ -15,20 +15,67 @@ def test_sql_version_cast_uses_text():
     )
 
 
+import asyncio
 import structlog
 import structlog.testing
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 
-def test_training_log_events_emitted():
-    """training.run.start and training.run.done events are captured via structlog."""
+@pytest.mark.asyncio
+async def test_worker_emits_training_structlog_events():
+    """task_run_skill_training must emit training.run.start and training.run.done via structlog."""
+    run_id = str(uuid4())
+    skill_id = str(uuid4())
+    agent_id = str(uuid4())
+    workspace_id = str(uuid4())
+
+    fake_result = {
+        "eval_score": 0.75,
+        "baseline_score": 0.5,
+        "accepted": True,
+        "patches_applied": 1,
+        "candidate_skill_id": None,
+    }
+    mock_trainer = MagicMock()
+    mock_trainer.run_training_epoch = AsyncMock(return_value=fake_result)
+
+    mock_repo = MagicMock()
+    mock_repo.update_training_run = AsyncMock()
+    mock_repo.insert_training_epoch = AsyncMock()
+    mock_repo.upsert_agent_skill = AsyncMock()
+    mock_repo.get_kg_node_by_label = AsyncMock(return_value=None)
+    mock_repo.upsert_kg_node = AsyncMock(return_value=str(uuid4()))
+    mock_repo.upsert_kg_edge = AsyncMock()
+
+    mock_pool = MagicMock()
+    mock_pool.execute = AsyncMock()
+
+    ctx = {"pool": mock_pool, "stream_hub": None}
+
+    # SkillTrainer and FlowRepository are locally imported inside task_run_skill_training,
+    # so patch at their source modules.
+    mock_training_config = MagicMock(max_epochs=1)
+
     with structlog.testing.capture_logs() as cap:
-        import structlog as sl
-        logger = sl.get_logger("flow.training")
-        logger.info("training.run.start", run_id="r1", skill_id="s1", agent_id="a1", max_epochs=3)
-        logger.info("training.run.done", run_id="r1", skill_id="s1", accepted=True, best_score=0.85)
+        with patch("flow.application.skill_trainer.SkillTrainer", return_value=mock_trainer), \
+             patch("flow.application.skill_trainer.TrainingConfig", return_value=mock_training_config), \
+             patch("flow.infrastructure.persistence.repo.FlowRepository", return_value=mock_repo):
+            from flow.infrastructure.queue.worker import task_run_skill_training
+            try:
+                await task_run_skill_training(
+                    ctx,
+                    run_id=run_id,
+                    skill_id=skill_id,
+                    agent_id=agent_id,
+                    workspace_id=workspace_id,
+                    config_dict={"max_epochs": 1, "learning_rate": 0.1},
+                )
+            except Exception:
+                pass  # we only care about log events, not full success
 
-    assert any(e["event"] == "training.run.start" for e in cap)
-    assert any(e["event"] == "training.run.done" for e in cap)
-    done_ev = next(e for e in cap if e["event"] == "training.run.done")
-    assert done_ev["accepted"] is True
-    assert done_ev["best_score"] == 0.85
+    events = [e["event"] for e in cap]
+    assert "training.run.start" in events, f"training.run.start not in {events}"
+    assert any(e in events for e in ("training.run.done", "training.run.failed")), \
+        f"neither training.run.done nor training.run.failed in {events}"

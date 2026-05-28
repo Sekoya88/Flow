@@ -254,7 +254,7 @@ async def task_run_skill_training(
                                 metadata={"trigger": "reflact", "epoch": epoch},
                             )
                     except Exception as _kg_exc:
-                        logger.warning("skill training KG update failed: %s", _kg_exc)
+                        _train_log.warning("training.kg_update.failed", run_id=run_id, error=str(_kg_exc))
                     # Genome snapshot
                     try:
                         from flow.application.genome_service import snapshot_genome
@@ -267,7 +267,7 @@ async def task_run_skill_training(
                             version_label=f"reflact-{run_id[:8]}",
                         )
                     except Exception as _snap_exc:
-                        logger.warning("skill training genome snapshot failed: %s", _snap_exc)
+                        _train_log.warning("training.genome_snapshot.failed", run_id=run_id, error=str(_snap_exc))
                 break  # early stop after acceptance
 
         await repo.update_training_run(
@@ -284,7 +284,6 @@ async def task_run_skill_training(
             })
 
     except Exception as exc:
-        logger.error("task_run_skill_training failed: run_id=%s err=%s", run_id, exc)
         _train_log.error("training.run.failed", run_id=run_id, skill_id=skill_id, error=str(exc))
         await repo.update_training_run(_run_id, status="failed", error_message=str(exc), completed_at=True)
         if stream_hub:
