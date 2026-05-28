@@ -7,12 +7,15 @@ import json
 from typing import Any, TypedDict
 from uuid import UUID
 
+import asyncpg
 import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
+from flow.infrastructure.observability.callbacks import FlowCallbackHandler
 from flow.infrastructure.observability.logging import get_logger
+from flow.infrastructure.persistence.repo import FlowRepository
 
 logger = get_logger(__name__)
 
@@ -26,6 +29,7 @@ class DigestState(TypedDict):
     obsidian_notes: list[dict]
     persisted_ids: list[str]
     stream_hub: Any  # Optional[ExecutionStreamHub] — in-memory only, no checkpointer
+    digest_run_id: str | None  # UUID str of the digest_runs row for this run
 
 
 # ── Node 1: fetch_sources ─────────────────────────────────────────────────────
@@ -431,11 +435,10 @@ tags:
 
 
 async def persist(state: DigestState) -> dict:
-    import asyncpg
-
     from flow.config import get_settings
 
     workspace_id = state["workspace_id"]
+    digest_run_id_val = state.get("digest_run_id")
     settings = get_settings()
     pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
 
@@ -450,12 +453,13 @@ async def persist(state: DigestState) -> dict:
                 INSERT INTO digest_papers
                     (workspace_id, title, abstract, source_url, arxiv_id,
                      authors, categories, relevance_score, tldr, key_insights,
-                     summary_md, obsidian_path, status, published_at)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13)
+                     summary_md, obsidian_path, status, published_at, digest_run_id)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13,$14)
                 ON CONFLICT (workspace_id, title) DO UPDATE SET
                     tldr = COALESCE(EXCLUDED.tldr, digest_papers.tldr),
                     key_insights = COALESCE(EXCLUDED.key_insights, digest_papers.key_insights),
                     relevance_score = EXCLUDED.relevance_score,
+                    digest_run_id = EXCLUDED.digest_run_id,
                     status = 'unread'
                 RETURNING id
                 """,
@@ -472,6 +476,7 @@ async def persist(state: DigestState) -> dict:
                 note["content"],
                 note["path"],
                 paper.get("published_at"),
+                UUID(digest_run_id_val) if digest_run_id_val else None,
             )
             if row:
                 persisted_ids.append(str(row["id"]))
@@ -566,26 +571,61 @@ def build_research_digest_graph():
 
 
 async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) -> dict:
+    from flow.config import get_settings
+
     if stream_hub is not None:
         await stream_hub.publish_global(workspace_id, "digest.start", {"workspace_id": workspace_id})
 
-    graph = build_research_digest_graph()
-    initial: DigestState = {
-        "workspace_id": workspace_id,
-        "config": config,
-        "raw_papers": [],
-        "filtered_papers": [],
-        "enriched_papers": [],
-        "obsidian_notes": [],
-        "persisted_ids": [],
-        "stream_hub": stream_hub,
-    }
+    settings = get_settings()
+    pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
+    repo = FlowRepository(pool)
+
+    run_id: UUID | None = None
     result: dict = {}
+    error_exc: Exception | None = None
     try:
-        result = await graph.ainvoke(initial)
-    except Exception:
+        run_id = await repo.create_digest_run(
+            UUID(workspace_id),
+            source=config.get("source") or "arxiv",
+        )
+
+        graph = build_research_digest_graph()
+        initial: DigestState = {
+            "workspace_id": workspace_id,
+            "config": config,
+            "raw_papers": [],
+            "filtered_papers": [],
+            "enriched_papers": [],
+            "obsidian_notes": [],
+            "persisted_ids": [],
+            "stream_hub": stream_hub,
+            "digest_run_id": str(run_id),
+        }
+        run_config = RunnableConfig(callbacks=[FlowCallbackHandler(workspace_id=workspace_id)])
+        result = await graph.ainvoke(initial, config=run_config)
+
+        if run_id is not None:
+            await repo.update_digest_run(
+                run_id,
+                status="done",
+                paper_count=len(result.get("persisted_ids", [])),
+                completed_at=True,
+            )
+    except Exception as e:
+        error_exc = e
         logger.exception("digest.run.failed", workspace_id=workspace_id)
+        if run_id is not None:
+            try:
+                await repo.update_digest_run(
+                    run_id,
+                    status="failed",
+                    error=str(e),
+                    completed_at=True,
+                )
+            except Exception:
+                logger.warning("digest.run.update_failed_status_error")
     finally:
+        await pool.close()
         persisted = len(result.get("persisted_ids", []))
         if stream_hub is not None:
             await stream_hub.publish_global(
