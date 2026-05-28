@@ -104,6 +104,7 @@ from flow.interfaces.http.schemas.schedules import (
 )
 from flow.interfaces.http.schemas.skills import (
     DeactivateOut,
+    PatchOut,
     SkillActivateOut,
     SkillCatalogItemOut,
     SkillCatalogOut,
@@ -227,6 +228,7 @@ __all__ = [
     "TrainingRunOut",
     "TrainingRunsOut",
     "TrainingRunDetailOut",
+    "PatchOut",
     # ab_tests
     "ABTestCreateIn",
     "ABTestResultItem",
