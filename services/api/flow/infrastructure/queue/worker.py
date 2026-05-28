@@ -163,7 +163,6 @@ async def task_run_skill_training(
         def _start_ls_run() -> None:
             nonlocal _ls_run_id
             try:
-                import uuid as _uuid
                 ls_run = _ls_client.create_run(
                     name=f"training/{run_id[:8]}",
                     run_type="chain",
