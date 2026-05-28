@@ -1018,6 +1018,42 @@ async def seed_workspace(pool: asyncpg.Pool, workspace_id: uuid.UUID, *, prune: 
 
     logger.info("seed.done", agents=len(seeded_agents), golden_sets=len(GOLDEN_SETS))
 
+    # ── Research project seed ──────────────────────────────────────────────────
+    await seed_research_projects(pool, workspace_id)
+
+
+async def seed_research_projects(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> None:
+    """Create default thesis research project if it doesn't exist."""
+    existing = await pool.fetchrow(
+        "SELECT id FROM research_projects WHERE workspace_id = $1 AND name = $2",
+        workspace_id,
+        "PhD — LLM × Sport & Coaching",
+    )
+    if existing:
+        logger.info("research_project.exists", name="PhD — LLM × Sport & Coaching")
+        return
+
+    await pool.execute(
+        """INSERT INTO research_projects
+           (id, workspace_id, name, goal, arxiv_categories, source_urls, cadence_cron, kg_namespace, enabled)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+        uuid.uuid4(),
+        workspace_id,
+        "PhD — LLM × Sport & Coaching",
+        (
+            "Track research on large language models applied to sports coaching, athletic performance, "
+            "human-AI interaction in sport, and agentic AI systems for coaching support. "
+            "Focus: LLM agents, reinforcement learning from feedback, multimodal performance analysis, "
+            "and AI-assisted decision-making in athletics."
+        ),
+        ["cs.AI", "cs.HC", "cs.LG", "cs.MA", "q-bio.QM"],
+        [],
+        "0 8 * * 1",  # Weekly Monday 8am
+        "sport-coaching",
+        True,
+    )
+    logger.info("research_project.created", name="PhD — LLM × Sport & Coaching")
+
 
 async def seed(pool: asyncpg.Pool, *, prune: bool = False) -> None:
     workspaces = await pool.fetch("SELECT id FROM workspaces")
