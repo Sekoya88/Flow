@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Bot,
   BookOpen,
+  BrainCircuit,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -18,6 +19,7 @@ import {
   Radio,
   Sparkles,
   Terminal,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +78,13 @@ type TimelineEvent = {
   message?: string;
 };
 
+type SkillUsed = {
+  skill_id: string;
+  skill_name: string;
+  matched_text: string | null;
+  created_at: string;
+};
+
 type LogDetail = {
   id: string;
   agent_name: string;
@@ -86,6 +95,7 @@ type LogDetail = {
   completed_at: string | null;
   duration_ms: number | null;
   timeline: TimelineEvent[];
+  skills_used: SkillUsed[];
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -116,16 +126,17 @@ function timeAgo(iso: string): string {
 // ── Event kind config ─────────────────────────────────────────────────
 
 const EVENT_KINDS: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
-  node_update:  { icon: Zap,          color: "text-blue-400",    label: "Node" },
-  tool_call:    { icon: Code2,         color: "text-amber-400",   label: "Tool" },
-  "llm.start":  { icon: Radio,         color: "text-violet-400",  label: "LLM" },
-  llm_start:    { icon: Radio,         color: "text-violet-400",  label: "LLM" },
-  "llm.end":    { icon: Radio,         color: "text-violet-300",  label: "LLM" },
-  llm_end:      { icon: Radio,         color: "text-violet-300",  label: "LLM" },
-  final:        { icon: CheckCircle2,  color: "text-emerald-400", label: "Final" },
-  error:        { icon: AlertTriangle, color: "text-red-400",     label: "Error" },
-  token:        { icon: Terminal,      color: "text-muted-foreground", label: "Token" },
-  citations:    { icon: MessageSquare, color: "text-sky-400",     label: "Citations" },
+  node_update:    { icon: Zap,           color: "text-blue-400",     label: "Node" },
+  tool_call:      { icon: Code2,          color: "text-amber-400",    label: "Tool" },
+  "llm.start":    { icon: Radio,          color: "text-violet-400",   label: "LLM" },
+  llm_start:      { icon: Radio,          color: "text-violet-400",   label: "LLM" },
+  "llm.end":      { icon: Radio,          color: "text-violet-300",   label: "LLM" },
+  llm_end:        { icon: Radio,          color: "text-violet-300",   label: "LLM" },
+  final:          { icon: CheckCircle2,   color: "text-emerald-400",  label: "Final" },
+  error:          { icon: AlertTriangle,  color: "text-red-400",      label: "Error" },
+  token:          { icon: Terminal,       color: "text-muted-foreground", label: "Token" },
+  citations:      { icon: MessageSquare,  color: "text-sky-400",      label: "Citations" },
+  skill_invoked:  { icon: Sparkles,       color: "text-flow-violet",  label: "Skill" },
 };
 
 // ── Status badge ──────────────────────────────────────────────────────
@@ -210,6 +221,26 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
 
   return (
     <div className="border-t border-border/30 bg-muted/10">
+      {/* Skills used */}
+      {detail.skills_used?.length > 0 && (
+        <div className="px-3 py-2 border-b border-border/20">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-flow-violet/70 mb-1.5 flex items-center gap-1">
+            <Sparkles className="h-3 w-3" />
+            Skills invoked ({detail.skills_used.length})
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {detail.skills_used.map((s) => (
+              <span
+                key={s.skill_id}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] bg-flow-violet/10 border border-flow-violet/20 text-flow-violet font-mono"
+              >
+                <Sparkles className="h-2.5 w-2.5" />
+                {s.skill_name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Answer preview */}
       {detail.timeline.find(e => e.kind === "final")?.answer && (
         <div className="px-3 py-2 border-b border-border/20">
@@ -328,16 +359,22 @@ type LiveEvent = {
 };
 
 const LIVE_KIND_CONFIG: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
-  "digest.start":         { icon: BookOpen,     color: "text-violet-400",  label: "Digest started" },
-  "digest.fetch_done":    { icon: BookOpen,     color: "text-sky-400",     label: "Papers fetched" },
-  "digest.scoring":       { icon: Zap,          color: "text-amber-400",   label: "Scoring relevance" },
-  "digest.filter_done":   { icon: Zap,          color: "text-amber-400",   label: "Papers filtered" },
-  "digest.summarize_done":{ icon: Sparkles,     color: "text-violet-400",  label: "Papers summarized" },
-  "digest.persist_done":  { icon: CheckCircle2, color: "text-emerald-400", label: "Papers saved" },
-  "digest.complete":      { icon: CheckCircle2, color: "text-emerald-400", label: "Digest complete" },
-  "knowledge.ingest":     { icon: BookOpen,     color: "text-sky-400",     label: "Knowledge ingested" },
-  "execution.start":      { icon: Activity,     color: "text-blue-400",    label: "Execution started" },
-  "execution.done":       { icon: CheckCircle2, color: "text-emerald-400", label: "Execution done" },
+  "digest.start":           { icon: BookOpen,     color: "text-violet-400",  label: "Digest started" },
+  "digest.fetch_done":      { icon: BookOpen,     color: "text-sky-400",     label: "Papers fetched" },
+  "digest.scoring":         { icon: Zap,          color: "text-amber-400",   label: "Scoring relevance" },
+  "digest.filter_done":     { icon: Zap,          color: "text-amber-400",   label: "Papers filtered" },
+  "digest.summarize_done":  { icon: Sparkles,     color: "text-violet-400",  label: "Papers summarized" },
+  "digest.persist_done":    { icon: CheckCircle2, color: "text-emerald-400", label: "Papers saved" },
+  "digest.complete":        { icon: CheckCircle2, color: "text-emerald-400", label: "Digest complete" },
+  "knowledge.ingest":       { icon: BookOpen,     color: "text-sky-400",     label: "Knowledge ingested" },
+  "execution.start":        { icon: Activity,     color: "text-blue-400",    label: "Execution started" },
+  "execution.done":         { icon: CheckCircle2, color: "text-emerald-400", label: "Execution done" },
+  "skill.training.started": { icon: BrainCircuit, color: "text-flow-violet", label: "Training started" },
+  "skill.training.epoch":   { icon: TrendingUp,   color: "text-amber-400",   label: "Training epoch" },
+  "skill.training.done":    { icon: CheckCircle2, color: "text-emerald-400", label: "Training done" },
+  "skill.training.failed":  { icon: AlertTriangle,color: "text-red-400",     label: "Training failed" },
+  "eval.started":           { icon: Zap,          color: "text-sky-400",     label: "Eval started" },
+  "eval.done":              { icon: CheckCircle2, color: "text-violet-400",  label: "Eval complete" },
 };
 
 function LiveFeed({ wsId }: { wsId: string }) {
@@ -400,6 +437,22 @@ function LiveFeed({ wsId }: { wsId: string }) {
     if (ev.kind === "digest.complete") {
       return `${rest.persisted ?? 0} persisted / ${rest.filtered ?? 0} filtered / ${rest.fetched ?? 0} fetched`;
     }
+    if (ev.kind === "skill.training.epoch") {
+      const score = typeof rest.eval_score === "number" ? rest.eval_score.toFixed(3) : "—";
+      const accepted = rest.accepted ? " ✓ accepted" : "";
+      return `epoch ${rest.epoch ?? "?"} · score ${score}${accepted}`;
+    }
+    if (ev.kind === "skill.training.done") {
+      const score = typeof rest.best_score === "number" ? rest.best_score.toFixed(3) : "—";
+      return `best ${score} · ${rest.accepted ? "accepted ✓" : "rejected"}`;
+    }
+    if (ev.kind === "eval.started") {
+      return `${rest.total ?? "?"} items · model ${rest.model ?? ""}`;
+    }
+    if (ev.kind === "eval.done") {
+      const pct = typeof rest.pass_rate === "number" ? `${(rest.pass_rate * 100).toFixed(0)}%` : "—";
+      return `pass ${pct} · avg ${typeof rest.avg_score === "number" ? rest.avg_score.toFixed(3) : "—"} · ${rest.scored ?? rest.total ?? "?"} items`;
+    }
     const vals = Object.entries(rest)
       .filter(([k]) => k !== "workspace_id")
       .map(([k, v]) => `${k}: ${v}`)
@@ -458,13 +511,42 @@ function LiveFeed({ wsId }: { wsId: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────
 
+type TrainingRunRow = {
+  id: string;
+  status: string;
+  epoch: number;
+  baseline_score: number | null;
+  best_score: number | null;
+  accepted: boolean;
+  created_at: string;
+  completed_at: string | null;
+  skill_id: string;
+  skill_name: string;
+  agent_id: string;
+  agent_name: string;
+};
+
 export default function LogsPage() {
   const wsId = useStore((s) => s.workspaces[0]?.id ?? "");
-  const [activeTab, setActiveTab] = useState<"executions" | "live">("executions");
+  const [activeTab, setActiveTab] = useState<"executions" | "training" | "live">("executions");
   const [status, setStatus] = useState<ObsStatus | null>(null);
   const [executions, setExecutions] = useState<ExecutionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [trainingRuns, setTrainingRuns] = useState<TrainingRunRow[]>([]);
+  const [trainingLoading, setTrainingLoading] = useState(false);
+
+  const loadTraining = useCallback(async () => {
+    setTrainingLoading(true);
+    try {
+      const data = await apiFetch<{ runs: TrainingRunRow[] }>("/api/v1/skills/training-runs");
+      setTrainingRuns(data.runs ?? []);
+    } catch (e) {
+      logger.warn("training runs load failed", { error: String(e) });
+    } finally {
+      setTrainingLoading(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -553,25 +635,126 @@ export default function LogsPage() {
 
         {/* Main tab switcher */}
         <div className="flex gap-1 border-b border-flow-800 pb-0">
-          {(["executions", "live"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors capitalize flex items-center gap-1.5",
-                activeTab === tab
-                  ? "border-flow-violet text-flow-50"
-                  : "border-transparent text-flow-500 hover:text-flow-300",
-              )}
-            >
-              {tab === "live" && <span className={cn("h-1.5 w-1.5 rounded-full", activeTab === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40")} />}
-              {tab === "executions" ? "Executions" : "Live"}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setActiveTab("executions")}
+            className={cn(
+              "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors flex items-center gap-1.5",
+              activeTab === "executions" ? "border-flow-violet text-flow-50" : "border-transparent text-flow-500 hover:text-flow-300",
+            )}
+          >
+            Executions
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab("training"); void loadTraining(); }}
+            className={cn(
+              "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors flex items-center gap-1.5",
+              activeTab === "training" ? "border-flow-violet text-flow-50" : "border-transparent text-flow-500 hover:text-flow-300",
+            )}
+          >
+            <BrainCircuit className="h-3 w-3" />
+            Training
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("live")}
+            className={cn(
+              "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors flex items-center gap-1.5",
+              activeTab === "live" ? "border-flow-violet text-flow-50" : "border-transparent text-flow-500 hover:text-flow-300",
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", activeTab === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40")} />
+            Live
+          </button>
         </div>
 
         {activeTab === "live" && <LiveFeed wsId={wsId} />}
+
+        {activeTab === "training" && (
+          <>
+            {trainingLoading ? (
+              <div className="rounded-xl border border-flow-800 overflow-hidden divide-y divide-border/30">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="px-4 py-3 space-y-2">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-full max-w-sm" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                ))}
+              </div>
+            ) : trainingRuns.length === 0 ? (
+              <div className="rounded-xl border border-flow-800 px-4 py-12 text-center">
+                <BrainCircuit className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No training runs yet — improve a skill to see history here.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-flow-800 overflow-hidden">
+                {trainingRuns.map((run) => {
+                  const scoreDelta =
+                    run.best_score !== null && run.baseline_score !== null
+                      ? run.best_score - run.baseline_score
+                      : null;
+                  const statusCls =
+                    run.status === "completed" && run.accepted
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : run.status === "completed"
+                      ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : run.status === "running"
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                      : "border-flow-800 text-muted-foreground";
+                  return (
+                    <div
+                      key={run.id}
+                      className="border-b border-border/30 last:border-0 px-4 py-3 hover:bg-muted/10 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <BrainCircuit className="h-4 w-4 text-flow-violet/60 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold">{run.skill_name}</span>
+                            <span className="text-[10px] text-muted-foreground/50">·</span>
+                            <span className="text-[10px] text-muted-foreground/60">{run.agent_name}</span>
+                            <Badge variant="outline" className={cn("text-[10px] px-1.5 h-5 capitalize", statusCls)}>
+                              {run.accepted ? "accepted" : run.status}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground/40 font-mono">{run.id.slice(0, 8)}</span>
+                          </div>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {run.baseline_score !== null && (
+                              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3" />
+                                {run.baseline_score.toFixed(2)}
+                                {scoreDelta !== null && (
+                                  <span className={cn("ml-1 font-semibold", scoreDelta > 0 ? "text-emerald-400" : scoreDelta < 0 ? "text-red-400" : "text-muted-foreground")}>
+                                    {scoreDelta > 0 ? "+" : ""}{scoreDelta.toFixed(2)}
+                                  </span>
+                                )}
+                                {run.best_score !== null && (
+                                  <span className="text-muted-foreground/40">→ {run.best_score.toFixed(2)}</span>
+                                )}
+                              </span>
+                            )}
+                            {run.epoch > 0 && (
+                              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                                <Zap className="h-3 w-3" />{run.epoch} epoch{run.epoch !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />{timeAgo(run.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
 
         {activeTab === "executions" && <>
         {/* Filter tabs */}
