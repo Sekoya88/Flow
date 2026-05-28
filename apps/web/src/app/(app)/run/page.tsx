@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUp,
+  BarChart2,
   Bot,
+  BrainCircuit,
   CheckCircle2,
   Clock,
+  Layers,
   Loader2,
   MessageSquarePlus,
   Sparkles,
@@ -29,7 +32,7 @@ import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { agentDisplayName, cn } from "@/lib/utils";
 import type { ToolCall } from "@/components/flow/ToolCallLog";
 import type { CitationSource } from "@/components/flow/CitationsPanel";
 import { SubagentCard, type SubagentInvocation } from "@/components/flow/SubagentCard";
@@ -74,9 +77,9 @@ type SseEvent = {
 };
 
 const SUGGESTIONS = [
-  { text: "Summarize the latest AI agent frameworks", icon: "🤖" },
-  { text: "Compare RAG vs fine-tuning tradeoffs", icon: "⚡" },
-  { text: "What are JEPA architectures?", icon: "🧠" },
+  { text: "Summarize the latest AI agent frameworks", Icon: Layers },
+  { text: "Compare RAG vs fine-tuning tradeoffs", Icon: BarChart2 },
+  { text: "What are JEPA architectures?", Icon: BrainCircuit },
 ];
 
 function timeAgo(iso: string | null): string {
@@ -118,12 +121,20 @@ function groupByDate(execs: ExecutionRow[]): { label: string; items: ExecutionRo
   return keys.map((label) => ({ label, items: groups[label] }));
 }
 
+// Module-level: survives component remounts so we can detect an already-open stream
+let _activeEs: EventSource | null = null;
+function _closeActiveEs() {
+  if (_activeEs) { _activeEs.close(); _activeEs = null; }
+}
+
 export default function RunPage() {
   const router = useRouter();
   const setNode = useStore((s) => s.setNode);
   const appendToken = useStore((s) => s.appendToken);
   const reset = useStore((s) => s.reset);
   const setActiveExecution = useStore((s) => s.setActiveExecution);
+  const setActiveTask = useStore((s) => s.setActiveTask);
+  const setPersistedLiveAnswer = useStore((s) => s.setPersistedLiveAnswer);
 
   const [wsId, setWsId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -203,6 +214,68 @@ export default function RunPage() {
       .then((r) => setHistory(r.executions))
       .catch(() => {});
   }, []);
+
+  // On mount: if there's an active execution from a previous session, reconnect its SSE stream
+  useEffect(() => {
+    const eid = useStore.getState().activeExecutionId;
+    const persisted = useStore.getState().persistedLiveAnswer;
+    if (!eid || _activeEs) return; // No active execution or stream already open
+
+    // Verify execution is still running before blocking the UI
+    apiFetch<{ execution: { status: string } }>(`/api/v1/executions/${eid}`)
+      .then(({ execution }) => {
+        if (execution.status !== "running" && execution.status !== "pending") {
+          setActiveExecution(null);
+          setPersistedLiveAnswer(null);
+          return;
+        }
+        setRunning(true);
+        setSelectedId(eid);
+        if (persisted) setLiveAnswer(persisted);
+        reconnectStream(eid, persisted);
+      })
+      .catch(() => { setActiveExecution(null); setPersistedLiveAnswer(null); });
+
+    function reconnectStream(reconnEid: string, reconnPersisted: string | null) {
+      apiFetch<{ stream_jwt: string }>(`/api/v1/executions/${reconnEid}/stream-token`, { method: "POST" })
+        .then(({ stream_jwt }) => {
+          const url = `${getApiBase()}/api/v1/executions/${reconnEid}/stream?stream_jwt=${encodeURIComponent(stream_jwt)}`;
+          _closeActiveEs();
+          const es = new EventSource(url);
+          _activeEs = es;
+          let fullAnswer = reconnPersisted ?? "";
+
+          es.onmessage = (ev) => {
+            try {
+              const data = JSON.parse(ev.data) as SseEvent;
+              if (data.kind === "token" && data.text) {
+                fullAnswer += data.text;
+                setLiveAnswer(fullAnswer);
+                setPersistedLiveAnswer(fullAnswer);
+              } else if (data.kind === "final" && data.answer) {
+                fullAnswer = String(data.answer);
+                setLiveAnswer(fullAnswer);
+                setPersistedLiveAnswer(fullAnswer);
+              } else if (data.kind === "done" || data.kind === "error") {
+                _closeActiveEs();
+                setRunning(false);
+                setActiveExecution(null);
+                setActiveTask(null);
+                setPersistedLiveAnswer(null);
+                refreshHistory();
+              }
+            } catch { /* non-JSON */ }
+          };
+          es.onerror = () => {
+            _closeActiveEs();
+            setRunning(false);
+            setPersistedLiveAnswer(null);
+            refreshHistory();
+          };
+        })
+        .catch(() => { setRunning(false); });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startNewChat = useCallback(() => {
     setSelectedId(null);
@@ -299,6 +372,7 @@ export default function RunPage() {
       );
       setSelectedId(eid);
       setActiveExecution(eid);
+      setActiveTask({ type: 'run', label: 'Agent running…', href: '/run' });
       setNode("planner", { status: "thinking" });
       track("run_started", { agent_id: agentId, execution_id: eid });
 
@@ -307,8 +381,11 @@ export default function RunPage() {
         { method: "POST" },
       );
       const url = `${getApiBase()}/api/v1/executions/${eid}/stream?stream_jwt=${encodeURIComponent(stream_jwt)}`;
+      _closeActiveEs();
       const es = new EventSource(url);
+      _activeEs = es;
       let fullAnswer = "";
+      let cleanDone = false;
 
       es.onmessage = (ev) => {
         try {
@@ -322,6 +399,7 @@ export default function RunPage() {
             appendToken(data.text);
             fullAnswer += data.text;
             setLiveAnswer(fullAnswer);
+            setPersistedLiveAnswer(fullAnswer);
           } else if (data.kind === "tool_call" && data.tool) {
             setToolCalls((prev) => [
               ...prev,
@@ -368,6 +446,7 @@ export default function RunPage() {
           } else if (data.kind === "final" && data.answer) {
             fullAnswer = String(data.answer);
             setLiveAnswer(fullAnswer);
+            setPersistedLiveAnswer(fullAnswer);
             setNode("synthesizer", { status: "done" });
             setHistory((prev) =>
               prev.map((e) =>
@@ -387,9 +466,12 @@ export default function RunPage() {
               ),
             );
           } else if (data.kind === "done") {
-            es.close();
+            cleanDone = true;
+            _closeActiveEs();
             setRunning(false);
             setActiveExecution(null);
+            setActiveTask(null);
+            setPersistedLiveAnswer(null);
             track("run_completed", { execution_id: eid, agent_id: agentId });
             refreshHistory();
           }
@@ -397,19 +479,23 @@ export default function RunPage() {
       };
 
       es.onerror = () => {
-        es.close();
+        if (cleanDone) return; // suppress spurious onerror Chrome fires after intentional es.close()
+        _closeActiveEs();
         setRunning(false);
         setActiveExecution(null);
+        setActiveTask(null);
+        setPersistedLiveAnswer(null);
         setNode("synthesizer", { status: "error" });
         refreshHistory();
       };
     } catch {
       setRunning(false);
       setActiveExecution(null);
+      setActiveTask(null);
       setHistory((prev) => prev.filter((e) => e.id !== optimisticId));
       track("run_failed", { agent_id: agentId });
     }
-  }, [agentId, agents, message, running, reset, setNode, appendToken, setActiveExecution, refreshHistory]);
+  }, [agentId, agents, message, running, reset, setNode, appendToken, setActiveExecution, refreshHistory, history, selectedId, setActiveTask, setPersistedLiveAnswer]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -475,7 +561,7 @@ export default function RunPage() {
           )}
           {grouped.map(({ label, items }) => (
             <div key={label} className="mb-2">
-              <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              <p className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 {label}
               </p>
               {items.map((exec) => (
@@ -504,8 +590,8 @@ export default function RunPage() {
                     )}
                   </div>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground/60 truncate max-w-[100px]">
-                      {exec.agent_name}
+                    <span className="text-[11px] text-muted-foreground/60 truncate max-w-[130px]">
+                      {/^[0-9a-f]{8}-/.test(exec.agent_name) ? `Agent ${exec.agent_name.slice(0, 6)}` : exec.agent_name}
                     </span>
                     <span className="text-[10px] text-muted-foreground/40">·</span>
                     <span className="text-[10px] text-muted-foreground/60">
@@ -570,8 +656,8 @@ export default function RunPage() {
                           "hover:-translate-y-1 hover:border-flow-violet/50 hover:shadow-lg hover:shadow-none/10",
                         )}
                       >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-flow-violet/10 text-xl">
-                          {q.icon}
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-flow-violet/20 bg-flow-violet/10">
+                          <q.Icon className="h-5 w-5 text-flow-violet/70" />
                         </div>
                         <span className="text-sm font-medium text-foreground/80 transition-colors group-hover:text-foreground leading-relaxed">
                           {q.text}
@@ -584,6 +670,18 @@ export default function RunPage() {
             ) : (
               /* Conversation view — multi-turn thread */
               <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-6">
+                {/* Agent chip */}
+                {agentId && agents.length > 0 && (
+                  <div className="flex items-center gap-1.5 animate-fade-in">
+                    <div className="flex items-center gap-1.5 rounded-full border border-flow-800 bg-muted/30 px-2.5 py-0.5">
+                      <Bot className="h-3 w-3 text-flow-violet" />
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {agentDisplayName(agents.find((a) => a.id === agentId) ?? { id: agentId, name: agentId, template: '' })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {threadLoading && threadTurns.length === 0 && (
                   <div className="flex justify-center py-8">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -610,7 +708,7 @@ export default function RunPage() {
                           {turn.created_at && (
                             <div className="flex items-center justify-end gap-1.5 pr-1">
                               <Clock className="h-3 w-3 text-muted-foreground/40" />
-                              <span className="text-[10px] text-muted-foreground/50">
+                              <span className="text-[11px] text-muted-foreground/50">
                                 {timeAgo(turn.created_at)}
                               </span>
                             </div>
@@ -721,7 +819,7 @@ export default function RunPage() {
                 <SelectContent>
                   {agents.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name || a.template}
+                      {agentDisplayName(a)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -738,10 +836,10 @@ export default function RunPage() {
                 placeholder={selectedExec?.answer ? "Ask a follow-up…" : "Ask anything…"}
                 rows={1}
                 className={cn(
-                  "w-full resize-none rounded-xl border border-flow-800 bg-card/80 px-4 py-3 pr-12",
+                  "w-full resize-none rounded-xl border border-flow-800 bg-card/80 px-4 py-3 pr-24",
                   "text-sm leading-relaxed placeholder:text-muted-foreground/60",
-                  "focus:outline-none focus:ring-2 focus:ring-flow-violet/30 focus:border-flow-violet/50",
-                  "transition-all min-h-[44px] max-h-[160px]",
+                  "focus:outline-none focus:ring-2 focus:ring-flow-violet/40 focus:border-flow-violet/60",
+                  "transition-all min-h-[52px] max-h-[160px]",
                 )}
                 style={{ height: "auto", overflow: "hidden" }}
                 onInput={(e) => {
@@ -750,23 +848,28 @@ export default function RunPage() {
                   t.style.height = `${Math.min(t.scrollHeight, 160)}px`;
                 }}
               />
-              <Button
-                size="icon"
-                onClick={() => void run()}
-                disabled={running || !message.trim()}
-                className={cn(
-                  "absolute right-2 bottom-2 h-8 w-8 rounded-lg transition-all",
-                  message.trim() && !running
-                    ? "bg-flow-50 text-flow-950 hover:bg-flow-violet/90 shadow-none/20"
-                    : "bg-muted text-muted-foreground",
+              <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                {message.trim() && !running && (
+                  <kbd className="hidden sm:block font-mono text-[9px] text-muted-foreground/40 select-none">⌘↵</kbd>
                 )}
-              >
-                {running ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-4 w-4" />
-                )}
-              </Button>
+                <Button
+                  size="icon"
+                  onClick={() => void run()}
+                  disabled={running || !message.trim()}
+                  className={cn(
+                    "h-8 w-8 rounded-lg transition-all",
+                    message.trim() && !running
+                      ? "bg-flow-50 text-flow-950 hover:bg-flow-violet/90 shadow-none/20"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {running ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
 
             {/* Inspector toggle */}
