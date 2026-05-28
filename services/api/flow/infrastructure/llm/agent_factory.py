@@ -157,6 +157,15 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
             {"provider": provider, "model": model_name, "temperature": temp},
             {"openai": api_key if provider == "openai" else None, "anthropic": api_key if provider == "anthropic" else None},
         )
+        # Configured provider has no key — fall back to OpenAI if available
+        if llm is None and ctx.openai_api_key and provider != "openai":
+            provider = "openai"
+            api_key = ctx.openai_api_key
+            model_name = "gpt-4o-mini"
+            llm = get_chat_model(
+                {"provider": "openai", "model": model_name, "temperature": temp},
+                {"openai": api_key, "anthropic": None},
+            )
         if llm is None:
             return None
 

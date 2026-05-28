@@ -107,10 +107,17 @@ def _get_llm(ctx: GraphContext):
     model_config = cfg.get("llm_config") or cfg.get("model") or {}
     if not model_config:
         model_config = {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2}
-    return get_chat_model(
+    llm = get_chat_model(
         model_config,
         fallback_api_keys={"openai": ctx.openai_api_key, "anthropic": ctx.anthropic_api_key},
     )
+    # Configured provider has no key — fall back to OpenAI if available
+    if llm is None and ctx.openai_api_key:
+        llm = get_chat_model(
+            {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.2},
+            {"openai": ctx.openai_api_key, "anthropic": None},
+        )
+    return llm
 
 
 def _last_human_text(state: FlowGraphState) -> str:

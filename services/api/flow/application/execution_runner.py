@@ -127,6 +127,12 @@ async def run_deer_execution(
         store=store,
     )
     graph = build_agent_from_ctx(ctx, checkpointer=checkpointer)
+    if graph is None:
+        err = "No LLM configured — set FLOW_OPENAI_API_KEY or FLOW_ANTHROPIC_API_KEY in the environment."
+        await repo.insert_event(execution_id, "error", {"message": err})
+        stream_hub.publish(execution_id, {"kind": "error", "message": err})
+        await repo.complete_execution(execution_id, "failed", err)
+        return
     config: dict[str, Any] = {
         "configurable": {"thread_id": str(thread_id)},
         "metadata": {
