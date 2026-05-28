@@ -76,6 +76,8 @@ services:
       FLOW_LANGSMITH_API_KEY: ${FLOW_LANGSMITH_API_KEY:-}
       FLOW_LANGSMITH_PROJECT: ${FLOW_LANGSMITH_PROJECT:-flow-docker}
       FLOW_LANGSMITH_ENDPOINT: ${FLOW_LANGSMITH_ENDPOINT:-}
+    volumes:
+      - "${FLOW_OBSIDIAN_VAULT_PATH:-/tmp/obsidian-vault}:/vault"
     ports:
       # Host 18000 avoids clash with another process already bound to 8000 (e.g. local uvicorn).
       - "18000:8000"
