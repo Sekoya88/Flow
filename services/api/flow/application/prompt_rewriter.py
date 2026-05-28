@@ -128,7 +128,7 @@ async def rewrite_prompt(
 
     try:
         resp = await client.chat.completions.create(
-            model="gpt-5.4-mini",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": _REWRITER_SYSTEM},
                 {"role": "user", "content": user_content},

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, TypedDict
 from uuid import UUID
 
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
@@ -38,7 +39,12 @@ def build_kg_ingestion_graph(config: IngestionConfig):
     api_key = config.openai_api_key
 
     def _llm() -> ChatOpenAI:
-        return ChatOpenAI(model="gpt-5.4-mini", temperature=0, openai_api_key=api_key)
+        return ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=api_key)
+
+    _ingest_meta = RunnableConfig(metadata={
+        "kind": "kg_ingestion",
+        "workspace_id": str(workspace_id),
+    })
 
     # ── Node 1: parse ──────────────────────────────────────────────────────
     def parse_note(state: IngestionState) -> dict:
@@ -68,7 +74,8 @@ def build_kg_ingestion_graph(config: IngestionConfig):
 Return ONLY a JSON object: {{"entities": ["string", ...]}}
 
 Text:
-{parsed.body[:3000]}"""
+{parsed.body[:3000]}""",
+                config=_ingest_meta,
             )
             data = json.loads(resp.content)
             entities = data.get("entities", [])[:10]
@@ -92,7 +99,8 @@ If none fit, create a short new one (2-3 words max).
 Return ONLY: {{"topic": "string"}}
 
 Note title: {parsed.title}
-Note preview: {parsed.body[:800]}"""
+Note preview: {parsed.body[:800]}""",
+                config=_ingest_meta,
             )
             data = json.loads(resp.content)
             topic = data.get("topic", "General")
@@ -106,7 +114,10 @@ Note preview: {parsed.body[:800]}"""
         parsed = state["parsed"]
         text_to_embed = f"{parsed.title}\n\n{parsed.body[:2000]}"
         try:
-            resp = await llm.ainvoke(f"Summarize in ≤200 characters:\n{parsed.body[:1500]}")
+            resp = await llm.ainvoke(
+                f"Summarize in ≤200 characters:\n{parsed.body[:1500]}",
+                config=_ingest_meta,
+            )
             summary = resp.content[:200]
         except Exception:
             summary = parsed.title
