@@ -732,6 +732,17 @@ class FlowRepository:
         )
         episodic = await self._pool.fetchval("SELECT COUNT(*) FROM episodic_memories WHERE workspace_id = ANY($1::uuid[])", ids)
         schedules = await self._pool.fetchval("SELECT COUNT(*) FROM agent_schedules WHERE workspace_id = ANY($1::uuid[]) AND enabled = true", ids)
+        active_skills = await self._pool.fetchval(
+            "SELECT COUNT(*) FROM agent_skills s JOIN agents a ON a.id = s.agent_id WHERE a.workspace_id = ANY($1::uuid[]) AND s.active = true",
+            ids,
+        )
+        training_runs = await self._pool.fetchval(
+            """SELECT COUNT(*) FROM skill_training_runs str
+               JOIN agent_skills s ON s.id = str.skill_id
+               JOIN agents a ON a.id = s.agent_id
+               WHERE a.workspace_id = ANY($1::uuid[])""",
+            ids,
+        )
         recent_rows = await self._pool.fetch(
             """
             SELECT e.id, e.status, e.user_message, e.created_at, a.name AS agent_name
@@ -761,6 +772,8 @@ class FlowRepository:
                 "pending_proposals": int(proposals or 0),
                 "episodic_memories": int(episodic or 0),
                 "active_schedules": int(schedules or 0),
+                "active_skills": int(active_skills or 0),
+                "training_runs": int(training_runs or 0),
             },
             "recent_executions": recent,
         }
@@ -1691,6 +1704,7 @@ class FlowRepository:
         edits_used: int | None = None,
         best_score: float | None = None,
         accepted: bool | None = None,
+        error_message: str | None = None,
         started_at: bool = False,
         completed_at: bool = False,
     ) -> None:
@@ -1713,6 +1727,9 @@ class FlowRepository:
         if accepted is not None:
             values.append(accepted)
             parts.append(f"accepted = ${len(values)}")
+        if error_message is not None:
+            values.append(error_message)
+            parts.append(f"error_message = ${len(values)}")
         if started_at:
             parts.append("started_at = now()")
         if completed_at:
@@ -1729,7 +1746,7 @@ class FlowRepository:
         """Return all training runs for a skill, newest first."""
         return await self._pool.fetch(
             """SELECT id, status, epoch, edit_budget, edits_used, baseline_score,
-                      best_score, accepted, started_at, completed_at, created_at
+                      best_score, accepted, error_message, started_at, completed_at, created_at
                FROM skill_training_runs
                WHERE skill_id = $1
                ORDER BY created_at DESC""",

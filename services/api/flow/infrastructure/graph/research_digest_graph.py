@@ -9,6 +9,7 @@ from uuid import UUID
 
 import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from flow.infrastructure.observability.logging import get_logger
@@ -195,6 +196,12 @@ async def filter_by_interest(state: DigestState) -> dict:
 
         user_interests = config.get("user_interests", "").strip()
 
+        run_meta = RunnableConfig(metadata={
+            "kind": "research_digest",
+            "workspace_id": state["workspace_id"],
+            "kg_namespace": config.get("kg_namespace", ""),
+        })
+
         async def score_one(paper: dict) -> float:
             async with sem:
                 try:
@@ -210,7 +217,8 @@ async def filter_by_interest(state: DigestState) -> dict:
                         [
                             SystemMessage(content="You are a research relevance scorer. Reply with JSON only."),
                             HumanMessage(content=prompt),
-                        ]
+                        ],
+                        config=run_meta,
                     )
                     text = resp.content if hasattr(resp, "content") else str(resp)
                     start = text.find("{")
@@ -263,6 +271,11 @@ async def summarize_papers(state: DigestState) -> dict:
     logger.info("digest.summarize.start", count=len(state["filtered_papers"]))
 
     sem = asyncio.Semaphore(5)
+    summarize_meta = RunnableConfig(metadata={
+        "kind": "research_digest",
+        "workspace_id": state["workspace_id"],
+        "kg_namespace": state["config"].get("kg_namespace", ""),
+    })
 
     async def summarize_one(paper: dict) -> dict:
         async with sem:
@@ -276,7 +289,7 @@ async def summarize_papers(state: DigestState) -> dict:
                         )
                     ),
                 ]
-                resp = await llm.ainvoke(messages)
+                resp = await llm.ainvoke(messages, config=summarize_meta)
                 text = resp.content if hasattr(resp, "content") else str(resp)
                 start = text.find("{")
                 end = text.rfind("}") + 1

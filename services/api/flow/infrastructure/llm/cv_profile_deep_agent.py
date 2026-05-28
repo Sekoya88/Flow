@@ -65,7 +65,7 @@ def build_cv_profile_chat_model(settings: Settings) -> BaseChatModel | None:
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                model="gpt-5.4-mini",
+                model="gpt-4o-mini",
                 api_key=settings.openai_api_key,
             )
         except Exception:

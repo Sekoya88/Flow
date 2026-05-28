@@ -142,6 +142,7 @@ async def task_run_skill_training(
     from flow.infrastructure.persistence.repo import FlowRepository
 
     pool = ctx["pool"]
+    stream_hub = ctx.get("stream_hub")
     repo = FlowRepository(pool)
     trainer = SkillTrainer(pool)
     config = TrainingConfig(**config_dict)
@@ -152,6 +153,10 @@ async def task_run_skill_training(
     _workspace_id = _UUID(workspace_id)
 
     await repo.update_training_run(_run_id, status="running", started_at=True)
+    if stream_hub:
+        await stream_hub.publish_global(workspace_id, kind="skill.training.started", payload={
+            "run_id": run_id, "skill_id": skill_id,
+        })
 
     best_score = None
     final_accepted = False
@@ -189,6 +194,12 @@ async def task_run_skill_training(
                 best_score=best_score,
                 accepted=result.get("accepted", False),
             )
+
+            if stream_hub:
+                await stream_hub.publish_global(workspace_id, kind="skill.training.epoch", payload={
+                    "run_id": run_id, "skill_id": skill_id, "epoch": epoch,
+                    "eval_score": eval_score, "accepted": result.get("accepted", False),
+                })
 
             if result.get("accepted"):
                 final_accepted = True
@@ -255,10 +266,19 @@ async def task_run_skill_training(
             accepted=final_accepted,
             completed_at=True,
         )
+        if stream_hub:
+            await stream_hub.publish_global(workspace_id, kind="skill.training.done", payload={
+                "run_id": run_id, "skill_id": skill_id,
+                "accepted": final_accepted, "best_score": best_score,
+            })
 
     except Exception as exc:
         logger.error("task_run_skill_training failed: run_id=%s err=%s", run_id, exc)
-        await repo.update_training_run(_run_id, status="failed", completed_at=True)
+        await repo.update_training_run(_run_id, status="failed", error_message=str(exc), completed_at=True)
+        if stream_hub:
+            await stream_hub.publish_global(workspace_id, kind="skill.training.failed", payload={
+                "run_id": run_id, "skill_id": skill_id, "error": str(exc),
+            })
         raise
 
     return {"run_id": run_id, "accepted": final_accepted, "best_score": best_score}

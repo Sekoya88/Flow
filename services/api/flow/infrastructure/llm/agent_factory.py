@@ -72,7 +72,7 @@ def _get_llm_for_judge(ctx: GraphContext) -> Any | None:
     try:
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(api_key=api_key, model="gpt-5.4-mini", temperature=0)
+        return ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0)
     except Exception:
         return None
 
@@ -149,7 +149,7 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
         from flow.infrastructure.llm.providers import get_chat_model
 
         api_key = ctx.anthropic_api_key if provider == "anthropic" else ctx.openai_api_key
-        model_name = model_cfg.get("model", "gpt-5.4-mini")
+        model_name = model_cfg.get("model", "gpt-4o-mini")
         temp = float(model_cfg.get("temperature", 0.2))
 
         # Create LLM first so we can patch it before graph compilation
