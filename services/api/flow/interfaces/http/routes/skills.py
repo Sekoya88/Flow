@@ -168,6 +168,183 @@ async def list_skill_templates(
     }
 
 
+@router.get("/training-runs")
+async def list_workspace_training_runs(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """List recent training runs across all skills in the workspace."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if not ws_rows:
+        return {"runs": []}
+    ws_id = ws_rows[0]["id"]
+    rows = await repo._pool.fetch(
+        """
+        SELECT
+            str.id, str.status, str.epoch, str.baseline_score, str.best_score,
+            str.accepted, str.created_at, str.completed_at,
+            s.id AS skill_id, s.name AS skill_name,
+            a.id AS agent_id, a.name AS agent_name
+        FROM skill_training_runs str
+        JOIN skills s ON s.id = str.skill_id
+        JOIN agents a ON a.id = s.agent_id
+        WHERE a.workspace_id = $1
+        ORDER BY str.created_at DESC
+        LIMIT $2
+        """,
+        ws_id,
+        limit,
+    )
+    return {
+        "runs": [
+            {
+                "id": str(r["id"]),
+                "status": r["status"],
+                "epoch": r["epoch"],
+                "baseline_score": float(r["baseline_score"]) if r["baseline_score"] is not None else None,
+                "best_score": float(r["best_score"]) if r["best_score"] is not None else None,
+                "accepted": r["accepted"],
+                "created_at": r["created_at"].isoformat(),
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+                "skill_id": str(r["skill_id"]),
+                "skill_name": r["skill_name"],
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"],
+            }
+            for r in rows
+        ]
+    }
+
+
+# ── Gist preview (must be before /{skill_id} catch-all) ──────────────────────
+
+@router.get("/preview-gist")
+async def preview_gist(
+    url: str,
+    _user_id: Annotated[UUID, Depends(get_current_user_id)],
+) -> dict:
+    """Server-side proxy for GitHub Gist preview (avoids browser rate-limits)."""
+    import re
+    import httpx
+
+    match = re.search(r"([0-9a-f]{20,})", url)
+    if not match:
+        raise HTTPException(status_code=422, detail="could not extract gist ID")
+    gist_id = match.group(1)
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.github.com/gists/{gist_id}",
+                headers={"Accept": "application/vnd.github.v3+json"},
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"gist fetch failed: {exc}") from exc
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="gist not found or not public")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"github API error {resp.status_code}")
+
+    data = resp.json()
+    files = data.get("files", {})
+    md_files = [v for v in files.values() if v["filename"].endswith(".md")]
+    file_entry = (md_files or list(files.values()) or [None])[0]
+    if not file_entry:
+        raise HTTPException(status_code=422, detail="gist has no files")
+
+    content = file_entry.get("content") or ""
+    name_match = re.search(r"^name:\s*(.+)$", content, re.MULTILINE)
+    name = name_match.group(1).strip() if name_match else file_entry["filename"].replace(".md", "")
+
+    return {
+        "gist_id": gist_id,
+        "source_file": file_entry["filename"],
+        "name": name,
+        "preview": content[:1200],
+    }
+
+
+# ── GitHub repo preview (must be before /{skill_id} catch-all) ───────────────
+
+class RepoSkillFile(BaseModel):
+    path: str
+    name: str
+    sha: str
+    size: int
+
+
+class RepoPreviewOut(BaseModel):
+    repo: str
+    skills: list[RepoSkillFile]
+    total: int
+    truncated: bool
+
+
+def _parse_repo_url(url: str) -> tuple[str, str]:
+    """Accept 'owner/repo' or full github.com URL; return (owner, repo)."""
+    import re
+    url = url.strip().rstrip("/")
+    m = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$", url)
+    if m:
+        return m.group(1), m.group(2)
+    # bare owner/repo
+    parts = url.split("/")
+    if len(parts) == 2 and parts[0] and parts[1]:
+        return parts[0], parts[1]
+    raise ValueError(f"could not parse GitHub repo URL: {url!r}")
+
+
+@router.get("/preview-repo", response_model=RepoPreviewOut)
+async def preview_repo(
+    url: str,
+    _user_id: Annotated[UUID, Depends(get_current_user_id)],
+) -> RepoPreviewOut:
+    """List all .md files in a public GitHub repo (one API call via git/trees)."""
+    import httpx
+
+    try:
+        owner, repo_name = _parse_repo_url(url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1",
+                headers={"Accept": "application/vnd.github+json"},
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub fetch failed: {exc}") from exc
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="repository not found or not public")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"GitHub API error {resp.status_code}")
+
+    from pathlib import Path as _Path
+
+    payload = resp.json()
+    tree = payload.get("tree", [])
+    skills = [
+        RepoSkillFile(
+            path=item["path"],
+            name=_Path(item["path"]).stem,
+            sha=item.get("sha", ""),
+            size=item.get("size", 0),
+        )
+        for item in tree
+        if item.get("type") == "blob" and item["path"].endswith(".md")
+    ]
+    return RepoPreviewOut(
+        repo=f"{owner}/{repo_name}",
+        skills=skills,
+        total=len(skills),
+        truncated=payload.get("truncated", False),
+    )
+
+
 @router.get("/{skill_id}")
 async def get_skill(
     skill_id: UUID,
@@ -512,11 +689,12 @@ async def vibe_modify_skill(
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+
 # ── Gist import ──────────────────────────────────────────────────────────────
 
 class GistImportIn(BaseModel):
     gist_url: str  # e.g. "https://gist.github.com/user/abc123" or just "abc123"
-    agent_id: UUID
+    agent_id: UUID | None = None
     workspace_id: UUID
 
 
@@ -571,8 +749,18 @@ async def import_skill_from_gist(
     parsed = parse_skill_md(content_md)
     skill_name = parsed.name if parsed.name != "unnamed" else file_entry["filename"].replace(".md", "")
 
+    effective_agent_id = body.agent_id
+    if effective_agent_id is None:
+        first_agent = await repo._pool.fetchrow(
+            "SELECT id FROM agents WHERE workspace_id = $1 ORDER BY created_at LIMIT 1",
+            body.workspace_id,
+        )
+        if not first_agent:
+            raise HTTPException(status_code=422, detail="no agents in workspace")
+        effective_agent_id = first_agent["id"]
+
     skill_id = await repo.upsert_agent_skill(
-        agent_id=body.agent_id,
+        agent_id=effective_agent_id,
         workspace_id=body.workspace_id,
         name=skill_name,
         content_md=content_md,
@@ -663,6 +851,104 @@ async def import_obsidian_skills(
     return {"imported_count": len(imported), "skills": imported, "errors": errors}
 
 
+# ── GitHub repo import ────────────────────────────────────────────────────────
+
+class RepoImportIn(BaseModel):
+    repo_url: str
+    workspace_id: UUID
+    paths: list[str] | None = None  # None = import all .md files
+    agent_id: UUID | None = None  # None = first agent in workspace
+
+
+class RepoImportOut(BaseModel):
+    imported: int
+    skills: list[dict]
+    errors: list[str]
+
+
+@router.post("/import/repo", response_model=RepoImportOut, status_code=status.HTTP_201_CREATED)
+async def import_skills_from_repo(
+    body: RepoImportIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> RepoImportOut:
+    """Fetch .md skill files from a public GitHub repo and install them as Flow skills."""
+    import httpx
+    from pathlib import Path as _Path
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if body.workspace_id not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    try:
+        owner, repo_name = _parse_repo_url(body.repo_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # Resolve effective agent (fall back to first in workspace when not provided)
+    effective_agent_id = body.agent_id
+    if effective_agent_id is None:
+        first_agent = await repo._pool.fetchrow(
+            "SELECT id FROM agents WHERE workspace_id = $1 ORDER BY created_at LIMIT 1",
+            body.workspace_id,
+        )
+        if not first_agent:
+            raise HTTPException(status_code=422, detail="no agents in workspace")
+        effective_agent_id = first_agent["id"]
+
+    # If no explicit path list, preview the repo to get all .md paths
+    paths_to_import: list[str] = body.paths or []
+    if not paths_to_import:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                tree_resp = await client.get(
+                    f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1",
+                    headers={"Accept": "application/vnd.github+json"},
+                )
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail=f"GitHub fetch failed: {exc}") from exc
+        if tree_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"GitHub API error {tree_resp.status_code}")
+        paths_to_import = [
+            item["path"]
+            for item in tree_resp.json().get("tree", [])
+            if item.get("type") == "blob" and item["path"].endswith(".md")
+        ]
+
+    raw_base = f"https://raw.githubusercontent.com/{owner}/{repo_name}/HEAD/"
+    imported_skills: list[dict] = []
+    errors: list[str] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for path in paths_to_import:
+            try:
+                r = await client.get(raw_base + path)
+                if r.status_code != 200:
+                    errors.append(f"{path}: HTTP {r.status_code}")
+                    continue
+                content_md = r.text
+                if not content_md.strip():
+                    errors.append(f"{path}: empty file")
+                    continue
+                parsed = parse_skill_md(content_md)
+                skill_name = (
+                    parsed.name if parsed.name != "unnamed" else _Path(path).stem
+                )
+                skill_id = await repo.upsert_agent_skill(
+                    agent_id=effective_agent_id,
+                    workspace_id=body.workspace_id,
+                    name=skill_name,
+                    content_md=content_md,
+                    category=parsed.category or "GitHub",
+                    initial_active=True,
+                )
+                imported_skills.append({"id": str(skill_id), "name": skill_name, "path": path})
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{path}: {exc}")
+
+    return RepoImportOut(imported=len(imported_skills), skills=imported_skills, errors=errors)
+
+
 # ── Skill training ────────────────────────────────────────────────────────────
 
 
@@ -714,6 +1000,7 @@ async def list_skill_training_runs(
             best_score=r["best_score"],
             accepted=r["accepted"],
             created_at=r["created_at"].isoformat(),
+            error_message=r["error_message"],
         )
         for r in rows
     ]
