@@ -511,6 +511,17 @@ function LiveFeed({ wsId }: { wsId: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────
 
+type ResearchRunRow = {
+  id: string;
+  status: "running" | "done" | "failed";
+  source: string | null;
+  paper_count: number;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number;
+};
+
 type TrainingRunRow = {
   id: string;
   status: string;
@@ -528,13 +539,17 @@ type TrainingRunRow = {
 
 export default function LogsPage() {
   const wsId = useStore((s) => s.workspaces[0]?.id ?? "");
-  const [activeTab, setActiveTab] = useState<"executions" | "training" | "live">("executions");
+  const [activeTab, setActiveTab] = useState<"executions" | "training" | "research" | "live">("executions");
   const [status, setStatus] = useState<ObsStatus | null>(null);
   const [executions, setExecutions] = useState<ExecutionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [trainingRuns, setTrainingRuns] = useState<TrainingRunRow[]>([]);
   const [trainingLoading, setTrainingLoading] = useState(false);
+  const [researchRuns, setResearchRuns] = useState<ResearchRunRow[]>([]);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [exportingRunId, setExportingRunId] = useState<string | null>(null);
+  const [exportResults, setExportResults] = useState<Record<string, { exported: number; error?: string }>>({});
 
   const loadTraining = useCallback(async () => {
     setTrainingLoading(true);
@@ -545,6 +560,33 @@ export default function LogsPage() {
       logger.warn("training runs load failed", { error: String(e) });
     } finally {
       setTrainingLoading(false);
+    }
+  }, []);
+
+  const loadResearchRuns = useCallback(async () => {
+    setResearchLoading(true);
+    try {
+      const data = await apiFetch<{ runs: ResearchRunRow[] }>("/api/v1/logs/research?limit=50");
+      setResearchRuns(data.runs ?? []);
+    } catch (e) {
+      logger.warn("research runs load failed", { error: String(e) });
+    } finally {
+      setResearchLoading(false);
+    }
+  }, []);
+
+  const handleExportObsidian = useCallback(async (runId: string) => {
+    setExportingRunId(runId);
+    try {
+      const data = await apiFetch<{ exported: number }>(
+        `/api/v1/digest/runs/${runId}/export-obsidian`,
+        { method: "POST" },
+      );
+      setExportResults((prev) => ({ ...prev, [runId]: { exported: data.exported } }));
+    } catch (e) {
+      setExportResults((prev) => ({ ...prev, [runId]: { exported: 0, error: String(e) } }));
+    } finally {
+      setExportingRunId(null);
     }
   }, []);
 
@@ -658,6 +700,17 @@ export default function LogsPage() {
           </button>
           <button
             type="button"
+            onClick={() => { setActiveTab("research"); void loadResearchRuns(); }}
+            className={cn(
+              "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors flex items-center gap-1.5",
+              activeTab === "research" ? "border-flow-violet text-flow-50" : "border-transparent text-flow-500 hover:text-flow-300",
+            )}
+          >
+            <BookOpen className="h-3 w-3" />
+            Research
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("live")}
             className={cn(
               "border-b-2 px-3 pb-2 font-mono text-[11px] font-medium uppercase tracking-wider transition-colors flex items-center gap-1.5",
@@ -754,6 +807,71 @@ export default function LogsPage() {
               </div>
             )}
           </>
+        )}
+
+        {activeTab === "research" && (
+          <div className="space-y-2">
+            {researchLoading && (
+              <div className="flex items-center gap-2 py-4 text-xs text-flow-500">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-flow-500 border-t-transparent" />
+                Loading research runs…
+              </div>
+            )}
+            {!researchLoading && researchRuns.length === 0 && (
+              <div className="rounded-xl border border-dashed border-flow-800 py-10 text-center">
+                <p className="font-mono text-xs text-flow-500">No research digests yet</p>
+              </div>
+            )}
+            {!researchLoading && researchRuns.map((run) => {
+              const expResult = exportResults[run.id];
+              const isExporting = exportingRunId === run.id;
+              return (
+                <div key={run.id} className="flex items-center gap-3 rounded-lg border border-flow-800 bg-flow-900/50 px-4 py-3">
+                  <span className={cn(
+                    "h-2 w-2 rounded-full shrink-0",
+                    run.status === "running" ? "bg-flow-violet animate-pulse" :
+                    run.status === "done" ? "bg-emerald-500" : "bg-red-500",
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate font-mono text-xs font-medium text-flow-100">
+                      {run.source ?? "digest"} · {run.paper_count} paper{run.paper_count !== 1 ? "s" : ""}
+                    </p>
+                    {run.error && (
+                      <p className="truncate font-mono text-[10px] text-red-400">{run.error}</p>
+                    )}
+                  </div>
+                  {expResult && !expResult.error && (
+                    <span className="flex items-center gap-1 font-mono text-[10px] text-emerald-400">
+                      ✓ {expResult.exported} notes
+                    </span>
+                  )}
+                  {expResult?.error && (
+                    <span className="truncate max-w-[120px] font-mono text-[10px] text-red-400">{expResult.error}</span>
+                  )}
+                  <button
+                    disabled={isExporting || run.status !== "done"}
+                    onClick={() => void handleExportObsidian(run.id)}
+                    className={cn(
+                      "shrink-0 rounded border px-2 py-1 font-mono text-[10px] transition-colors",
+                      run.status === "done" && !isExporting
+                        ? "border-flow-700 bg-flow-800 text-flow-300 hover:bg-flow-700 hover:text-flow-100"
+                        : "cursor-not-allowed border-flow-800 bg-flow-950 text-flow-600 opacity-50",
+                    )}
+                  >
+                    {isExporting ? "Exporting…" : "Export to Obsidian"}
+                  </button>
+                  {run.duration_ms > 0 && (
+                    <span className="shrink-0 font-mono text-[10px] text-flow-600">
+                      {(run.duration_ms / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                  <span className="shrink-0 font-mono text-[10px] text-flow-600">
+                    {new Date(run.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {activeTab === "executions" && <>
