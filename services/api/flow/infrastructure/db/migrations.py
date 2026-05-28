@@ -61,3 +61,29 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
             """
         )
     logger.info("schema.knowledge_ingest_and_proposal_exec_columns")
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS digest_runs (
+                id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                status       TEXT NOT NULL DEFAULT 'running',
+                source       TEXT,
+                paper_count  INT  NOT NULL DEFAULT 0,
+                error        TEXT,
+                started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                completed_at TIMESTAMPTZ
+            )
+        """)
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS digest_runs_ws_idx ON digest_runs (workspace_id, started_at DESC)"
+        )
+        await conn.execute(
+            "ALTER TABLE digest_papers ADD COLUMN IF NOT EXISTS digest_run_id UUID REFERENCES digest_runs(id) ON DELETE SET NULL"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS digest_papers_run_idx ON digest_papers (digest_run_id)"
+        )
+        await conn.execute(
+            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS obsidian_vault_path TEXT"
+        )
+    logger.info("schema.digest_runs_and_obsidian_vault_path")
