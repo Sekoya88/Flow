@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedList } from "@/components/ui/animated-list";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { cn } from "@/lib/utils";
+import { agentDisplayName, cn } from "@/lib/utils";
 
 type Me = { workspaces: { id: string; name: string }[] };
 
@@ -184,7 +184,7 @@ export default function MemoryPage() {
             <SelectContent>
               {agents.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.name || a.template}
+                  {agentDisplayName(a)}
                 </SelectItem>
               ))}
             </SelectContent>

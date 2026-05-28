@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -23,11 +23,30 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBase } from "@/lib/api";
+import { getToken } from "@/lib/auth";
+import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+
+const DIGEST_LABELS: Record<string, string> = {
+  "digest.start":         "Starting digest…",
+  "digest.fetch_done":    "Papers fetched",
+  "digest.scoring":       "Scoring relevance…",
+  "digest.filter_done":   "Filtering done",
+  "digest.summarize_done":"Summaries ready",
+  "digest.persist_done":  "Persisted to KG",
+  "digest.complete":      "Complete",
+}
+
+function formatDigestPayload(payload: Record<string, unknown>): string {
+  if (payload.count !== undefined) return `${payload.count} papers`
+  if (payload.persisted !== undefined) return `${payload.persisted} ingested`
+  return ""
+}
 
 type Project = {
   id: string;
+  workspace_id: string;
   name: string;
   goal: string;
   arxiv_categories: string[];
@@ -75,6 +94,7 @@ function RunSparkline({ runs }: { runs: ProjectRun[] }) {
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const setActiveTask = useStore((s) => s.setActiveTask);
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +105,8 @@ export default function ProjectDetailPage() {
   const [saving, setSaving] = useState(false);
   const [runs, setRuns] = useState<ProjectRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [liveEvents, setLiveEvents] = useState<{ kind: string; payload: Record<string, unknown>; ts: number }[]>([]);
+  const liveAbortRef = useRef<AbortController | null>(null);
 
   async function load() {
     if (!id) return;
@@ -114,10 +136,45 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { void load(); }, [id]);
 
+  function startLiveStream(wsId: string) {
+    const ctrl = new AbortController();
+    liveAbortRef.current = ctrl;
+    const token = getToken();
+    const base = getApiBase();
+    fetch(`${base}/api/v1/stream?workspace_id=${wsId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: ctrl.signal,
+    }).then(async (res) => {
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const ev = JSON.parse(line.slice(5).trim()) as Record<string, unknown>;
+            if (typeof ev.kind === "string" && ev.kind.startsWith("digest.")) {
+              setLiveEvents(prev => [{ kind: ev.kind as string, payload: ev, ts: Date.now() }, ...prev]);
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    }).catch(() => { /* aborted or network error */ });
+  }
+
   async function trigger() {
     if (!project) return;
+    setLiveEvents([]);
+    startLiveStream(project.workspace_id);
     setTriggering(true);
     setTriggerResult(null);
+    setActiveTask({ type: 'research', label: 'Digest running…', href: `/projects/${project.id}` });
     try {
       const r = await apiFetch<{ status: string; papers_processed: number }>(
         `/api/v1/projects/${project.id}/trigger`,
@@ -128,6 +185,8 @@ export default function ProjectDetailPage() {
     } catch (e) {
       setTriggerResult(`Error: ${String(e)}`);
     } finally {
+      liveAbortRef.current?.abort();
+      setActiveTask(null);
       setTriggering(false);
     }
   }
@@ -364,6 +423,23 @@ export default function ProjectDetailPage() {
             </p>
           )}
         </div>
+
+        {(triggering || liveEvents.length > 0) && (
+          <div className="rounded-[6px] border border-flow-800 bg-flow-950 p-3 font-mono text-xs space-y-1 animate-fade-in">
+            <p className="text-[10px] uppercase tracking-widest text-flow-500 mb-2">Live</p>
+            {triggering && liveEvents.length === 0 && (
+              <p className="text-muted-foreground/60 animate-pulse">Starting…</p>
+            )}
+            {liveEvents.map((ev, i) => (
+              <div key={i} className="flex items-center gap-2 text-flow-200">
+                <span className="shrink-0 text-flow-violet">{DIGEST_LABELS[ev.kind] ?? ev.kind}</span>
+                {formatDigestPayload(ev.payload) && (
+                  <span className="text-muted-foreground/60">{formatDigestPayload(ev.payload)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Run history timeline */}
