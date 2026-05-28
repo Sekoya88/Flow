@@ -8,7 +8,7 @@ import {
   CheckSquare,
   Download,
   FileText,
-  Github,
+  GitBranch,
   Loader2,
   Square,
   TriangleAlert,
@@ -142,7 +142,7 @@ export default function MarketplacePage() {
       {/* Header */}
       <header className="space-y-2">
         <div className="flex items-center gap-2">
-          <Github className="h-4 w-4 text-flow-violet" />
+          <GitBranch className="h-4 w-4 text-flow-violet" />
           <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-flow-violet/80">
             Import from GitHub
           </span>
@@ -182,7 +182,7 @@ export default function MarketplacePage() {
             {phase === "previewing" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Github className="h-3.5 w-3.5" />
+              <GitBranch className="h-3.5 w-3.5" />
             )}
             Browse
           </Button>
