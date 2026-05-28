@@ -1855,3 +1855,114 @@ class FlowRepository:
             skill_id,
         )
         return result == "UPDATE 1"
+
+    # ── Digest Runs ──────────────────────────────────────────────────────────
+
+    async def create_digest_run(
+        self,
+        workspace_id: UUID,
+        source: str | None = None,
+    ) -> UUID:
+        """Insert a new digest_runs row with status='running' and return its id."""
+        return await self._pool.fetchval(
+            """
+            INSERT INTO digest_runs (workspace_id, source)
+            VALUES ($1, $2)
+            RETURNING id
+            """,
+            workspace_id,
+            source,
+        )
+
+    async def update_digest_run(
+        self,
+        run_id: UUID,
+        *,
+        status: str | None = None,
+        paper_count: int | None = None,
+        error: str | None = None,
+        completed_at: bool = False,
+    ) -> None:
+        """Partial update on digest_runs. completed_at=True sets it to NOW()."""
+        parts: list[str] = []
+        params: list = [run_id]
+        idx = 2
+        if status is not None:
+            parts.append(f"status = ${idx}")
+            params.append(status)
+            idx += 1
+        if paper_count is not None:
+            parts.append(f"paper_count = ${idx}")
+            params.append(paper_count)
+            idx += 1
+        if error is not None:
+            parts.append(f"error = ${idx}")
+            params.append(error)
+            idx += 1
+        if completed_at:
+            parts.append("completed_at = NOW()")
+        if not parts:
+            return
+        await self._pool.execute(
+            f"UPDATE digest_runs SET {', '.join(parts)} WHERE id = $1",
+            *params,
+        )
+
+    async def list_digest_runs(
+        self,
+        workspace_id: UUID,
+        limit: int = 50,
+    ) -> list:
+        """Return recent digest runs for a workspace, newest first."""
+        return await self._pool.fetch(
+            """
+            SELECT id, workspace_id, status, source, paper_count, error,
+                   started_at, completed_at,
+                   EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000 AS duration_ms
+            FROM digest_runs
+            WHERE workspace_id = $1
+            ORDER BY started_at DESC
+            LIMIT $2
+            """,
+            workspace_id,
+            limit,
+        )
+
+    async def get_digest_run_papers(
+        self,
+        run_id: UUID,
+    ) -> list:
+        """Return all digest_papers linked to a specific digest run."""
+        return await self._pool.fetch(
+            """
+            SELECT id, workspace_id, title, abstract, source_url, arxiv_id,
+                   authors, categories, relevance_score, tldr, key_insights,
+                   summary_md, obsidian_path, status, published_at, digest_run_id
+            FROM digest_papers
+            WHERE digest_run_id = $1
+            ORDER BY relevance_score DESC
+            """,
+            run_id,
+        )
+
+    async def get_workspace_vault_path(
+        self,
+        workspace_id: UUID,
+    ) -> str | None:
+        """Return the configured Obsidian vault path for this workspace, or None."""
+        return await self._pool.fetchval(
+            "SELECT obsidian_vault_path FROM workspaces WHERE id = $1",
+            workspace_id,
+        )
+
+    async def set_workspace_vault_path(
+        self,
+        workspace_id: UUID,
+        path: str | None,
+    ) -> None:
+        """Set or clear the Obsidian vault path for this workspace."""
+        await self._pool.execute(
+            "UPDATE workspaces SET obsidian_vault_path = $2 WHERE id = $1",
+            workspace_id,
+            path,
+        )
