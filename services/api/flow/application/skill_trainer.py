@@ -450,7 +450,7 @@ class SkillTrainer:
         # 9. Persist candidate as inactive skill version
         candidate_skill_id = await _pool.fetchval(
             """INSERT INTO agent_skills (agent_id, workspace_id, name, content_md, active, version, category)
-               SELECT agent_id, workspace_id, name, $2, false, version::text || '-reflact', category
+               SELECT agent_id, workspace_id, name, $2, false, version + 1, category
                FROM agent_skills WHERE id = $1
                RETURNING id""",
             skill_id,
