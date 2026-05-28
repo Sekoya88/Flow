@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Search,
   Sparkles,
+  Target,
   Trash2,
   Workflow,
 } from "lucide-react";
@@ -148,7 +149,14 @@ export function AgentDetailDrawer({
   const [skillsLoaded, setSkillsLoaded] = useState(false);
 
   useEffect(() => {
-    if (agent && !isTogglingRef.current) setLocalTools(getTools(agent.config));
+    if (agent) {
+      if (!isTogglingRef.current) {
+        setLocalTools(getTools(agent.config));
+      } else {
+        // Guard fired — server state arriving after optimistic toggle; skip overwrite and clear flag
+        isTogglingRef.current = false;
+      }
+    }
     setSkills([]);
     setSkillsLoaded(false);
   }, [agent]);
@@ -336,6 +344,7 @@ export function AgentDetailDrawer({
                 <TabsTrigger value="versions" onClick={() => { if (versions.length === 0) void loadVersions(); }}>Versions</TabsTrigger>
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="skills" onClick={() => { void loadSkills(); }}>Skills</TabsTrigger>
+                <TabsTrigger value="evals">Evals</TabsTrigger>
                 <TabsTrigger value="live">Live</TabsTrigger>
               </TabsList>
 
@@ -386,7 +395,6 @@ export function AgentDetailDrawer({
                             setLocalTools((p) => ({ ...p, [key]: checked }));
                             setToggleError(null);
                             void onToolToggle?.(agent.id, key, checked)
-                              ?.then(() => { isTogglingRef.current = false; })
                               ?.catch(() => {
                                 isTogglingRef.current = false;
                                 setLocalTools(prev);
@@ -639,6 +647,56 @@ export function AgentDetailDrawer({
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Evals tab */}
+              <TabsContent value="evals" className="px-6 py-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Golden sets &amp; evaluation runs</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 gap-1 text-[10px] px-2"
+                      onClick={() => { onOpenChange(false); router.push(`/agents/${agent.id}/golden`); }}
+                    >
+                      <Target className="h-3 w-3" />
+                      Open Evals
+                    </Button>
+                  </div>
+                  <div className="rounded-xl border border-flow-800 bg-muted/10 p-4 space-y-3">
+                    <p className="text-[11px] text-muted-foreground/70 font-mono uppercase tracking-wide">Quick actions</p>
+                    <div className="space-y-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-xs h-8 border-flow-800"
+                        onClick={() => { onOpenChange(false); router.push(`/agents/${agent.id}/golden`); }}
+                      >
+                        <Target className="h-3.5 w-3.5 text-flow-violet" />
+                        Manage golden sets
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-xs h-8 border-flow-800"
+                        onClick={() => { onOpenChange(false); router.push(`/evals`); }}
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        Workspace evaluations
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-xs h-8 border-flow-800"
+                        onClick={() => { onOpenChange(false); router.push(`/agents/${agent.id}/skills/training`); }}
+                      >
+                        <Brain className="h-3.5 w-3.5 text-emerald-400" />
+                        Skill training (ReflACT)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="live" className="px-6 py-4">
