@@ -39,7 +39,16 @@ async def test_create_digest_run_returns_uuid(repo, mock_pool):
 @pytest.mark.asyncio
 async def test_update_digest_run_calls_execute(repo, mock_pool):
     await repo.update_digest_run(RUN_ID, status="done", paper_count=5)
-    mock_pool.execute.assert_awaited()
+    mock_pool.execute.assert_awaited_once()
+    call_sql = mock_pool.execute.call_args[0][0]
+    assert "digest_runs" in call_sql
+    assert "status" in call_sql
+
+
+@pytest.mark.asyncio
+async def test_update_digest_run_raises_on_no_fields(repo, mock_pool):
+    with pytest.raises(ValueError, match="no fields to update"):
+        await repo.update_digest_run(RUN_ID)
 
 
 @pytest.mark.asyncio

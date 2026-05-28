@@ -1902,7 +1902,7 @@ class FlowRepository:
         if completed_at:
             parts.append("completed_at = NOW()")
         if not parts:
-            return
+            raise ValueError("update_digest_run called with no fields to update")
         await self._pool.execute(
             f"UPDATE digest_runs SET {', '.join(parts)} WHERE id = $1",
             *params,
@@ -1918,7 +1918,7 @@ class FlowRepository:
             """
             SELECT id, workspace_id, status, source, paper_count, error,
                    started_at, completed_at,
-                   EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000 AS duration_ms
+                   COALESCE(EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000, 0) AS duration_ms
             FROM digest_runs
             WHERE workspace_id = $1
             ORDER BY started_at DESC
@@ -1962,7 +1962,7 @@ class FlowRepository:
     ) -> None:
         """Set or clear the Obsidian vault path for this workspace."""
         await self._pool.execute(
-            "UPDATE workspaces SET obsidian_vault_path = $2 WHERE id = $1",
-            workspace_id,
+            "UPDATE workspaces SET obsidian_vault_path = $1 WHERE id = $2",
             path,
+            workspace_id,
         )
