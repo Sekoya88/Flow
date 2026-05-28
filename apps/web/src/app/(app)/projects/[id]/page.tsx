@@ -9,6 +9,7 @@ import {
   BookOpen,
   CalendarClock,
   CheckCircle2,
+  Download,
   Layers,
   Loader2,
   Play,
@@ -67,6 +68,7 @@ type ProjectRun = {
   status: string;
   error_message: string | null;
   created_at: string;
+  digest_run_id: string | null;
 };
 
 // ── Inline SVG sparkline ──────────────────────────────────────────────────────
@@ -107,6 +109,8 @@ export default function ProjectDetailPage() {
   const [runsLoading, setRunsLoading] = useState(false);
   const [liveEvents, setLiveEvents] = useState<{ kind: string; payload: Record<string, unknown>; ts: number }[]>([]);
   const liveAbortRef = useRef<AbortController | null>(null);
+  const [exportingRunId, setExportingRunId] = useState<string | null>(null);
+  const [exportResults, setExportResults] = useState<Record<string, { exported: number; error?: string }>>({});
 
   async function load() {
     if (!id) return;
@@ -219,6 +223,22 @@ export default function ProjectDetailPage() {
       json: { enabled: !project.enabled },
     });
     setProject(updated);
+  }
+
+  async function handleExportObsidian(run: ProjectRun) {
+    if (!run.digest_run_id) return;
+    setExportingRunId(run.id);
+    try {
+      const data = await apiFetch<{ exported: number }>(
+        `/api/v1/digest/runs/${run.digest_run_id}/export-obsidian`,
+        { method: "POST" },
+      );
+      setExportResults((prev) => ({ ...prev, [run.id]: { exported: data.exported } }));
+    } catch (e) {
+      setExportResults((prev) => ({ ...prev, [run.id]: { exported: 0, error: String(e) } }));
+    } finally {
+      setExportingRunId(null);
+    }
   }
 
   if (loading) {
@@ -507,8 +527,38 @@ export default function ProjectDetailPage() {
                     </p>
                   </div>
                 </div>
-                <div className="shrink-0 text-right font-mono text-[10px] text-muted-foreground/40">
-                  {run.kg_nodes_before} → {run.kg_nodes_after}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="font-mono text-[10px] text-muted-foreground/40">
+                    {run.kg_nodes_before} → {run.kg_nodes_after}
+                  </span>
+                  {run.digest_run_id && (
+                    <button
+                      disabled={exportingRunId === run.id}
+                      onClick={() => void handleExportObsidian(run)}
+                      className={cn(
+                        "flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[9px] transition-colors",
+                        exportingRunId === run.id
+                          ? "cursor-wait border-flow-800 text-flow-600"
+                          : exportResults[run.id]?.error
+                          ? "border-red-500/30 text-red-400"
+                          : exportResults[run.id]
+                          ? "border-emerald-500/30 text-emerald-400"
+                          : "border-flow-700 text-flow-400 hover:border-flow-500 hover:text-flow-200",
+                      )}
+                      title="Export papers from this run to your Obsidian vault"
+                    >
+                      {exportingRunId === run.id ? (
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      ) : (
+                        <Download className="h-2.5 w-2.5" />
+                      )}
+                      {exportResults[run.id]?.error
+                        ? "Error"
+                        : exportResults[run.id]
+                        ? `✓ ${exportResults[run.id].exported} notes`
+                        : "Obsidian"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

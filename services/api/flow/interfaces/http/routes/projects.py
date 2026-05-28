@@ -198,6 +198,8 @@ async def trigger_project(
         stream_hub = getattr(request.app.state, "stream_hub", None)
         result = await run_research_digest(workspace_id=workspace_id_str, config=config, stream_hub=stream_hub)
         persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
+        digest_run_id_str: str | None = result.get("digest_run_id") if isinstance(result, dict) else None
+        digest_run_uuid: UUID | None = UUID(digest_run_id_str) if digest_run_id_str else None
 
         # KG node count after run
         nodes_after_row = await repo._pool.fetchrow(
@@ -213,12 +215,12 @@ async def trigger_project(
         await repo._pool.execute(
             """
             INSERT INTO project_runs
-                (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status)
-            VALUES ($1, $2, $3, $4, 'completed')
+                (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status, digest_run_id)
+            VALUES ($1, $2, $3, $4, 'completed', $5)
             """,
-            project_id, persisted, nodes_before, nodes_after,
+            project_id, persisted, nodes_before, nodes_after, digest_run_uuid,
         )
-        return {"status": "ok", "papers_processed": persisted}
+        return {"status": "ok", "papers_processed": persisted, "digest_run_id": digest_run_id_str}
     except Exception as exc:
         await repo._pool.execute(
             """
@@ -247,7 +249,7 @@ async def list_project_runs(
 
     runs = await repo._pool.fetch(
         """
-        SELECT id, papers_processed, kg_nodes_before, kg_nodes_after, status, error_message, created_at
+        SELECT id, papers_processed, kg_nodes_before, kg_nodes_after, status, error_message, created_at, digest_run_id
         FROM project_runs WHERE project_id = $1
         ORDER BY created_at DESC LIMIT 50
         """,
@@ -263,6 +265,7 @@ async def list_project_runs(
                 "kg_nodes_added": r["kg_nodes_after"] - r["kg_nodes_before"],
                 "status": r["status"],
                 "error_message": r["error_message"],
+                "digest_run_id": str(r["digest_run_id"]) if r["digest_run_id"] else None,
                 "created_at": r["created_at"].isoformat(),
             }
             for r in runs

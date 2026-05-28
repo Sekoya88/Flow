@@ -288,6 +288,54 @@ const KIND_PREFIX: Record<string, string> = {
   error: '✗',
 }
 
+function EventRow({ event: e }: { event: TrainingEvent }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasDetail = !!(e.data && (e.data.actual || e.data.rationale || e.data.analysis || e.data.content))
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        className={cn(
+          "flex w-full items-start gap-2 font-mono text-[10px] leading-relaxed text-left",
+          hasDetail && "cursor-pointer hover:opacity-80",
+        )}
+        onClick={() => hasDetail && setExpanded(x => !x)}
+      >
+        <span className={cn('w-[52px] shrink-0 truncate font-semibold', STAGE_COLORS[e.stage] ?? 'text-flow-500')}>
+          {e.stage}
+        </span>
+        <span className="shrink-0 w-3 text-flow-700 text-center">{KIND_PREFIX[e.kind] ?? '·'}</span>
+        <span className="text-flow-400 break-words min-w-0 flex-1">{e.message}</span>
+        {hasDetail && (
+          <span className="shrink-0 text-flow-700">{expanded ? '▲' : '▼'}</span>
+        )}
+      </button>
+      {expanded && e.data && (
+        <div className="ml-[68px] space-y-1 rounded border border-flow-800 bg-flow-900 p-2">
+          {!!e.data.actual && (
+            <div>
+              <p className="font-mono text-[9px] uppercase tracking-wider text-flow-600 mb-0.5">Agent response</p>
+              <p className="font-mono text-[10px] text-flow-300 whitespace-pre-wrap break-words leading-relaxed">{String(e.data.actual)}</p>
+            </div>
+          )}
+          {!!e.data.rationale && (
+            <div>
+              <p className="font-mono text-[9px] uppercase tracking-wider text-flow-600 mb-0.5">Judge rationale</p>
+              <p className="font-mono text-[10px] text-flow-400 whitespace-pre-wrap break-words leading-relaxed">{String(e.data.rationale)}</p>
+            </div>
+          )}
+          {!!e.data.content && !e.data.actual && (
+            <div>
+              <p className="font-mono text-[9px] uppercase tracking-wider text-flow-600 mb-0.5">Patch content</p>
+              <p className="font-mono text-[10px] text-flow-300 whitespace-pre-wrap break-words leading-relaxed">{String(e.data.content)}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LiveEventFeed({ events }: { events: TrainingEvent[] }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -304,16 +352,10 @@ function LiveEventFeed({ events }: { events: TrainingEvent[] }) {
   }
 
   return (
-    <div className="mt-3 max-h-52 overflow-y-auto rounded-md border border-flow-800 bg-flow-950 p-2 space-y-0.5">
+    <div className="mt-3 max-h-64 overflow-y-auto rounded-md border border-flow-800 bg-flow-950 p-2 space-y-0.5">
       <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-flow-600">Live log</p>
       {events.map((e) => (
-        <div key={e.id} className="flex items-start gap-2 font-mono text-[10px] leading-relaxed">
-          <span className={cn('w-[52px] shrink-0 truncate font-semibold', STAGE_COLORS[e.stage] ?? 'text-flow-500')}>
-            {e.stage}
-          </span>
-          <span className="shrink-0 w-3 text-flow-700 text-center">{KIND_PREFIX[e.kind] ?? '·'}</span>
-          <span className="text-flow-400 break-words min-w-0">{e.message}</span>
-        </div>
+        <EventRow key={e.id} event={e} />
       ))}
       <div ref={bottomRef} />
     </div>
