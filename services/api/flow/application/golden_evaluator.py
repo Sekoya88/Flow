@@ -121,7 +121,15 @@ async def run_agent_on_item(
         messages.append(SystemMessage(content=system_prompt))
     messages.append(HumanMessage(content=input_text))
 
-    invoke_config = RunnableConfig(metadata=langsmith_extra) if langsmith_extra else None
+    if langsmith_extra:
+        extra = dict(langsmith_extra)
+        invoke_config = RunnableConfig(
+            run_name=extra.pop("run_name", "skill-eval"),
+            tags=extra.pop("tags", ["skill_training"]),
+            metadata=extra,
+        )
+    else:
+        invoke_config = None
 
     try:
         result = await llm.ainvoke(messages, config=invoke_config)

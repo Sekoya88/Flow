@@ -153,6 +153,15 @@ class TrainingEpochOut(BaseModel):
     created_at: str  # ISO format
 
 
+class PatchOut(BaseModel):
+    op: str             # "replace" | "append" | "insert" | "delete"
+    target: str         # section heading targeted
+    content: str | None
+    impact_score: float | None
+    applied: bool
+    rejected: bool
+
+
 class TrainingRunOut(BaseModel):
     id: str
     status: str
@@ -179,3 +188,6 @@ class TrainingRunDetailOut(BaseModel):
     epochs: list[TrainingEpochOut]
     patches_applied: int
     patches_rejected: int
+    patches: list[PatchOut] = []
+    original_content: str | None = None
+    candidate_content: str | None = None

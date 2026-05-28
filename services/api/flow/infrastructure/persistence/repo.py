@@ -1843,6 +1843,24 @@ class FlowRepository:
             run_id,
         )
 
+    async def list_run_patches(self, run_id: UUID) -> list[asyncpg.Record]:
+        """Return all patches for a training run."""
+        return await self._pool.fetch(
+            """SELECT id, patch_json, applied, rejected
+               FROM skill_raw_patches
+               WHERE run_id = $1
+               ORDER BY created_at""",
+            run_id,
+        )
+
+    async def get_skill_content(self, skill_id: UUID) -> str | None:
+        """Return content_md for a skill, or None if not found."""
+        row = await self._pool.fetchrow(
+            "SELECT content_md FROM agent_skills WHERE id = $1",
+            skill_id,
+        )
+        return row["content_md"] if row else None
+
     async def patch_skill_training_mode(
         self,
         skill_id: UUID,

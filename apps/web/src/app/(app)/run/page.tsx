@@ -443,19 +443,22 @@ export default function RunPage() {
               };
               return next;
             });
-          } else if (data.kind === "final" && data.answer) {
-            fullAnswer = String(data.answer);
-            setLiveAnswer(fullAnswer);
-            setPersistedLiveAnswer(fullAnswer);
+          } else if (data.kind === "final") {
+            // Prefer explicit answer from server; fall back to tokens accumulated
+            // locally (for agents that stream tokens but don't set answer in state).
+            const ans = (data.answer && String(data.answer).trim()) ? String(data.answer) : fullAnswer;
+            fullAnswer = ans;
+            setLiveAnswer(ans);
+            setPersistedLiveAnswer(ans);
             setNode("synthesizer", { status: "done" });
             setHistory((prev) =>
               prev.map((e) =>
-                e.id === eid ? { ...e, status: "completed", answer: fullAnswer, completed_at: new Date().toISOString() } : e,
+                e.id === eid ? { ...e, status: "completed", answer: ans, completed_at: new Date().toISOString() } : e,
               ),
             );
             setThreadTurns((prev) =>
               prev.map((t) =>
-                t.id === eid ? { ...t, status: "completed", answer: fullAnswer } : t,
+                t.id === eid ? { ...t, status: "completed", answer: ans } : t,
               ),
             );
           } else if (data.kind === "error") {
@@ -876,14 +879,15 @@ export default function RunPage() {
             <button
               onClick={() => setShowInspector(!showInspector)}
               className={cn(
-                "rounded-lg p-2 transition-colors shrink-0",
+                "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors shrink-0",
                 showInspector
                   ? "text-flow-violet bg-flow-violet/10"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "text-muted-foreground hover:text-foreground hover:bg-flow-800",
               )}
-              title="Toggle inspector"
+              title="Show tool calls, citations and execution details"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Inspector</span>
             </button>
           </div>
         </div>

@@ -399,10 +399,13 @@ class SkillTrainer:
             effective_golden_set_id,
             config.mini_batch_size,
         )
+        skill_name = skill_row["name"] or str(skill_id)
         rollout_results = await self._stage_rollout(
             skill_row["content_md"],
             list(items),
             langsmith_extra={
+                "run_name": f"train/{skill_name}/rollout",
+                "tags": ["skill_training", f"skill:{str(skill_id)[:8]}"],
                 "kind": "skill_training",
                 "run_id": str(run_id),
                 "skill_id": str(skill_id),

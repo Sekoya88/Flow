@@ -6,9 +6,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  GitBranch,
   Layers,
   Loader2,
+  Minus,
   Play,
+  Plus,
   TrendingUp,
   XCircle,
   Zap,
@@ -16,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
-import { useSkillTrainingRuns, useStartTraining, useTrainingModeToggle, type TrainingRun } from '@/lib/useSkillTraining'
+import { useSkillTrainingRuns, useStartTraining, useTrainingModeToggle, type TrainingPatch, type TrainingRun } from '@/lib/useSkillTraining'
 
 interface Props {
   skillId: string
@@ -142,6 +145,122 @@ function ActiveRunProgress({ run }: { run: TrainingRun }) {
   )
 }
 
+// ── Simple line-level diff (no library needed) ────────────────────────────────
+
+function computeDiff(original: string, candidate: string): Array<{ type: 'same' | 'add' | 'remove'; line: string }> {
+  const aLines = original.split('\n')
+  const bLines = candidate.split('\n')
+  // Build LCS matrix
+  const m = aLines.length, n = bLines.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = aLines[i - 1] === bLines[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+  // Trace back
+  const result: Array<{ type: 'same' | 'add' | 'remove'; line: string }> = []
+  let i = m, j = n
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && aLines[i - 1] === bLines[j - 1]) {
+      result.unshift({ type: 'same', line: aLines[i - 1] })
+      i--; j--
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: 'add', line: bLines[j - 1] })
+      j--
+    } else {
+      result.unshift({ type: 'remove', line: aLines[i - 1] })
+      i--
+    }
+  }
+  return result
+}
+
+function SkillDiff({ original, candidate }: { original: string; candidate: string }) {
+  const [show, setShow] = useState(false)
+  const diff = computeDiff(original, candidate)
+  const changes = diff.filter(d => d.type !== 'same').length
+  if (changes === 0) return (
+    <div className="mt-3 rounded-md border border-flow-800 bg-flow-950 px-3 py-2">
+      <p className="font-mono text-[10px] text-flow-500">No changes to skill content.</p>
+    </div>
+  )
+  return (
+    <div className="mt-3 rounded-md border border-flow-800 bg-flow-950 overflow-hidden">
+      <button
+        className="flex w-full items-center justify-between px-3 py-2 text-left"
+        onClick={() => setShow(s => !s)}
+      >
+        <div className="flex items-center gap-2">
+          <GitBranch className="h-3 w-3 text-flow-500" />
+          <span className="font-mono text-[10px] text-flow-400">Skill diff</span>
+          <span className="font-mono text-[10px] text-emerald-400">+{diff.filter(d => d.type === 'add').length}</span>
+          <span className="font-mono text-[10px] text-red-400">-{diff.filter(d => d.type === 'remove').length}</span>
+        </div>
+        {show ? <ChevronDown className="h-3 w-3 text-flow-500" /> : <ChevronRight className="h-3 w-3 text-flow-500" />}
+      </button>
+      {show && (
+        <div className="border-t border-flow-800 overflow-x-auto">
+          <pre className="p-3 font-mono text-[10px] leading-relaxed">
+            {diff.map((d, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "px-1",
+                  d.type === 'add' ? 'bg-emerald-500/10 text-emerald-400' :
+                  d.type === 'remove' ? 'bg-red-500/10 text-red-400' :
+                  'text-flow-600'
+                )}
+              >
+                <span className="select-none mr-2 opacity-50">
+                  {d.type === 'add' ? <Plus className="inline h-2.5 w-2.5" /> : d.type === 'remove' ? <Minus className="inline h-2.5 w-2.5" /> : ' '}
+                </span>
+                {d.line || ' '}
+              </div>
+            ))}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PatchList({ patches }: { patches: TrainingPatch[] }) {
+  if (patches.length === 0) return null
+  const applied = patches.filter(p => p.applied)
+  const rejected = patches.filter(p => p.rejected)
+  return (
+    <div className="mt-3 space-y-1.5 rounded-md border border-flow-800 bg-flow-950 p-3">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-flow-500">
+        Patches · {applied.length} applied · {rejected.length} rejected
+      </p>
+      {patches.map((p, i) => (
+        <div key={i} className={cn(
+          "rounded border px-2 py-1.5 text-[10px]",
+          p.applied ? "border-emerald-500/20 bg-emerald-500/5" :
+          p.rejected ? "border-red-500/20 bg-red-500/5" :
+          "border-flow-800 bg-flow-900"
+        )}>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className={cn(
+              "rounded px-1 py-px font-mono text-[9px] font-bold uppercase",
+              p.op === 'replace' ? "bg-amber-500/20 text-amber-400" :
+              p.op === 'append' ? "bg-blue-500/20 text-blue-400" :
+              p.op === 'insert' ? "bg-emerald-500/20 text-emerald-400" :
+              "bg-red-500/20 text-red-400"
+            )}>{p.op}</span>
+            <span className="font-mono text-flow-400 truncate">{p.target}</span>
+            {p.impact_score != null && (
+              <span className="ml-auto shrink-0 font-mono text-[9px] text-flow-600">{p.impact_score.toFixed(2)}</span>
+            )}
+          </div>
+          {p.content && (
+            <p className="font-mono text-[10px] leading-relaxed text-flow-500 line-clamp-2 break-all">{p.content}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function RunCard({ run, defaultOpen }: { run: TrainingRun; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
   const date = new Date(run.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -191,6 +310,10 @@ function RunCard({ run, defaultOpen }: { run: TrainingRun; defaultOpen?: boolean
         <div className="border-t border-flow-800 px-3 pb-3">
           {isActive && <ActiveRunProgress run={run} />}
           <EpochTimeline run={run} />
+          {(run.patches ?? []).length > 0 && <PatchList patches={run.patches!} />}
+          {run.original_content && run.candidate_content && (
+            <SkillDiff original={run.original_content} candidate={run.candidate_content} />
+          )}
           {run.status === 'failed' && run.error_message && (
             <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/5 p-2.5">
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-red-400/70">Error</p>

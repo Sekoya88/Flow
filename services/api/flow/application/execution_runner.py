@@ -192,6 +192,16 @@ async def run_deer_execution(
         answer = values.get("answer") or ""
         confidence = float(values.get("confidence") or 0.8)
 
+        # Fallback: agents that stream tokens but don't set an explicit "answer"
+        # state key (e.g. ReAct/tool agents) — use last AIMessage content.
+        if not answer:
+            msgs = values.get("messages") or []
+            for msg in reversed(msgs):
+                content = getattr(msg, "content", "")
+                if content and getattr(msg, "type", "") == "ai":
+                    answer = content if isinstance(content, str) else str(content)
+                    break
+
         await repo.insert_event(execution_id, "final", {"answer": str(answer), "confidence": confidence})
         stream_hub.publish(execution_id, {"kind": "final", "answer": str(answer), "confidence": confidence})
 

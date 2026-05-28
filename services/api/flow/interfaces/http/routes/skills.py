@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import Annotated
@@ -27,6 +28,7 @@ from flow.interfaces.http.schemas import (
     SkillListOut,
     SkillPatchIn,
     SkillTestIn,
+    PatchOut,
     SkillUsageOut,
     SkillVibeCreateIn,
     SkillVibeModifyIn,
@@ -1014,10 +1016,17 @@ async def get_skill_training_run(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> TrainingRunDetailOut:
+    import json as _json
+
     run = await repo.get_training_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Training run not found")
-    epochs = await repo.list_training_epochs(run_id)
+
+    epochs, raw_patches = await asyncio.gather(
+        repo.list_training_epochs(run_id),
+        repo.list_run_patches(run_id),
+    )
+
     epoch_outs = [
         TrainingEpochOut(
             epoch=e["epoch"],
@@ -1029,7 +1038,40 @@ async def get_skill_training_run(
         )
         for e in epochs
     ]
-    patches_applied = sum(e["patch_count"] for e in epochs)
+
+    patch_outs: list[PatchOut] = []
+    patches_applied = 0
+    patches_rejected = 0
+    for p in raw_patches:
+        pj = p["patch_json"]
+        if isinstance(pj, str):
+            try:
+                pj = _json.loads(pj)
+            except Exception:
+                pj = {}
+        patch_outs.append(PatchOut(
+            op=str(pj.get("op", "")),
+            target=str(pj.get("target", "")),
+            content=str(pj.get("content", "")) if pj.get("content") else None,
+            impact_score=float(pj["impact_score"]) if pj.get("impact_score") is not None else None,
+            applied=bool(p["applied"]),
+            rejected=bool(p["rejected"]),
+        ))
+        if p["applied"]:
+            patches_applied += 1
+        if p["rejected"]:
+            patches_rejected += 1
+
+    # Fetch original skill content
+    original_content = await repo.get_skill_content(skill_id)
+
+    # Fetch candidate skill content from the best accepted epoch
+    candidate_content: str | None = None
+    for ep in reversed(epochs):
+        if ep["accepted"] and ep["candidate_skill_id"]:
+            candidate_content = await repo.get_skill_content(ep["candidate_skill_id"])
+            break
+
     return TrainingRunDetailOut(
         id=str(run["id"]),
         status=run["status"],
@@ -1040,5 +1082,8 @@ async def get_skill_training_run(
         created_at=run["created_at"].isoformat(),
         epochs=epoch_outs,
         patches_applied=patches_applied,
-        patches_rejected=0,
+        patches_rejected=patches_rejected,
+        patches=patch_outs,
+        original_content=original_content,
+        candidate_content=candidate_content,
     )

@@ -11,6 +11,15 @@ export interface TrainingEpoch {
   created_at: string
 }
 
+export interface TrainingPatch {
+  op: string             // "replace" | "append" | "insert" | "delete"
+  target: string         // section heading
+  content: string | null
+  impact_score: number | null
+  applied: boolean
+  rejected: boolean
+}
+
 export interface TrainingRun {
   id: string
   status: string       // "pending" | "running" | "done" | "failed"
@@ -21,8 +30,11 @@ export interface TrainingRun {
   created_at: string
   error_message?: string | null
   epochs?: TrainingEpoch[]
+  patches?: TrainingPatch[]
   patches_applied?: number
   patches_rejected?: number
+  original_content?: string | null
+  candidate_content?: string | null
 }
 
 interface TrainingRunsResponse {
@@ -30,18 +42,40 @@ interface TrainingRunsResponse {
 }
 
 // Poll training runs for a skill. Stops polling when all runs are done/failed.
+// For done/accepted runs, also fetches the detail (patches + diff content).
 export function useSkillTrainingRuns(skillId: string | undefined) {
   const [runs, setRuns] = useState<TrainingRun[]>([])
   const [loading, setLoading] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Track which run IDs have already been enriched with detail data
+  const enrichedRef = useRef<Set<string>>(new Set())
+
+  const enrichRun = useCallback(async (run: TrainingRun): Promise<TrainingRun> => {
+    if (!skillId) return run
+    if (enrichedRef.current.has(run.id)) return run
+    // Only fetch detail for terminal runs that have something to show
+    if (run.status !== 'done' && run.status !== 'failed') return run
+    try {
+      const detail = await apiFetch<TrainingRun>(`/api/v1/skills/${skillId}/training-runs/${run.id}`)
+      enrichedRef.current.add(run.id)
+      return { ...run, ...detail }
+    } catch {
+      return run
+    }
+  }, [skillId])
 
   const load = useCallback(async () => {
     if (!skillId) return
     try {
       const res = await apiFetch<TrainingRunsResponse>(`/api/v1/skills/${skillId}/training-runs`)
-      setRuns(res.runs ?? [])
+      const rawRuns = res.runs ?? []
+
+      // Enrich terminal runs with detail data (patches, content)
+      const enriched = await Promise.all(rawRuns.map(enrichRun))
+      setRuns(enriched)
+
       // Stop polling if no runs are active
-      const hasActive = (res.runs ?? []).some(r => r.status === 'pending' || r.status === 'running')
+      const hasActive = enriched.some(r => r.status === 'pending' || r.status === 'running')
       if (!hasActive && intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
@@ -49,7 +83,7 @@ export function useSkillTrainingRuns(skillId: string | undefined) {
     } catch {
       // silently ignore
     }
-  }, [skillId])
+  }, [skillId, enrichRun])
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current)
