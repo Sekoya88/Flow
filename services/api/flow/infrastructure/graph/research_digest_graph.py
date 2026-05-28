@@ -441,112 +441,113 @@ async def persist(state: DigestState) -> dict:
     digest_run_id_val = state.get("digest_run_id")
     settings = get_settings()
     pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
-
-    persisted_ids: list[str] = []
-    for note in state["obsidian_notes"]:
-        paper = note["paper"]
-        if not paper:  # daily index note has empty paper dict
-            continue
-        try:
-            row = await pool.fetchrow(
-                """
-                INSERT INTO digest_papers
-                    (workspace_id, title, abstract, source_url, arxiv_id,
-                     authors, categories, relevance_score, tldr, key_insights,
-                     summary_md, obsidian_path, status, published_at, digest_run_id)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13,$14)
-                ON CONFLICT (workspace_id, title) DO UPDATE SET
-                    tldr = COALESCE(EXCLUDED.tldr, digest_papers.tldr),
-                    key_insights = COALESCE(EXCLUDED.key_insights, digest_papers.key_insights),
-                    relevance_score = EXCLUDED.relevance_score,
-                    digest_run_id = EXCLUDED.digest_run_id,
-                    status = 'unread'
-                RETURNING id
-                """,
-                UUID(workspace_id),
-                paper["title"],
-                paper.get("abstract"),
-                paper.get("source_url"),
-                paper.get("arxiv_id"),
-                paper.get("authors", []),
-                paper.get("categories", []),
-                paper.get("relevance_score", 0.0),
-                paper.get("tldr"),
-                paper.get("key_insights"),
-                note["content"],
-                note["path"],
-                paper.get("published_at"),
-                UUID(digest_run_id_val) if digest_run_id_val else None,
-            )
-            if row:
-                persisted_ids.append(str(row["id"]))
-        except Exception:
-            logger.exception("digest.persist.paper_failed", title=paper.get("title"))
-
-    # ── Knowledge graph nodes for each persisted paper ───────────────────
-    paper_kg_ids: list[tuple[str, list[str]]] = []
-    for note in state["obsidian_notes"]:
-        paper = note["paper"]
-        if not paper:
-            continue
-        try:
-            row = await pool.fetchrow(
-                """
-                INSERT INTO kg_nodes
-                    (workspace_id, label, node_type, summary, source_path, metadata)
-                VALUES ($1, $2, 'paper', $3, $4, $5::jsonb)
-                ON CONFLICT (workspace_id, label, node_type) DO UPDATE
-                    SET summary = EXCLUDED.summary, source_path = EXCLUDED.source_path,
-                        metadata = EXCLUDED.metadata, updated_at = now()
-                RETURNING id
-                """,
-                UUID(workspace_id),
-                paper["title"][:500],
-                (paper.get("tldr") or paper.get("abstract", ""))[:500],
-                paper.get("source_url"),
-                json.dumps(
-                    {
-                        "arxiv_id": paper.get("arxiv_id"),
-                        "categories": paper.get("categories", []),
-                        "relevance_score": paper.get("relevance_score"),
-                    }
-                ),
-            )
-            if row:
-                paper_kg_ids.append((str(row["id"]), paper.get("categories", [])))
-        except Exception:
-            logger.warning("digest.persist.kg_node_failed", title=paper.get("title"))
-
-    # ── Edges between papers sharing categories ───────────────────────────
-    for i, (id_a, cats_a) in enumerate(paper_kg_ids):
-        for id_b, cats_b in paper_kg_ids[i + 1 :]:
-            shared = set(cats_a) & set(cats_b)
-            if not shared:
+    try:
+        persisted_ids: list[str] = []
+        for note in state["obsidian_notes"]:
+            paper = note["paper"]
+            if not paper:  # daily index note has empty paper dict
                 continue
-            weight = len(shared) / max(len(cats_a), len(cats_b), 1)
             try:
-                await pool.execute(
+                row = await pool.fetchrow(
                     """
-                    INSERT INTO kg_edges
-                        (workspace_id, source_id, target_id, edge_type, weight)
-                    VALUES ($1, $2, $3, 'co_category', $4)
-                    ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
+                    INSERT INTO digest_papers
+                        (workspace_id, title, abstract, source_url, arxiv_id,
+                         authors, categories, relevance_score, tldr, key_insights,
+                         summary_md, obsidian_path, status, published_at, digest_run_id)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'unread',$13,$14)
+                    ON CONFLICT (workspace_id, title) DO UPDATE SET
+                        tldr = COALESCE(EXCLUDED.tldr, digest_papers.tldr),
+                        key_insights = COALESCE(EXCLUDED.key_insights, digest_papers.key_insights),
+                        relevance_score = EXCLUDED.relevance_score,
+                        digest_run_id = EXCLUDED.digest_run_id,
+                        status = 'unread'
+                    RETURNING id
                     """,
                     UUID(workspace_id),
-                    UUID(id_a),
-                    UUID(id_b),
-                    weight,
+                    paper["title"],
+                    paper.get("abstract"),
+                    paper.get("source_url"),
+                    paper.get("arxiv_id"),
+                    paper.get("authors", []),
+                    paper.get("categories", []),
+                    paper.get("relevance_score", 0.0),
+                    paper.get("tldr"),
+                    paper.get("key_insights"),
+                    note["content"],
+                    note["path"],
+                    paper.get("published_at"),
+                    UUID(digest_run_id_val) if digest_run_id_val else None,
                 )
+                if row:
+                    persisted_ids.append(str(row["id"]))
             except Exception:
-                pass
+                logger.exception("digest.persist.paper_failed", title=paper.get("title"))
 
-    hub = state.get("stream_hub")
-    if hub:
-        await hub.publish_global(state["workspace_id"], "digest.persist_done", {"persisted": len(persisted_ids)})
+        # ── Knowledge graph nodes for each persisted paper ───────────────────
+        paper_kg_ids: list[tuple[str, list[str]]] = []
+        for note in state["obsidian_notes"]:
+            paper = note["paper"]
+            if not paper:
+                continue
+            try:
+                row = await pool.fetchrow(
+                    """
+                    INSERT INTO kg_nodes
+                        (workspace_id, label, node_type, summary, source_path, metadata)
+                    VALUES ($1, $2, 'paper', $3, $4, $5::jsonb)
+                    ON CONFLICT (workspace_id, label, node_type) DO UPDATE
+                        SET summary = EXCLUDED.summary, source_path = EXCLUDED.source_path,
+                            metadata = EXCLUDED.metadata, updated_at = now()
+                    RETURNING id
+                    """,
+                    UUID(workspace_id),
+                    paper["title"][:500],
+                    (paper.get("tldr") or paper.get("abstract", ""))[:500],
+                    paper.get("source_url"),
+                    json.dumps(
+                        {
+                            "arxiv_id": paper.get("arxiv_id"),
+                            "categories": paper.get("categories", []),
+                            "relevance_score": paper.get("relevance_score"),
+                        }
+                    ),
+                )
+                if row:
+                    paper_kg_ids.append((str(row["id"]), paper.get("categories", [])))
+            except Exception:
+                logger.warning("digest.persist.kg_node_failed", title=paper.get("title"))
 
-    await pool.close()
-    logger.info("digest.persist.done", persisted=len(persisted_ids))
-    return {"persisted_ids": persisted_ids}
+        # ── Edges between papers sharing categories ───────────────────────────
+        for i, (id_a, cats_a) in enumerate(paper_kg_ids):
+            for id_b, cats_b in paper_kg_ids[i + 1 :]:
+                shared = set(cats_a) & set(cats_b)
+                if not shared:
+                    continue
+                weight = len(shared) / max(len(cats_a), len(cats_b), 1)
+                try:
+                    await pool.execute(
+                        """
+                        INSERT INTO kg_edges
+                            (workspace_id, source_id, target_id, edge_type, weight)
+                        VALUES ($1, $2, $3, 'co_category', $4)
+                        ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
+                        """,
+                        UUID(workspace_id),
+                        UUID(id_a),
+                        UUID(id_b),
+                        weight,
+                    )
+                except Exception:
+                    pass
+
+        hub = state.get("stream_hub")
+        if hub:
+            await hub.publish_global(state["workspace_id"], "digest.persist_done", {"persisted": len(persisted_ids)})
+
+        logger.info("digest.persist.done", persisted=len(persisted_ids))
+        return {"persisted_ids": persisted_ids}
+    finally:
+        await pool.close()
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
@@ -624,6 +625,7 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
                 )
             except Exception:
                 logger.warning("digest.run.update_failed_status_error")
+        raise
     finally:
         await pool.close()
         persisted = len(result.get("persisted_ids", []))
