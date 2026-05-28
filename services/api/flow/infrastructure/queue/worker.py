@@ -154,6 +154,51 @@ async def task_run_skill_training(
 
     _train_log = get_logger("flow.training")
 
+    # LangSmith tracing — optional, gracefully degrades if not configured
+    _ls_run_id: str | None = None
+    try:
+        from langsmith import Client as _LSClient
+        _ls_client = _LSClient()
+
+        def _start_ls_run() -> None:
+            nonlocal _ls_run_id
+            try:
+                import uuid as _uuid
+                ls_run = _ls_client.create_run(
+                    name=f"training/{run_id[:8]}",
+                    run_type="chain",
+                    inputs={"skill_id": skill_id, "run_id": run_id},
+                    tags=["training"],
+                )
+                _ls_run_id = str(ls_run.id) if ls_run and hasattr(ls_run, "id") else None
+            except Exception:
+                pass
+
+        def _end_ls_run(outputs: dict, error: str | None = None) -> None:
+            if not _ls_run_id:
+                return
+            try:
+                import uuid as _uuid
+                if error:
+                    _ls_client.update_run(
+                        _uuid.UUID(_ls_run_id),
+                        error=error,
+                        end_time=__import__("datetime").datetime.utcnow(),
+                    )
+                else:
+                    _ls_client.update_run(
+                        _uuid.UUID(_ls_run_id),
+                        outputs=outputs,
+                        end_time=__import__("datetime").datetime.utcnow(),
+                    )
+            except Exception:
+                pass
+
+        _start_ls_run()
+    except ImportError:
+        def _start_ls_run() -> None: pass  # type: ignore[misc]
+        def _end_ls_run(outputs: dict, error: str | None = None) -> None: pass  # type: ignore[misc]
+
     await repo.update_training_run(_run_id, status="running", started_at=True)
     _train_log.info("training.run.start", run_id=run_id, skill_id=skill_id, agent_id=agent_id)
     if stream_hub:
@@ -277,6 +322,7 @@ async def task_run_skill_training(
             completed_at=True,
         )
         _train_log.info("training.run.done", run_id=run_id, skill_id=skill_id)
+        _end_ls_run({"run_id": run_id, "accepted": final_accepted, "best_score": best_score})
         if stream_hub:
             await stream_hub.publish_global(workspace_id, kind="skill.training.done", payload={
                 "run_id": run_id, "skill_id": skill_id,
@@ -285,6 +331,7 @@ async def task_run_skill_training(
 
     except Exception as exc:
         _train_log.error("training.run.failed", run_id=run_id, skill_id=skill_id, error=str(exc))
+        _end_ls_run({}, error=str(exc))
         await repo.update_training_run(_run_id, status="failed", error_message=str(exc), completed_at=True)
         if stream_hub:
             await stream_hub.publish_global(workspace_id, kind="skill.training.failed", payload={
