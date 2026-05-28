@@ -663,9 +663,11 @@ async def export_digest_to_obsidian(
     ws_id = ws_rows[0]["id"]
 
     # Verify this run belongs to this workspace
-    run_rows = await repo.list_digest_runs(ws_id, limit=500)
-    run_ids = {r["id"] for r in run_rows}
-    if run_id not in run_ids:
+    run_row = await repo._pool.fetchrow(
+        "SELECT workspace_id FROM digest_runs WHERE id = $1",
+        run_id,
+    )
+    if run_row is None or run_row["workspace_id"] != ws_id:
         raise HTTPException(status_code=404, detail="digest run not found")
 
     vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get(
@@ -680,7 +682,7 @@ async def export_digest_to_obsidian(
     vault_root = Path(vault_str).expanduser().resolve()
     if not vault_root.exists():
         raise HTTPException(
-            status_code=400, detail=f"Vault path does not exist: {vault_root}"
+            status_code=400, detail="Vault path does not exist on this server."
         )
 
     papers = await repo.get_digest_run_papers(run_id)
@@ -695,8 +697,8 @@ async def export_digest_to_obsidian(
         try:
             out = _safe_write(vault_root, note_path, content)
             written_paths.append(str(out.relative_to(vault_root)))
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid note path in digest paper.")
 
     # Write index note with wikilinks to each paper
     if papers:
