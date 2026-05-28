@@ -192,9 +192,9 @@ async def _get_agent_config(pool, agent_id: UUID) -> dict:
         cfg = json.loads(raw) if isinstance(raw, str) else dict(raw)
         return {
             "system_prompt": cfg.get("system_prompt", ""),
-            "llm_config": cfg.get("llm_config") or cfg.get("model") or {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3},
+            "llm_config": cfg.get("llm_config") or cfg.get("model") or {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3},
         }
-    return {"system_prompt": "", "llm_config": {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}}
+    return {"system_prompt": "", "llm_config": {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}}
 
 
 async def _run_ab_test(pool, test_id: UUID, golden_set_id: UUID, agent_a_id: UUID, agent_b_id: UUID):

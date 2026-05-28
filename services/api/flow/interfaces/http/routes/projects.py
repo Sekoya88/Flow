@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from flow.infrastructure.observability.logging import get_logger
@@ -160,6 +160,7 @@ async def delete_project(
 
 @router.post("/projects/{project_id}/trigger")
 async def trigger_project(
+    request: Request,
     project_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
@@ -194,7 +195,8 @@ async def trigger_project(
         if project["kg_namespace"]:
             config["kg_namespace"] = project["kg_namespace"]
 
-        result = await run_research_digest(workspace_id=workspace_id_str, config=config)
+        stream_hub = getattr(request.app.state, "stream_hub", None)
+        result = await run_research_digest(workspace_id=workspace_id_str, config=config, stream_hub=stream_hub)
         persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
 
         # KG node count after run

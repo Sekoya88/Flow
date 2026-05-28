@@ -123,6 +123,27 @@ async def get_log_detail(
 
     events = await repo.list_events(execution_id)
 
+    # Fetch skills used in this execution
+    skill_rows = await repo._pool.fetch(
+        """
+        SELECT see.skill_id, s.name AS skill_name, see.matched_text, see.created_at
+        FROM skill_execution_events see
+        JOIN skills s ON s.id = see.skill_id
+        WHERE see.execution_id = $1
+        ORDER BY see.created_at
+        """,
+        execution_id,
+    )
+    skills_used = [
+        {
+            "skill_id": str(r["skill_id"]),
+            "skill_name": r["skill_name"],
+            "matched_text": r["matched_text"],
+            "created_at": r["created_at"].isoformat(),
+        }
+        for r in skill_rows
+    ]
+
     # Build structured timeline
     timeline = []
     for ev in events:
@@ -168,4 +189,5 @@ async def get_log_detail(
         "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
         "duration_ms": duration_ms,
         "timeline": timeline,
+        "skills_used": skills_used,
     }

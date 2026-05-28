@@ -156,7 +156,7 @@ async def create_knowledge_from_image(
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     llm = ChatOpenAI(
         api_key=settings.openai_api_key,
-        model="gpt-5.4-mini",
+        model="gpt-4o-mini",
         temperature=0,
         max_tokens=1024,
     )

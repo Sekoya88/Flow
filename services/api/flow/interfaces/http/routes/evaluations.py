@@ -33,6 +33,8 @@ async def run_evaluation_sse(
     checks for regression and genome improvement.
     """
 
+    stream_hub = getattr(request.app.state, "stream_hub", None)
+
     async def event_generator():
         def evt(kind: str, **payload) -> str:
             return f"data: {json.dumps({'kind': kind, **payload})}\n\n"
@@ -73,7 +75,7 @@ async def run_evaluation_sse(
                 "temperature": active_genome.llm_config.temperature,
             }
             if active_genome
-            else {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
+            else {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
         )
 
         yield evt("info", message=f"Genome: {agent_version} | model: {llm_config['model']}")
@@ -99,6 +101,14 @@ async def run_evaluation_sse(
 
         yield evt("info", message=f"Running {len(items)} items through {llm_config['model']}…")
 
+        if stream_hub:
+            await stream_hub.publish_global(str(workspace_id), kind="eval.started", payload={
+                "agent_id": str(resolved_agent_id),
+                "golden_set_id": str(resolved_set_id),
+                "total": len(items),
+                "model": llm_config["model"],
+            })
+
         openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
         judge_client = AsyncOpenAI(api_key=openai_key)
         eval_run_id = uuid4()
@@ -114,6 +124,14 @@ async def run_evaluation_sse(
                 system_prompt=system_prompt,
                 llm_config=llm_config,
                 openai_api_key=openai_key,
+                langsmith_extra={
+                    "kind": "evaluation",
+                    "workspace_id": str(workspace_id),
+                    "agent_id": str(resolved_agent_id),
+                    "golden_set_id": str(resolved_set_id),
+                    "eval_run_id": str(eval_run_id),
+                    "item_index": i,
+                },
             )
 
             yield evt("progress", index=i, total=len(items), message=f"Item {i + 1}/{len(items)}: scoring with judge…")
@@ -172,6 +190,15 @@ async def run_evaluation_sse(
             "summary",
             message=f"Done — pass rate: {pass_rate * 100:.1f}% | avg score: {avg_score:.3f}",
         )
+
+        if stream_hub:
+            await stream_hub.publish_global(str(workspace_id), kind="eval.done", payload={
+                "agent_id": str(resolved_agent_id),
+                "golden_set_id": str(resolved_set_id),
+                "total": total, "scored": scored,
+                "avg_score": round(avg_score, 3),
+                "pass_rate": round(pass_rate, 3),
+            })
 
         if pass_rate < 0.7:
             yield evt("warning", message="REGRESSION — pass rate below 70% threshold")
@@ -473,7 +500,7 @@ async def trigger_improvement(
             "temperature": active_genome.llm_config.temperature,
         }
         if active_genome
-        else {"provider": "openai", "model": "gpt-5.4-mini", "temperature": 0.3}
+        else {"provider": "openai", "model": "gpt-4o-mini", "temperature": 0.3}
     )
 
     # Resolve golden set
