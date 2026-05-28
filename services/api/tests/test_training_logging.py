@@ -70,7 +70,7 @@ async def test_worker_emits_training_structlog_events():
                     skill_id=skill_id,
                     agent_id=agent_id,
                     workspace_id=workspace_id,
-                    config_dict={"max_epochs": 1, "learning_rate": 0.1},
+                    config_dict={"max_epochs": 1},
                 )
             except Exception:
                 pass  # we only care about log events, not full success
