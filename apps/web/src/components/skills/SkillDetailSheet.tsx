@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, GitBranch, History, Loader2, Play, Sparkles, Wand2 } from 'lucide-react'
+import { BrainCircuit, CheckCircle2, GitBranch, History, Loader2, Play, Sparkles, Wand2 } from 'lucide-react'
 import { SkillDiffView } from '@/components/agents/SkillDiffView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import type { SkillCatalogRow } from '@/lib/useSkillsCatalog'
 import { useSkillHistory } from '@/lib/useSkillHistory'
 import { useSkillUsage, type UsageDay } from '@/lib/useSkillUsage'
 import { SkillPlayground } from './SkillPlayground'
+import { SkillTrainingPanel } from './SkillTrainingPanel'
 
 function UsageSparkline({ data }: { data: UsageDay[] }) {
   if (data.length < 2) return null
@@ -44,7 +45,8 @@ function UsageSparkline({ data }: { data: UsageDay[] }) {
 
 interface SkillDetailSheetProps {
   skill: SkillCatalogRow | null
-  initialTab?: 'overview' | 'versions' | 'playground'
+  initialTab?: 'overview' | 'versions' | 'playground' | 'train'
+  workspaceId?: string
   onOpenChange: (open: boolean) => void
   onActivated?: () => void
 }
@@ -52,6 +54,7 @@ interface SkillDetailSheetProps {
 export function SkillDetailSheet({
   skill,
   initialTab = 'overview',
+  workspaceId,
   onOpenChange,
   onActivated,
 }: SkillDetailSheetProps) {
@@ -222,6 +225,10 @@ export function SkillDetailSheet({
                   <TabsTrigger value="vibe">
                     <Wand2 className="mr-1 h-3.5 w-3.5" />
                     Vibe
+                  </TabsTrigger>
+                  <TabsTrigger value="train">
+                    <BrainCircuit className="mr-1 h-3.5 w-3.5" />
+                    Train
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -450,6 +457,25 @@ export function SkillDetailSheet({
                     )}
                   </div>
                 </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="train" className="flex-1 overflow-auto">
+                {workspaceId ? (
+                  <div className="p-6">
+                    <SkillTrainingPanel
+                      skillId={skill.id}
+                      skillName={skill.name}
+                      agentId={skill.agent_id}
+                      workspaceId={workspaceId}
+                      trainingMode={null}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <BrainCircuit className="h-8 w-8 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">Workspace not available.</p>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>

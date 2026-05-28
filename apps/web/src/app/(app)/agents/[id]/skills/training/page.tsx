@@ -8,9 +8,9 @@ import { apiFetch } from '@/lib/api'
 
 type SkillRow = {
   id: string
+  agent_id: string
   name: string
-  training_mode: string | null
-  workspace_id: string
+  metadata: Record<string, unknown>
 }
 
 type SkillsResponse = { skills: SkillRow[] }
@@ -35,7 +35,7 @@ export default function SkillTrainingPage() {
     ])
       .then(([agent]) => {
         setWorkspaceId(agent.workspace_id)
-        return apiFetch<SkillsResponse>(`/api/v1/skills?agent_id=${agentId}&workspace_id=${agent.workspace_id}`)
+        return apiFetch<SkillsResponse>(`/api/v1/skills/catalog?workspace_id=${agent.workspace_id}`)
       })
       .then(res => setSkills(res.skills ?? []))
       .catch(() => {})
@@ -75,9 +75,9 @@ export default function SkillTrainingPage() {
             key={skill.id}
             skillId={skill.id}
             skillName={skill.name}
-            agentId={agentId}
+            agentId={skill.agent_id}
             workspaceId={workspaceId ?? ''}
-            trainingMode={skill.training_mode ?? null}
+            trainingMode={(skill.metadata?.training_mode as string | null) ?? null}
           />
         ))}
       </div>

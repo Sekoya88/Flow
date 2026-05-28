@@ -4,6 +4,7 @@ import Link from 'next/link'
 import {
   BarChart2,
   Brain,
+  BrainCircuit,
   Calendar,
   Code2,
   Layers,
@@ -63,7 +64,7 @@ export default function SkillsHubPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [sort, setSort] = useState<SortKey>('score')
   const [selected, setSelected] = useState<SkillCatalogRow | null>(null)
-  const [initialTab, setInitialTab] = useState<'overview' | 'versions' | 'playground'>('overview')
+  const [initialTab, setInitialTab] = useState<'overview' | 'versions' | 'playground' | 'train'>('overview')
   const [createOpen, setCreateOpen] = useState(false)
 
   const { skills, loading, error, reload } = useSkillsCatalog(workspaceId ?? undefined, {
@@ -122,6 +123,7 @@ export default function SkillsHubPage() {
 
   const openSkill = (skill: SkillCatalogRow) => { setInitialTab('overview'); setSelected(skill) }
   const tryRun = (skill: SkillCatalogRow) => { setInitialTab('playground'); setSelected(skill) }
+  const trainSkill = (skill: SkillCatalogRow) => { setInitialTab('train'); setSelected(skill) }
 
   if (wsLoading) {
     return (
@@ -271,11 +273,12 @@ export default function SkillsHubPage() {
             const colorClass = CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.General
             const previews = categoryPreviews[cat] ?? []
             const count = categoryCounts[cat] ?? 0
+            const firstSkill = previews[0] ?? null
             return (
-              <button
+              <div
                 key={cat}
+                className="group flex flex-col gap-3 rounded-[8px] border border-flow-800 bg-flow-950 p-5 text-left transition-all duration-150 hover:border-flow-600 hover:bg-flow-900 cursor-pointer"
                 onClick={() => setCategoryFilter(cat)}
-                className="group flex flex-col gap-3 rounded-[8px] border border-flow-800 bg-flow-950 p-5 text-left transition-all duration-150 hover:border-flow-600 hover:bg-flow-900"
               >
                 <div className="flex items-center justify-between">
                   <div className={cn('flex h-9 w-9 items-center justify-center rounded-[6px] border', colorClass)}>
@@ -305,7 +308,22 @@ export default function SkillsHubPage() {
                     </span>
                   )}
                 </div>
-              </button>
+                <div className="mt-auto flex items-center justify-between gap-2 pt-1 border-t border-flow-800/60">
+                  <span className="font-mono text-[10px] text-flow-600 group-hover:text-flow-400 transition-colors">
+                    Browse all →
+                  </span>
+                  {firstSkill && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); trainSkill(firstSkill) }}
+                      className="flex items-center gap-1 rounded-[4px] border border-flow-violet/30 bg-flow-violet/10 px-2 py-0.5 font-mono text-[10px] text-flow-violet hover:bg-flow-violet/20 hover:border-flow-violet/50 transition-colors"
+                    >
+                      <BrainCircuit className="h-3 w-3" />
+                      Train
+                    </button>
+                  )}
+                </div>
+              </div>
             )
           })}
         </div>
@@ -338,7 +356,7 @@ export default function SkillsHubPage() {
               )}
               <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {visible.map(skill => (
-                  <SkillHubCard key={skill.id} skill={skill} onOpen={openSkill} onTry={tryRun} />
+                  <SkillHubCard key={skill.id} skill={skill} onOpen={openSkill} onTry={tryRun} onTrain={trainSkill} />
                 ))}
               </section>
             </>
@@ -356,6 +374,7 @@ export default function SkillsHubPage() {
       <SkillDetailSheet
         skill={selected}
         initialTab={initialTab}
+        workspaceId={workspaceId ?? undefined}
         onOpenChange={o => !o && setSelected(null)}
         onActivated={reload}
       />

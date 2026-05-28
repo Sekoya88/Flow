@@ -1,5 +1,5 @@
 'use client'
-import { Activity, Layers, Play, Workflow } from 'lucide-react'
+import { Activity, BrainCircuit, Layers, Play, Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,9 +19,10 @@ interface SkillHubCardProps {
   skill: SkillCatalogRow
   onOpen: (skill: SkillCatalogRow) => void
   onTry: (skill: SkillCatalogRow) => void
+  onTrain?: (skill: SkillCatalogRow) => void
 }
 
-export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
+export function SkillHubCard({ skill, onOpen, onTry, onTrain }: SkillHubCardProps) {
   const shownTriggers = skill.triggers.slice(0, 3)
   const extra = skill.triggers.length - shownTriggers.length
 
@@ -89,19 +90,36 @@ export function SkillHubCard({ skill, onOpen, onTry }: SkillHubCardProps) {
             {skill.use_count} runs
           </span>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="border-flow-violet/40 text-flow-violet opacity-80 transition-opacity group-hover:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation()
-            onTry(skill)
-          }}
-        >
-          <Play className="mr-1 h-3 w-3" />
-          Try
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {onTrain && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-flow-violet/70 hover:text-flow-violet hover:bg-flow-violet/10 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                onTrain(skill)
+              }}
+            >
+              <BrainCircuit className="mr-1 h-3 w-3" />
+              Train
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-flow-violet/40 text-flow-violet opacity-80 transition-opacity group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation()
+              onTry(skill)
+            }}
+          >
+            <Play className="mr-1 h-3 w-3" />
+            Try
+          </Button>
+        </div>
       </footer>
     </article>
   )
