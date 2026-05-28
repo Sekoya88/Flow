@@ -1861,6 +1861,16 @@ class FlowRepository:
         )
         return row["content_md"] if row else None
 
+    async def list_training_events(self, run_id: UUID) -> list[asyncpg.Record]:
+        """Return all COT events for a training run, ordered chronologically."""
+        return await self._pool.fetch(
+            """SELECT id, stage, kind, message, data, created_at
+               FROM skill_training_events
+               WHERE run_id = $1
+               ORDER BY created_at""",
+            run_id,
+        )
+
     async def patch_skill_training_mode(
         self,
         skill_id: UUID,

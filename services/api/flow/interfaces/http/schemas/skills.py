@@ -191,3 +191,16 @@ class TrainingRunDetailOut(BaseModel):
     patches: list[PatchOut] = []
     original_content: str | None = None
     candidate_content: str | None = None
+
+
+class TrainingEventOut(BaseModel):
+    id: str
+    stage: str   # 'epoch' | 'rollout' | 'reflect' | 'select' | 'update' | 'evaluate'
+    kind: str    # 'stage_start' | 'item_result' | 'patch_proposed' | 'analysis' | 'summary' | 'score' | 'error'
+    message: str
+    data: dict[str, Any] | None = None
+    created_at: str
+
+
+class TrainingEventsOut(BaseModel):
+    events: list[TrainingEventOut]

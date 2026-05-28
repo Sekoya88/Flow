@@ -34,6 +34,8 @@ from flow.interfaces.http.schemas import (
     SkillVibeModifyIn,
     TrainingConfigIn,
     TrainingEpochOut,
+    TrainingEventOut,
+    TrainingEventsOut,
     TrainingRunDetailOut,
     TrainingRunOut,
     TrainingRunsOut,
@@ -1086,4 +1088,28 @@ async def get_skill_training_run(
         patches=patch_outs,
         original_content=original_content,
         candidate_content=candidate_content,
+    )
+
+
+@router.get("/{skill_id}/training-runs/{run_id}/events", response_model=TrainingEventsOut)
+async def get_training_run_events(
+    skill_id: UUID,
+    run_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> TrainingEventsOut:
+    """Return all COT events for a training run, ordered chronologically."""
+    events = await repo.list_training_events(run_id)
+    return TrainingEventsOut(
+        events=[
+            TrainingEventOut(
+                id=str(e["id"]),
+                stage=e["stage"],
+                kind=e["kind"],
+                message=e["message"],
+                data=dict(e["data"]) if e["data"] else None,
+                created_at=e["created_at"].isoformat(),
+            )
+            for e in events
+        ]
     )

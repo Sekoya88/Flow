@@ -32,6 +32,29 @@ from flow.infrastructure.observability.logging import get_logger
 log = get_logger("flow.training")
 
 
+async def _emit(
+    pool: asyncpg.Pool,
+    run_id: UUID,
+    stage: str,
+    kind: str,
+    message: str,
+    data: dict | None = None,
+) -> None:
+    """Insert a training event row; swallows errors so training is never blocked."""
+    try:
+        await pool.execute(
+            """INSERT INTO skill_training_events (run_id, stage, kind, message, data)
+               VALUES ($1, $2, $3, $4, $5::jsonb)""",
+            run_id,
+            stage,
+            kind,
+            message,
+            json.dumps(data) if data else None,
+        )
+    except Exception as exc:
+        log.warning("training.emit_failed", error=str(exc))
+
+
 # ── Data classes ─────────────────────────────────────────────────────────────
 
 
@@ -134,10 +157,10 @@ class SkillTrainer:
         rejected_patches: list[dict],
         *,
         client: AsyncOpenAI | None = None,
-    ) -> list[RawPatch]:
+    ) -> tuple[list[RawPatch], str]:
         """Analyze failures and propose targeted patches via LLM.
 
-        Returns list of RawPatch objects; returns [] on JSON parse failure.
+        Returns (patches, failure_analysis) tuple; patches=[] on JSON parse failure.
         """
         if client is None:
             api_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
@@ -187,6 +210,7 @@ class SkillTrainer:
                 json_str = "\n".join(lines[1:-1]) if len(lines) > 2 else json_str
 
             data = json.loads(json_str)
+            analysis: str = data.get("failure_analysis", "")
             patches = []
             for p in data.get("patches", []):
                 try:
@@ -200,14 +224,14 @@ class SkillTrainer:
                     )
                 except (KeyError, TypeError, ValueError) as exc:
                     log.warning("training.patch.malformed", error=str(exc))
-            return patches
+            return patches, analysis
 
         except json.JSONDecodeError as exc:
             log.warning("training.reflect.json_parse_failed", error=str(exc))
-            return []
+            return [], ""
         except Exception as exc:
             log.error("training.reflect.failed", error=str(exc))
-            return []
+            return [], ""
 
     # ── Stage 3: Aggregate ────────────────────────────────────────────────────
 
@@ -372,6 +396,7 @@ class SkillTrainer:
             effective_golden_set_id = gs_row["id"] if gs_row else None
 
         if effective_golden_set_id is None:
+            await _emit(_pool, run_id, "epoch", "error", "No golden set found — add golden examples first.")
             return {
                 "accepted": False,
                 "eval_score": 0.0,
@@ -380,6 +405,10 @@ class SkillTrainer:
                 "patches_applied": 0,
                 "patches_rejected": 0,
             }
+
+        await _emit(_pool, run_id, "epoch", "stage_start",
+            f"Epoch starting — baseline score: {baseline_score:.3f}",
+            {"baseline_score": baseline_score, "skill_name": skill_row["name"]})
 
         # 4. Get rejected patches (cross-epoch buffer)
         rejected = await _pool.fetch(
@@ -394,6 +423,7 @@ class SkillTrainer:
         ]
 
         # 5. Rollout — fetch items and run agent
+        await _emit(_pool, run_id, "rollout", "stage_start", "Running agent on golden items…")
         items = await _pool.fetch(
             "SELECT input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1 LIMIT $2",
             effective_golden_set_id,
@@ -413,10 +443,20 @@ class SkillTrainer:
                 "workspace_id": str(workspace_id),
             },
         )
+        for r in rollout_results:
+            passed = r["score"] >= 0.7
+            await _emit(_pool, run_id, "rollout", "item_result",
+                f"{'✓' if passed else '✗'} Score {r['score']:.3f} — {r['input_text'][:80]}",
+                {"score": r["score"], "input": r["input_text"][:150],
+                 "actual": r["actual_output"][:300], "rationale": r.get("rationale", "")})
         failures = [r for r in rollout_results if r["score"] < 0.7]
+        await _emit(_pool, run_id, "rollout", "summary",
+            f"{len(failures)}/{len(rollout_results)} items failed (score < 0.7)",
+            {"total": len(rollout_results), "failures": len(failures)})
 
         if not failures:
-            # Skill is already performing well — no changes needed
+            await _emit(_pool, run_id, "epoch", "stage_start",
+                "Skill already performing well — no patches needed.")
             return {
                 "accepted": False,
                 "eval_score": baseline_score,
@@ -427,15 +467,29 @@ class SkillTrainer:
             }
 
         # 6. Reflect — propose patches
-        patches = await self._stage_reflect(body, failures[:3], rejected_targets)
+        await _emit(_pool, run_id, "reflect", "stage_start",
+            f"Analyzing {len(failures)} failure(s) with LLM — proposing patches…")
+        patches, failure_analysis = await self._stage_reflect(body, failures[:3], rejected_targets)
+        if failure_analysis:
+            await _emit(_pool, run_id, "reflect", "analysis", failure_analysis)
+        for p in patches:
+            await _emit(_pool, run_id, "reflect", "patch_proposed",
+                f"{p.op.upper()} `{p.target}` (impact: {p.impact_score:.2f})",
+                {"op": p.op, "target": p.target,
+                 "content": p.content[:200], "impact_score": p.impact_score})
 
         # 7. Aggregate + Select — track count before capping for patches_rejected
         raw_patch_count = len(patches)
         patches = self._stage_aggregate(patches)
         patches = self._stage_select(patches, config.edit_budget)
         patches_rejected = raw_patch_count - len(patches)
+        await _emit(_pool, run_id, "select", "summary",
+            f"{len(patches)} patch{'es' if len(patches) != 1 else ''} selected, {patches_rejected} rejected",
+            {"selected": len(patches), "rejected": patches_rejected})
 
         if not patches:
+            await _emit(_pool, run_id, "select", "error",
+                "No patches passed selection — try adding more golden examples.")
             return {
                 "accepted": False,
                 "eval_score": baseline_score,
@@ -446,6 +500,8 @@ class SkillTrainer:
             }
 
         # 8. Update — produce candidate skill body
+        await _emit(_pool, run_id, "update", "stage_start",
+            f"Applying {len(patches)} patch{'es' if len(patches) != 1 else ''} to skill…")
         new_body = self._stage_update(body, patches)
         bumped_front = _bump_version_in_frontmatter(frontmatter) if frontmatter else frontmatter
         candidate_md = (bumped_front + "\n\n" + new_body) if bumped_front else new_body
@@ -461,6 +517,8 @@ class SkillTrainer:
         )
 
         # 10. Evaluate candidate
+        await _emit(_pool, run_id, "evaluate", "stage_start",
+            "Evaluating candidate skill on golden set…")
         eval_result = await evaluate_golden_set(
             pool=_pool,
             golden_set_id=effective_golden_set_id,
@@ -472,6 +530,10 @@ class SkillTrainer:
         eval_score = eval_result.get("avg_score", 0.0)
 
         accepted = eval_score > baseline_score + config.min_val_improvement
+        await _emit(_pool, run_id, "evaluate", "score",
+            f"{'✓ Accepted' if accepted else '✗ Rejected'} — score {eval_score:.3f} "
+            f"(baseline {baseline_score:.3f}, delta {eval_score - baseline_score:+.3f})",
+            {"eval_score": eval_score, "baseline_score": baseline_score, "accepted": accepted})
 
         return {
             "accepted": accepted,

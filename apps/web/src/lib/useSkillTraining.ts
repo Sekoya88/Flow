@@ -2,6 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '@/lib/api'
 
+export interface TrainingEvent {
+  id: string
+  stage: string  // 'epoch' | 'rollout' | 'reflect' | 'select' | 'update' | 'evaluate'
+  kind: string   // 'stage_start' | 'item_result' | 'patch_proposed' | 'analysis' | 'summary' | 'score' | 'error'
+  message: string
+  data?: Record<string, unknown>
+  created_at: string
+}
+
 export interface TrainingEpoch {
   epoch: number
   eval_score: number
@@ -150,4 +159,44 @@ export function useTrainingModeToggle(skillId: string, onToggled: () => void) {
   }, [skillId, onToggled])
 
   return { toggle, busy }
+}
+
+// Poll live COT events for an active training run. Stops when active=false.
+export function useTrainingEvents(
+  skillId: string | undefined,
+  runId: string | undefined,
+  active: boolean,
+) {
+  const [events, setEvents] = useState<TrainingEvent[]>([])
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const load = useCallback(async () => {
+    if (!skillId || !runId) return
+    try {
+      const res = await apiFetch<{ events: TrainingEvent[] }>(
+        `/api/v1/skills/${skillId}/training-runs/${runId}/events`,
+      )
+      setEvents(res.events ?? [])
+    } catch { /* ignore */ }
+  }, [skillId, runId])
+
+  useEffect(() => {
+    if (!active || !skillId || !runId) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      return
+    }
+    void load()
+    intervalRef.current = setInterval(load, 2000)
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [active, skillId, runId, load])
+
+  return events
 }

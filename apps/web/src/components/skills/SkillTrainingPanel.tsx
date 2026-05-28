@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Brain,
@@ -19,7 +19,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
-import { useSkillTrainingRuns, useStartTraining, useTrainingModeToggle, type TrainingPatch, type TrainingRun } from '@/lib/useSkillTraining'
+import {
+  useSkillTrainingRuns,
+  useStartTraining,
+  useTrainingEvents,
+  useTrainingModeToggle,
+  type TrainingEvent,
+  type TrainingPatch,
+  type TrainingRun,
+} from '@/lib/useSkillTraining'
 
 interface Props {
   skillId: string
@@ -261,10 +269,62 @@ function PatchList({ patches }: { patches: TrainingPatch[] }) {
   )
 }
 
-function RunCard({ run, defaultOpen }: { run: TrainingRun; defaultOpen?: boolean }) {
+const STAGE_COLORS: Record<string, string> = {
+  epoch: 'text-flow-violet',
+  rollout: 'text-blue-400',
+  reflect: 'text-amber-400',
+  select: 'text-emerald-400',
+  update: 'text-cyan-400',
+  evaluate: 'text-purple-400',
+}
+
+const KIND_PREFIX: Record<string, string> = {
+  stage_start: '▶',
+  item_result: '·',
+  analysis: '→',
+  patch_proposed: '+',
+  summary: '─',
+  score: '★',
+  error: '✗',
+}
+
+function LiveEventFeed({ events }: { events: TrainingEvent[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [events.length])
+
+  if (events.length === 0) {
+    return (
+      <div className="mt-3 rounded-md bg-flow-950 px-3 py-2.5">
+        <p className="font-mono text-[10px] text-flow-600 animate-pulse">Waiting for events…</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 max-h-52 overflow-y-auto rounded-md border border-flow-800 bg-flow-950 p-2 space-y-0.5">
+      <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-flow-600">Live log</p>
+      {events.map((e) => (
+        <div key={e.id} className="flex items-start gap-2 font-mono text-[10px] leading-relaxed">
+          <span className={cn('w-[52px] shrink-0 truncate font-semibold', STAGE_COLORS[e.stage] ?? 'text-flow-500')}>
+            {e.stage}
+          </span>
+          <span className="shrink-0 w-3 text-flow-700 text-center">{KIND_PREFIX[e.kind] ?? '·'}</span>
+          <span className="text-flow-400 break-words min-w-0">{e.message}</span>
+        </div>
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?: boolean; skillId: string }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
   const date = new Date(run.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const isActive = run.status === 'running' || run.status === 'pending'
+  const events = useTrainingEvents(skillId, run.id, isActive && open)
 
   return (
     <div className={cn(
@@ -309,6 +369,7 @@ function RunCard({ run, defaultOpen }: { run: TrainingRun; defaultOpen?: boolean
       {open && (
         <div className="border-t border-flow-800 px-3 pb-3">
           {isActive && <ActiveRunProgress run={run} />}
+          {isActive && <LiveEventFeed events={events} />}
           <EpochTimeline run={run} />
           {(run.patches ?? []).length > 0 && <PatchList patches={run.patches!} />}
           {run.original_content && run.candidate_content && (
@@ -443,7 +504,12 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
             Training history · {runs.length} run{runs.length !== 1 ? 's' : ''}
           </p>
           {runs.slice(0, 6).map((run, i) => (
-            <RunCard key={run.id} run={run} defaultOpen={i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed')} />
+            <RunCard
+              key={run.id}
+              run={run}
+              skillId={skillId}
+              defaultOpen={i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed')}
+            />
           ))}
         </div>
       )}
