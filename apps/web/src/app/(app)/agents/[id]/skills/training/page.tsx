@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { FlowPageHeader } from '@/components/layout/FlowPageHeader'
 import { SkillTrainingPanel } from '@/components/skills/SkillTrainingPanel'
@@ -22,10 +22,13 @@ export default function SkillTrainingPage() {
   const params = useParams<{ id: string }>()
   const agentId = params.id
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const targetSkillId = searchParams.get('skill')
 
   const [skills, setSkills] = useState<SkillRow[]>([])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const skillRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     if (!agentId) return
@@ -41,6 +44,12 @@ export default function SkillTrainingPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [agentId])
+
+  useEffect(() => {
+    if (!targetSkillId || loading) return
+    const el = skillRefs.current[targetSkillId]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [targetSkillId, loading])
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -71,14 +80,16 @@ export default function SkillTrainingPage() {
 
       <div className="flex flex-col gap-4">
         {skills.map(skill => (
-          <SkillTrainingPanel
-            key={skill.id}
-            skillId={skill.id}
-            skillName={skill.name}
-            agentId={skill.agent_id}
-            workspaceId={workspaceId ?? ''}
-            trainingMode={(skill.metadata?.training_mode as string | null) ?? null}
-          />
+          <div key={skill.id} ref={el => { skillRefs.current[skill.id] = el }}>
+            <SkillTrainingPanel
+              skillId={skill.id}
+              skillName={skill.name}
+              agentId={skill.agent_id}
+              workspaceId={workspaceId ?? ''}
+              trainingMode={(skill.metadata?.training_mode as string | null) ?? null}
+              initialOpen={skill.id === targetSkillId}
+            />
+          </div>
         ))}
       </div>
     </div>

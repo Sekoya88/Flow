@@ -759,9 +759,10 @@ export default function LogsPage() {
                       ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
                       : "border-flow-800 text-muted-foreground";
                   return (
-                    <div
+                    <Link
                       key={run.id}
-                      className="border-b border-border/30 last:border-0 px-4 py-3 hover:bg-muted/10 transition-colors"
+                      href={`/agents/${run.agent_id}/skills/training?skill=${run.skill_id}`}
+                      className="block border-b border-border/30 last:border-0 px-4 py-3 hover:bg-muted/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-start gap-3">
                         <BrainCircuit className="h-4 w-4 text-flow-violet/60 mt-0.5 shrink-0" />
@@ -801,7 +802,7 @@ export default function LogsPage() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

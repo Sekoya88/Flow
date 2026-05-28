@@ -44,12 +44,12 @@ async def _emit(
     try:
         await pool.execute(
             """INSERT INTO skill_training_events (run_id, stage, kind, message, data)
-               VALUES ($1, $2, $3, $4, $5::jsonb)""",
+               VALUES ($1, $2, $3, $4, $5)""",
             run_id,
             stage,
             kind,
             message,
-            json.dumps(data) if data else None,
+            data,  # pool codec handles jsonb serialization; don't double-encode
         )
     except Exception as exc:
         log.warning("training.emit_failed", error=str(exc))

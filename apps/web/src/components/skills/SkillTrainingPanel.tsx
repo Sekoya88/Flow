@@ -35,6 +35,7 @@ interface Props {
   agentId: string
   workspaceId: string
   trainingMode: string | null
+  initialOpen?: boolean
 }
 
 const STAGE_LABELS = ['Rollout', 'Reflect', 'Aggregate', 'Select', 'Update', 'Evaluate']
@@ -431,7 +432,7 @@ function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?
   )
 }
 
-export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, trainingMode }: Props) {
+export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, trainingMode, initialOpen }: Props) {
   const { runs, loading, reload, startPolling } = useSkillTrainingRuns(skillId)
   const setActiveTask = useStore((s) => s.setActiveTask)
 
@@ -550,7 +551,10 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
               key={run.id}
               run={run}
               skillId={skillId}
-              defaultOpen={i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed')}
+              defaultOpen={
+                (i === 0 && !!initialOpen) ||
+                (i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed'))
+              }
             />
           ))}
         </div>

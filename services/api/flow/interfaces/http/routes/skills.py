@@ -1107,7 +1107,7 @@ async def get_training_run_events(
                 stage=e["stage"],
                 kind=e["kind"],
                 message=e["message"],
-                data=dict(e["data"]) if e["data"] else None,
+                data=e["data"] if isinstance(e["data"], dict) else (json.loads(e["data"]) if e["data"] else None),
                 created_at=e["created_at"].isoformat(),
             )
             for e in events
