@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
@@ -54,6 +55,13 @@ class EmbedKnowledgeIn(BaseModel):
     paper_ids: list[UUID]
 
 
+class DigestExportOut(BaseModel):
+    exported: int
+    paths: list[str]
+    index_path: str | None
+    vault_path: str
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -61,6 +69,21 @@ async def _assert_workspace(user_id: UUID, workspace_id: UUID, repo: FlowReposit
     ws_rows = await repo.list_workspaces_for_user(user_id)
     if workspace_id not in {r["id"] for r in ws_rows}:
         raise HTTPException(status_code=403, detail="workspace not allowed")
+
+
+def _safe_write(vault_root: Path, note_path: str, content: str) -> Path:
+    """Write content to vault_root/note_path, rejecting path traversal.
+
+    Raises ValueError if note_path is absolute or resolves outside vault_root.
+    """
+    if Path(note_path).is_absolute():
+        raise ValueError(f"path traversal rejected: absolute path {note_path!r}")
+    resolved = (vault_root / note_path).resolve()
+    if not resolved.is_relative_to(vault_root.resolve()):
+        raise ValueError(f"path traversal rejected: {note_path!r} escapes vault root")
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(content, encoding="utf-8")
+    return resolved
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -622,6 +645,85 @@ async def embed_papers_as_knowledge(
 
     logger.info("digest.embed_knowledge.done", embedded=embedded, workspace_id=str(body.workspace_id))
     return {"embedded": embedded}
+
+
+@router.post("/runs/{run_id}/export-obsidian", response_model=DigestExportOut)
+async def export_digest_to_obsidian(
+    run_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> DigestExportOut:
+    """Write digest notes to the configured local Obsidian vault."""
+    import os
+
+    # Verify run belongs to this user's workspace
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if not ws_rows:
+        raise HTTPException(status_code=403, detail="no workspace")
+    ws_id = ws_rows[0]["id"]
+
+    # Verify this run belongs to this workspace
+    run_rows = await repo.list_digest_runs(ws_id, limit=500)
+    run_ids = {r["id"] for r in run_rows}
+    if run_id not in run_ids:
+        raise HTTPException(status_code=404, detail="digest run not found")
+
+    vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get(
+        "FLOW_OBSIDIAN_VAULT_PATH"
+    )
+    if not vault_str:
+        raise HTTPException(
+            status_code=400,
+            detail="Obsidian vault path not configured. Set it in workspace settings or FLOW_OBSIDIAN_VAULT_PATH env var.",
+        )
+
+    vault_root = Path(vault_str).expanduser().resolve()
+    if not vault_root.exists():
+        raise HTTPException(
+            status_code=400, detail=f"Vault path does not exist: {vault_root}"
+        )
+
+    papers = await repo.get_digest_run_papers(run_id)
+    written_paths: list[str] = []
+    index_path: str | None = None
+
+    for paper in papers:
+        note_path: str | None = paper["obsidian_path"]
+        content: str | None = paper["summary_md"]
+        if not note_path or not content:
+            continue
+        try:
+            out = _safe_write(vault_root, note_path, content)
+            written_paths.append(str(out.relative_to(vault_root)))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # Write index note with wikilinks to each paper
+    if papers:
+        from datetime import date
+        today = date.today().isoformat()
+        paper_links = "\n".join(
+            f"- [[{p['obsidian_path'].replace('.md', '')}|{p['title'][:70]}]]"
+            for p in papers
+            if p.get("obsidian_path")
+        )
+        index_content = (
+            f"---\ndate: {today}\ntype: daily-digest\ntags:\n  - research\n  - digest\n---\n"
+            f"# Research Digest — {today}\n\n{paper_links or '_No papers._'}\n"
+        )
+        index_rel = f"Research/Digest/{today}/index.md"
+        try:
+            _safe_write(vault_root, index_rel, index_content)
+            index_path = index_rel
+        except ValueError:
+            pass
+
+    return DigestExportOut(
+        exported=len(written_paths),
+        paths=written_paths,
+        index_path=index_path,
+        vault_path=str(vault_root),
+    )
 
 
 @router.get("/knowledge")
