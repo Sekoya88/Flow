@@ -29,7 +29,8 @@ from openai import AsyncOpenAI
 from flow.application.golden_evaluator import evaluate_golden_set, judge_single, run_agent_on_item
 from flow.application.skill_rewriter import _bump_version_in_frontmatter, _split_frontmatter
 
-logger = logging.getLogger(__name__)
+from flow.infrastructure.observability.logging import get_logger
+log = get_logger("flow.training")
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -199,14 +200,14 @@ class SkillTrainer:
                         )
                     )
                 except (KeyError, TypeError, ValueError) as exc:
-                    logger.warning("skill_trainer: skipping malformed patch: %s", exc)
+                    log.warning("training.patch.malformed", error=str(exc))
             return patches
 
         except json.JSONDecodeError as exc:
-            logger.warning("skill_trainer._stage_reflect: JSON parse failed: %s", exc)
+            log.warning("training.reflect.json_parse_failed", error=str(exc))
             return []
         except Exception as exc:
-            logger.error("skill_trainer._stage_reflect failed: %s", exc)
+            log.error("training.reflect.failed", error=str(exc))
             return []
 
     # ── Stage 3: Aggregate ────────────────────────────────────────────────────
@@ -250,7 +251,7 @@ class SkillTrainer:
         for match in slow_pattern.finditer(body):
             protected_block = match.group(0)
             if target in protected_block:
-                logger.debug("skill_trainer: skipping protected section: %s", target)
+                log.debug("training.patch.protected_section_skipped", target=target)
                 return body
 
         # Find the target heading line
@@ -339,7 +340,7 @@ class SkillTrainer:
             skill_id,
         )
         if skill_row is None:
-            logger.warning("skill_trainer: skill not found: %s", skill_id)
+            log.warning("training.skill_not_found", skill_id=str(skill_id))
             return {
                 "accepted": False,
                 "eval_score": 0.0,
@@ -450,7 +451,7 @@ class SkillTrainer:
         # 9. Persist candidate as inactive skill version
         candidate_skill_id = await _pool.fetchval(
             """INSERT INTO agent_skills (agent_id, workspace_id, name, content_md, active, version, category)
-               SELECT agent_id, workspace_id, name, $2, false, version || '-reflact', category
+               SELECT agent_id, workspace_id, name, $2, false, version::text || '-reflact', category
                FROM agent_skills WHERE id = $1
                RETURNING id""",
             skill_id,

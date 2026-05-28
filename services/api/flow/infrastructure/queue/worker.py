@@ -152,7 +152,10 @@ async def task_run_skill_training(
     _agent_id = _UUID(agent_id)
     _workspace_id = _UUID(workspace_id)
 
+    _train_log = get_logger("flow.training")
+
     await repo.update_training_run(_run_id, status="running", started_at=True)
+    _train_log.info("training.run.start", run_id=run_id, skill_id=skill_id, agent_id=agent_id)
     if stream_hub:
         await stream_hub.publish_global(workspace_id, kind="skill.training.started", payload={
             "run_id": run_id, "skill_id": skill_id,
@@ -182,6 +185,13 @@ async def task_run_skill_training(
                 baseline_score=result.get("baseline_score", 0.0),
                 accepted=result.get("accepted", False),
                 patch_count=result.get("patches_applied", 0),
+            )
+            _train_log.info(
+                "training.epoch.done",
+                run_id=run_id,
+                epoch=epoch,
+                eval_score=result.get("eval_score", 0.0) if isinstance(result, dict) else 0.0,
+                accepted=result.get("accepted", False) if isinstance(result, dict) else False,
             )
 
             eval_score = result.get("eval_score", 0.0)
@@ -266,6 +276,7 @@ async def task_run_skill_training(
             accepted=final_accepted,
             completed_at=True,
         )
+        _train_log.info("training.run.done", run_id=run_id, skill_id=skill_id)
         if stream_hub:
             await stream_hub.publish_global(workspace_id, kind="skill.training.done", payload={
                 "run_id": run_id, "skill_id": skill_id,
@@ -274,6 +285,7 @@ async def task_run_skill_training(
 
     except Exception as exc:
         logger.error("task_run_skill_training failed: run_id=%s err=%s", run_id, exc)
+        _train_log.error("training.run.failed", run_id=run_id, skill_id=skill_id, error=str(exc))
         await repo.update_training_run(_run_id, status="failed", error_message=str(exc), completed_at=True)
         if stream_hub:
             await stream_hub.publish_global(workspace_id, kind="skill.training.failed", payload={
