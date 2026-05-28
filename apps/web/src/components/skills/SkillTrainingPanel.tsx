@@ -1,6 +1,7 @@
 'use client'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
+  AlertCircle,
   Brain,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +27,7 @@ interface Props {
 }
 
 const STAGE_LABELS = ['Rollout', 'Reflect', 'Aggregate', 'Select', 'Update', 'Evaluate']
+const MAX_EPOCHS = 3
 
 function StatusDot({ status }: { status: string }) {
   const base = "h-2 w-2 rounded-full shrink-0"
@@ -53,27 +55,6 @@ function RunStatusBadge({ status }: { status: string }) {
   )
 }
 
-function ScoreBadge({ score, baseline }: { score: number; baseline: number }) {
-  const delta = score - baseline
-  const improved = delta >= 0
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className={cn(
-        "font-mono text-xs font-semibold",
-        improved ? "text-emerald-400" : "text-red-400"
-      )}>
-        {score.toFixed(3)}
-      </span>
-      <span className={cn(
-        "font-mono text-[10px]",
-        improved ? "text-emerald-500/70" : "text-red-500/70"
-      )}>
-        {improved ? '+' : ''}{delta.toFixed(3)}
-      </span>
-    </div>
-  )
-}
-
 function EpochTimeline({ run }: { run: TrainingRun }) {
   const epochs = run.epochs ?? []
   if (epochs.length === 0) return null
@@ -90,7 +71,14 @@ function EpochTimeline({ run }: { run: TrainingRun }) {
                 style={{ width: `${Math.min(ep.eval_score * 100, 100)}%` }}
               />
             </div>
-            <ScoreBadge score={ep.eval_score} baseline={ep.baseline_score} />
+            <div className="flex items-center gap-1.5">
+              <span className={cn("font-mono text-xs font-semibold", ep.accepted ? "text-emerald-400" : "text-red-400")}>
+                {ep.eval_score.toFixed(3)}
+              </span>
+              <span className={cn("font-mono text-[10px]", ep.accepted ? "text-emerald-500/70" : "text-red-500/70")}>
+                {ep.accepted ? `+${(ep.eval_score - ep.baseline_score).toFixed(3)}` : (ep.eval_score - ep.baseline_score).toFixed(3)}
+              </span>
+            </div>
           </div>
           {ep.accepted ? (
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
@@ -106,34 +94,56 @@ function EpochTimeline({ run }: { run: TrainingRun }) {
   )
 }
 
-function ActiveRunStages() {
+function ActiveRunProgress({ run }: { run: TrainingRun }) {
+  const currentEpoch = run.epoch ?? 0
+  const epochProgress = Math.min(currentEpoch / MAX_EPOCHS, 1)
+
   return (
-    <div className="mt-3 rounded-md border border-flow-violet/20 bg-flow-violet/5 p-3">
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-flow-violet/70">Pipeline stages</p>
-      <div className="flex items-center gap-0">
-        {STAGE_LABELS.map((label, i) => (
-          <div key={label} className="flex flex-1 flex-col items-center gap-1">
-            <div className={cn(
-              "flex h-6 w-6 items-center justify-center rounded-full border text-[9px] font-bold",
-              i === 0
-                ? "border-flow-violet bg-flow-violet/20 text-flow-violet animate-pulse"
-                : "border-flow-700 bg-flow-900 text-flow-600"
-            )}>
-              {i + 1}
+    <div className="mt-3 space-y-3 rounded-md border border-flow-violet/20 bg-flow-violet/5 p-3">
+      {/* Epoch counter */}
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-flow-violet/70">Progress</p>
+        <span className="font-mono text-[11px] text-flow-300">
+          Epoch <span className="font-semibold text-flow-violet">{currentEpoch}</span> / {MAX_EPOCHS}
+        </span>
+      </div>
+
+      {/* Epoch progress bar */}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-flow-800">
+        <div
+          className="h-full rounded-full bg-flow-violet transition-all duration-700"
+          style={{ width: `${epochProgress * 100}%` }}
+        />
+      </div>
+
+      {/* Pipeline stages */}
+      <div className="flex items-center gap-0.5">
+        {STAGE_LABELS.map((label, i) => {
+          const isDone = i < currentEpoch % STAGE_LABELS.length && currentEpoch > 0
+          const isActive = i === currentEpoch % STAGE_LABELS.length
+          return (
+            <div key={label} className="flex flex-1 flex-col items-center gap-1">
+              <div className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full border text-[8px] font-bold transition-colors",
+                isActive
+                  ? "border-flow-violet bg-flow-violet/20 text-flow-violet animate-pulse"
+                  : isDone
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                  : "border-flow-700 bg-flow-900 text-flow-600"
+              )}>
+                {isDone ? '✓' : i + 1}
+              </div>
+              <span className="text-center font-mono text-[8px] leading-tight text-flow-600 truncate max-w-full px-0.5">{label}</span>
             </div>
-            <span className="text-center font-mono text-[9px] leading-tight text-flow-600">{label}</span>
-            {i < STAGE_LABELS.length - 1 && (
-              <div className="absolute mt-3 h-px w-full bg-flow-800" />
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function RunCard({ run }: { run: TrainingRun }) {
-  const [open, setOpen] = useState(false)
+function RunCard({ run, defaultOpen }: { run: TrainingRun; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false)
   const date = new Date(run.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const isActive = run.status === 'running' || run.status === 'pending'
 
@@ -145,20 +155,20 @@ function RunCard({ run }: { run: TrainingRun }) {
         : "border-flow-800 bg-flow-900/50"
     )}>
       <button
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left min-w-0"
         onClick={() => setOpen(o => !o)}
       >
         <StatusDot status={run.status} />
         <RunStatusBadge status={run.status} />
-        <span className="flex-1 font-mono text-[11px] text-flow-400">{date}</span>
+        <span className="flex-1 truncate font-mono text-[11px] text-flow-400">{date}</span>
         {run.best_score != null && (
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <TrendingUp className="h-3 w-3 text-flow-500" />
             <span className="font-mono text-xs font-semibold text-flow-200">{run.best_score.toFixed(3)}</span>
           </div>
         )}
         {run.accepted && (
-          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 border border-emerald-500/30">
+          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 border border-emerald-500/30">
             applied
           </span>
         )}
@@ -169,9 +179,17 @@ function RunCard({ run }: { run: TrainingRun }) {
         )}
       </button>
 
+      {/* Inline error preview — always visible for failed runs */}
+      {run.status === 'failed' && run.error_message && !open && (
+        <div className="flex items-start gap-2 border-t border-red-500/10 bg-red-500/5 px-3 py-2">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-red-400" />
+          <p className="font-mono text-[10px] leading-relaxed text-red-400 line-clamp-2">{run.error_message}</p>
+        </div>
+      )}
+
       {open && (
         <div className="border-t border-flow-800 px-3 pb-3">
-          {isActive && <ActiveRunStages />}
+          {isActive && <ActiveRunProgress run={run} />}
           <EpochTimeline run={run} />
           {run.status === 'failed' && run.error_message && (
             <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/5 p-2.5">
@@ -191,52 +209,61 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
   const { runs, loading, reload, startPolling } = useSkillTrainingRuns(skillId)
   const setActiveTask = useStore((s) => s.setActiveTask)
 
+  const hasActiveRun = runs.some(r => r.status === 'pending' || r.status === 'running')
+  const lastBestScore = runs.find(r => r.best_score != null)?.best_score ?? null
+  const isTrainingEnabled = trainingMode === 'react'
+
+  // Keep floating indicator alive while training, clear when done
+  useEffect(() => {
+    if (hasActiveRun) {
+      setActiveTask({ type: 'training', label: `Training ${skillName}…`, href: '/skills' })
+    } else {
+      setActiveTask(null)
+    }
+  }, [hasActiveRun, skillName, setActiveTask])
+
   const handleStarted = useCallback(() => {
     reload()
     startPolling()
-    setActiveTask(null)
-  }, [reload, startPolling, setActiveTask])
+  }, [reload, startPolling])
 
   const { start, busy: trainBusy, error: trainError } = useStartTraining(skillId, agentId, workspaceId, handleStarted)
   const { toggle: toggleMode, busy: modeBusy } = useTrainingModeToggle(skillId, reload)
 
   async function handleTrainNow() {
-    setActiveTask({ type: 'training', label: `Training ${skillName}…`, href: '/skills' })
     await start()
   }
-
-  const isTrainingEnabled = trainingMode === 'react'
-  const hasActiveRun = runs.some(r => r.status === 'pending' || r.status === 'running')
-  const lastBestScore = runs.find(r => r.best_score != null)?.best_score ?? null
 
   return (
     <div className="space-y-4">
       {/* Header card */}
       <div className="rounded-xl border border-flow-800 bg-flow-900 p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-flow-violet/15 border border-flow-violet/30">
-                <Brain className="h-3.5 w-3.5 text-flow-violet" />
-              </div>
-              <span className="font-mono text-sm font-semibold text-flow-100">{skillName}</span>
-              {isTrainingEnabled && (
-                <span className="rounded border border-flow-violet/30 bg-flow-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-flow-violet">
-                  auto-train
-                </span>
-              )}
+        <div className="flex flex-col gap-3">
+          {/* Skill name row */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-flow-violet/15 border border-flow-violet/30">
+              <Brain className="h-3.5 w-3.5 text-flow-violet" />
             </div>
-            {lastBestScore != null && (
-              <div className="flex items-center gap-1.5 pl-9">
-                <Zap className="h-3 w-3 text-flow-500" />
-                <span className="font-mono text-[11px] text-flow-400">
-                  Best score: <span className="text-flow-200 font-semibold">{lastBestScore.toFixed(3)}</span>
-                </span>
-              </div>
+            <span className="truncate font-mono text-sm font-semibold text-flow-100">{skillName}</span>
+            {isTrainingEnabled && (
+              <span className="shrink-0 rounded border border-flow-violet/30 bg-flow-violet/10 px-1.5 py-0.5 font-mono text-[10px] text-flow-violet">
+                auto
+              </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Stats row */}
+          {lastBestScore != null && (
+            <div className="flex items-center gap-1.5 pl-9">
+              <Zap className="h-3 w-3 text-flow-500" />
+              <span className="font-mono text-[11px] text-flow-400">
+                Best score: <span className="text-flow-200 font-semibold">{lastBestScore.toFixed(3)}</span>
+              </span>
+            </div>
+          )}
+
+          {/* Buttons row — own line, never overflows */}
+          <div className="flex items-center gap-2 pl-9">
             <Button
               variant="ghost"
               size="sm"
@@ -244,13 +271,7 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
               onClick={() => void toggleMode(!isTrainingEnabled)}
               className="h-7 border border-flow-700 bg-flow-800 text-[11px] text-flow-400 hover:bg-flow-700 hover:text-flow-200"
             >
-              {modeBusy ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : isTrainingEnabled ? (
-                'Disable auto'
-              ) : (
-                'Enable auto'
-              )}
+              {modeBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : isTrainingEnabled ? 'Disable auto' : 'Enable auto'}
             </Button>
             <Button
               size="sm"
@@ -298,8 +319,8 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
           <p className="px-0.5 font-mono text-[10px] uppercase tracking-wider text-flow-500">
             Training history · {runs.length} run{runs.length !== 1 ? 's' : ''}
           </p>
-          {runs.slice(0, 6).map(run => (
-            <RunCard key={run.id} run={run} />
+          {runs.slice(0, 6).map((run, i) => (
+            <RunCard key={run.id} run={run} defaultOpen={i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed')} />
           ))}
         </div>
       )}

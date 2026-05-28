@@ -187,7 +187,7 @@ async def list_workspace_training_runs(
             s.id AS skill_id, s.name AS skill_name,
             a.id AS agent_id, a.name AS agent_name
         FROM skill_training_runs str
-        JOIN skills s ON s.id = str.skill_id
+        JOIN agent_skills s ON s.id = str.skill_id
         JOIN agents a ON a.id = s.agent_id
         WHERE a.workspace_id = $1
         ORDER BY str.created_at DESC

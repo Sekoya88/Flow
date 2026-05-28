@@ -220,7 +220,7 @@ async def get_log_detail(
         """
         SELECT see.skill_id, s.name AS skill_name, see.matched_text, see.created_at
         FROM skill_execution_events see
-        JOIN skills s ON s.id = see.skill_id
+        JOIN agent_skills s ON s.id = see.skill_id
         WHERE see.execution_id = $1
         ORDER BY see.created_at
         """,
