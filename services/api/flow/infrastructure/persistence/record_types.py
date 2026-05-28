@@ -11,7 +11,7 @@ from uuid import UUID
 
 
 class DigestRunRecord(TypedDict):
-    """Shape of rows from the digest_runs table."""
+    """Shape of rows from the digest_runs table (as returned by list_digest_runs)."""
     id: UUID
     workspace_id: UUID
     status: str            # "running" | "done" | "failed"
@@ -20,6 +20,7 @@ class DigestRunRecord(TypedDict):
     error: str | None
     started_at: datetime
     completed_at: datetime | None
+    duration_ms: int       # COALESCE(EXTRACT(EPOCH...) * 1000, 0)
 
 
 class DigestPaperRecord(TypedDict):

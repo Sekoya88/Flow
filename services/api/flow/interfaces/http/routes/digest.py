@@ -324,7 +324,6 @@ async def export_papers_to_obsidian(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Write selected papers' Obsidian markdown to the configured vault path."""
-    import os
     from datetime import date
 
     await _assert_workspace(user_id, body.workspace_id, repo)
@@ -345,6 +344,7 @@ async def export_papers_to_obsidian(
         body.workspace_id,
     )
     vault_path = (config_row["obsidian_vault_path"] if config_row else None) or "/vault"
+    vault_root = Path(vault_path).expanduser().resolve()
 
     today = date.today().isoformat()
     written = 0
@@ -394,17 +394,17 @@ type: research-paper
             safe = (row["arxiv_id"] or (row["title"] or "paper")[:40]).replace("/", "-").replace(":", "")
             obsidian_path = f"Research/Digest/{today}/{safe}.md"
 
-        full_path = os.path.join(vault_path, obsidian_path)
         try:
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(content)
+            _safe_write(vault_root, obsidian_path, content)
             written += 1
+        except ValueError:
+            logger.warning("digest.export.path_traversal_rejected", paper_id=str(row["id"]))
+            skipped += 1
         except Exception:
-            logger.warning("digest.export.vault_write_failed", path=full_path)
+            logger.warning("digest.export.vault_write_failed", paper_id=str(row["id"]))
             skipped += 1
 
-    logger.info("digest.export.done", written=written, skipped=skipped, vault=vault_path)
+    logger.info("digest.export.done", written=written, skipped=skipped)
     return {"written": written, "skipped": skipped, "vault_path": vault_path}
 
 
@@ -537,7 +537,7 @@ paper_count: {len(rows)}
     return {**parsed, "synthesis_md": synthesis_md, "paper_count": len(rows)}
 
 
-@router.delete("/papers/{paper_id}", status_code=204)
+@router.delete("/papers/{paper_id}", status_code=204, response_model=None)
 async def delete_digest_paper(
     paper_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
@@ -656,20 +656,20 @@ async def export_digest_to_obsidian(
     """Write digest notes to the configured local Obsidian vault."""
     import os
 
-    # Verify run belongs to this user's workspace
+    # Verify run belongs to one of this user's workspaces
     ws_rows = await repo.list_workspaces_for_user(user_id)
     if not ws_rows:
         raise HTTPException(status_code=403, detail="no workspace")
-    ws_id = ws_rows[0]["id"]
+    ws_ids = {r["id"] for r in ws_rows}
 
-    # Verify this run belongs to this workspace
     run_row = await repo._pool.fetchrow(
         "SELECT workspace_id FROM digest_runs WHERE id = $1",
         run_id,
     )
-    if run_row is None or run_row["workspace_id"] != ws_id:
+    if run_row is None or run_row["workspace_id"] not in ws_ids:
         raise HTTPException(status_code=404, detail="digest run not found")
 
+    ws_id = run_row["workspace_id"]
     vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get(
         "FLOW_OBSIDIAN_VAULT_PATH"
     )
