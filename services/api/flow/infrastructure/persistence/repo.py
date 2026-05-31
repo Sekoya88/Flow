@@ -1683,14 +1683,15 @@ class FlowRepository:
         workspace_id: UUID,
         edit_budget: int,
         created_by: UUID | None = None,
+        golden_set_id: UUID | None = None,
     ) -> UUID:
         """Insert a new skill_training_runs row (status='pending') and return its id."""
         row = await self._pool.fetchrow(
             """INSERT INTO skill_training_runs
-                   (skill_id, agent_id, workspace_id, edit_budget, status)
-               VALUES ($1, $2, $3, $4, 'pending')
+                   (skill_id, agent_id, workspace_id, edit_budget, status, golden_set_id)
+               VALUES ($1, $2, $3, $4, 'pending', $5)
                RETURNING id""",
-            skill_id, agent_id, workspace_id, edit_budget,
+            skill_id, agent_id, workspace_id, edit_budget, golden_set_id,
         )
         assert row is not None
         return row["id"]
@@ -1818,16 +1819,19 @@ class FlowRepository:
         baseline_score: float,
         accepted: bool,
         patch_count: int,
+        item_scores: list[dict] | None = None,
     ) -> UUID:
         """Record the result of one training epoch."""
+        import json as _json
         row = await self._pool.fetchrow(
             """INSERT INTO skill_training_epochs
                    (run_id, epoch, candidate_skill_id, eval_score, baseline_score,
-                    accepted, patch_count)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    accepted, patch_count, item_scores)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id""",
             run_id, epoch, candidate_skill_id, eval_score, baseline_score,
             accepted, patch_count,
+            _json.dumps(item_scores) if item_scores is not None else None,
         )
         assert row is not None
         return row["id"]
@@ -1836,7 +1840,7 @@ class FlowRepository:
         """Return all epoch results for a training run, ordered by epoch."""
         return await self._pool.fetch(
             """SELECT id, epoch, candidate_skill_id, eval_score, baseline_score,
-                      accepted, patch_count, created_at
+                      accepted, patch_count, item_scores, created_at
                FROM skill_training_epochs
                WHERE run_id = $1
                ORDER BY epoch""",

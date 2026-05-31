@@ -20,10 +20,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import {
+  useGoldenSets,
   useSkillTrainingRuns,
   useStartTraining,
   useTrainingEvents,
   useTrainingModeToggle,
+  type ItemScore,
   type TrainingEvent,
   type TrainingPatch,
   type TrainingRun,
@@ -102,6 +104,102 @@ function EpochTimeline({ run }: { run: TrainingRun }) {
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Regression floor mirrored from the backend gate (TrainingConfig.regression_floor).
+const REGRESSION_FLOOR = 0.1
+
+// Flatten the latest epoch's per-item scores (that's the candidate the gate judged).
+function latestItemScores(run: TrainingRun): ItemScore[] {
+  const epochs = run.epochs ?? []
+  for (let i = epochs.length - 1; i >= 0; i--) {
+    if (epochs[i].item_scores && epochs[i].item_scores!.length) return epochs[i].item_scores!
+  }
+  return []
+}
+
+type Verdict = { kind: 'accepted' | 'blocked' | 'rejected'; worst?: ItemScore }
+
+function runVerdict(run: TrainingRun): Verdict | null {
+  if (run.status !== 'done') return null
+  const items = latestItemScores(run)
+  const worst = items.reduce<ItemScore | undefined>((acc, i) => (!acc || i.delta < acc.delta ? i : acc), undefined)
+  if (run.accepted) return { kind: 'accepted', worst }
+  if (worst && worst.delta < -REGRESSION_FLOOR) return { kind: 'blocked', worst }
+  return { kind: 'rejected', worst }
+}
+
+function GateVerdict({ run }: { run: TrainingRun }) {
+  const v = runVerdict(run)
+  if (!v) return null
+  if (v.kind === 'blocked') {
+    // Bold, impossible-to-miss banner — a candidate regressed a critical item.
+    return (
+      <div className="mt-3 rounded-lg border-2 border-red-500 bg-red-500/15 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+          <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-red-300">
+            ⛔ Activation blocked — regression
+          </span>
+        </div>
+        {v.worst && (
+          <p className="mt-1 pl-6 font-mono text-[10px] leading-relaxed text-red-300/90">
+            “{v.worst.input}” dropped {(v.worst.baseline_score * 100).toFixed(0)}% →{' '}
+            {(v.worst.candidate_score * 100).toFixed(0)}% ({(v.worst.delta * 100).toFixed(0)}%). Filed a proposal for review.
+          </p>
+        )}
+      </div>
+    )
+  }
+  if (v.kind === 'accepted') {
+    return (
+      <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+            ✓ Accepted — no item regressed
+          </span>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-flow-700 bg-flow-900 px-3 py-2">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-flow-400">
+        ✗ Rejected — gain below threshold
+      </span>
+    </div>
+  )
+}
+
+function ItemScores({ items }: { items: ItemScore[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="mt-3 space-y-1.5 rounded-md bg-flow-950 p-3">
+      <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-flow-500">
+        Per-item before → after
+      </p>
+      {items.map((it) => {
+        const regressed = it.delta < -REGRESSION_FLOOR
+        return (
+          <div key={it.item_id} className="flex items-center gap-2">
+            <span className="flex-1 truncate font-mono text-[10px] text-flow-400" title={it.input}>
+              {it.input}
+            </span>
+            <span className="shrink-0 font-mono text-[10px] text-flow-500">
+              {(it.baseline_score * 100).toFixed(0)}→{(it.candidate_score * 100).toFixed(0)}
+            </span>
+            <span className={cn(
+              'w-12 shrink-0 text-right font-mono text-[10px] font-semibold',
+              regressed ? 'text-red-400' : it.delta > 0 ? 'text-emerald-400' : 'text-flow-500',
+            )}>
+              {it.delta >= 0 ? '+' : ''}{(it.delta * 100).toFixed(0)}%
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -426,7 +524,9 @@ function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?
         <div className="border-t border-flow-800 px-3 pb-3">
           {isActive && <ActiveRunProgress run={run} />}
           {isActive && <LiveEventFeed events={events} />}
+          <GateVerdict run={run} />
           <EpochTimeline run={run} />
+          <ItemScores items={latestItemScores(run)} />
           {(run.patches ?? []).length > 0 && <PatchList patches={run.patches!} />}
           {run.original_content && run.candidate_content && (
             <SkillDiff original={run.original_content} candidate={run.candidate_content} />
@@ -469,9 +569,11 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
 
   const { start, busy: trainBusy, error: trainError } = useStartTraining(skillId, agentId, workspaceId, handleStarted)
   const { toggle: toggleMode, busy: modeBusy } = useTrainingModeToggle(skillId, reload)
+  const goldenSets = useGoldenSets()
+  const [selectedSet, setSelectedSet] = useState<string>('')
 
   async function handleTrainNow() {
-    await start()
+    await start(selectedSet || null)
   }
 
   return (
@@ -501,6 +603,21 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
               </span>
             </div>
           )}
+
+          {/* Dataset picker — choose which golden set trains (and gates) this skill */}
+          <div className="flex items-center gap-2 pl-9">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-flow-600">Dataset</span>
+            <select
+              value={selectedSet}
+              onChange={(e) => setSelectedSet(e.target.value)}
+              className="h-7 flex-1 min-w-0 rounded border border-flow-700 bg-flow-800 px-2 font-mono text-[11px] text-flow-300 focus:border-flow-violet focus:outline-none"
+            >
+              <option value="">Auto (first set)</option>
+              {goldenSets.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.item_count})</option>
+              ))}
+            </select>
+          </div>
 
           {/* Buttons row — own line, never overflows */}
           <div className="flex items-center gap-2 pl-9">

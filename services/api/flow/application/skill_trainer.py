@@ -73,6 +73,26 @@ class TrainingConfig:
     min_val_improvement: float = 0.02
     mini_batch_size: int = 10
     slow_update_ema: float = 0.1  # for EMA-blended protected sections (Phase 3 stub)
+    regression_floor: float = 0.1  # max allowed per-item score drop before a candidate is blocked
+
+
+@dataclass
+class GateResult:
+    """Verdict from the per-item regression gate.
+
+    status:
+      "accepted" — aggregate improved and no item regressed beyond the floor
+      "blocked"  — aggregate improved BUT an item regressed beyond the floor
+                   (needs human review — never auto-activated)
+      "rejected" — aggregate did not improve enough
+    """
+    status: str
+    accepted: bool
+    blocked_reason: str | None
+    item_scores: list[dict]   # {item_id, input, baseline_score, candidate_score, delta}
+    baseline_avg: float
+    candidate_avg: float
+    min_delta: float
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -139,6 +159,7 @@ class SkillTrainer:
             )
             results.append(
                 {
+                    "item_id": str(item["id"]) if item.get("id") is not None else item["input_text"],
                     "input_text": item["input_text"],
                     "expected_output": item["expected_output"],
                     "actual_output": actual,
@@ -333,8 +354,67 @@ class SkillTrainer:
 
         return body
 
-    # ── Stage 6: Evaluate (called via evaluate_golden_set) ────────────────────
-    # Evaluation is driven by run_training_epoch; no separate method needed.
+    # ── Stage 6: Evaluate — the per-item regression gate ──────────────────────
+
+    def _decide_gate(
+        self,
+        baseline_items: list[dict],
+        candidate_items: list[dict],
+        config: TrainingConfig,
+    ) -> GateResult:
+        """Decide whether a candidate skill may activate.
+
+        Compares baseline vs candidate scores for the SAME golden items (joined by
+        item_id). A candidate is accepted only if the aggregate improves AND no single
+        item regresses beyond ``config.regression_floor`` — so a safety-critical item
+        cannot be silently sacrificed for average gains. If the aggregate improves but
+        an item regresses, the verdict is "blocked" (human review), never auto-applied.
+        """
+        cand_by_id = {c["item_id"]: c for c in candidate_items}
+
+        item_scores: list[dict] = []
+        for b in baseline_items:
+            c = cand_by_id.get(b["item_id"])
+            if c is None:
+                continue
+            base_s = float(b["score"])
+            cand_s = float(c["score"])
+            item_scores.append({
+                "item_id": b["item_id"],
+                "input": b.get("input_text", "")[:150],
+                "baseline_score": base_s,
+                "candidate_score": cand_s,
+                "delta": cand_s - base_s,
+            })
+
+        if not item_scores:
+            return GateResult("rejected", False, "no comparable items", [], 0.0, 0.0, 0.0)
+
+        baseline_avg = sum(i["baseline_score"] for i in item_scores) / len(item_scores)
+        candidate_avg = sum(i["candidate_score"] for i in item_scores) / len(item_scores)
+        worst = min(item_scores, key=lambda i: i["delta"])
+        min_delta = worst["delta"]
+
+        improved = (candidate_avg - baseline_avg) > config.min_val_improvement
+        regressed = min_delta < -config.regression_floor
+
+        if improved and not regressed:
+            status, accepted, reason = "accepted", True, None
+        elif improved and regressed:
+            status, accepted = "blocked", False
+            reason = f'regression on "{worst["input"]}" ({min_delta:+.2f})'
+        else:
+            status, accepted, reason = "rejected", False, None
+
+        return GateResult(
+            status=status,
+            accepted=accepted,
+            blocked_reason=reason,
+            item_scores=item_scores,
+            baseline_avg=baseline_avg,
+            candidate_avg=candidate_avg,
+            min_delta=min_delta,
+        )
 
     # ── Orchestrator ─────────────────────────────────────────────────────────
 
@@ -375,16 +455,10 @@ class SkillTrainer:
 
         frontmatter, body = _split_frontmatter(skill_row["content_md"])
 
-        # 2. Get baseline score (last golden eval for this skill, or 0.0 if none)
-        baseline_row = await _pool.fetchrow(
-            """
-            SELECT AVG(score) AS avg
-            FROM (SELECT score FROM golden_results WHERE agent_id = $1
-                  ORDER BY created_at DESC LIMIT 50) recent
-            """,
-            agent_id,
-        )
-        baseline_score = float(baseline_row["avg"] or 0.0) if baseline_row else 0.0
+        # 2. Baseline is computed per-item from the rollout on the SAME golden set
+        #    (see _decide_gate). A mixed-history average across other sets would make
+        #    the accept/reject decision meaningless.
+        baseline_score = 0.0
 
         # 3. Get golden set — linked to skill or fallback to workspace's first set
         effective_golden_set_id = golden_set_id
@@ -407,8 +481,8 @@ class SkillTrainer:
             }
 
         await _emit(_pool, run_id, "epoch", "stage_start",
-            f"Epoch starting — baseline score: {baseline_score:.3f}",
-            {"baseline_score": baseline_score, "skill_name": skill_row["name"]})
+            "Epoch starting — measuring baseline on the golden set…",
+            {"skill_name": skill_row["name"]})
 
         # 4. Get rejected patches (cross-epoch buffer)
         rejected = await _pool.fetch(
@@ -425,7 +499,7 @@ class SkillTrainer:
         # 5. Rollout — fetch items and run agent
         await _emit(_pool, run_id, "rollout", "stage_start", "Running agent on golden items…")
         items = await _pool.fetch(
-            "SELECT input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1 LIMIT $2",
+            "SELECT id, input_text, expected_output, scoring_criteria FROM golden_items WHERE set_id = $1 LIMIT $2",
             effective_golden_set_id,
             config.mini_batch_size,
         )
@@ -450,9 +524,12 @@ class SkillTrainer:
                 {"score": r["score"], "input": r["input_text"][:150],
                  "actual": r["actual_output"][:300], "rationale": r.get("rationale", "")})
         failures = [r for r in rollout_results if r["score"] < 0.7]
+        # Baseline = mean of the same-set rollout scores (the gate's reference point).
+        if rollout_results:
+            baseline_score = sum(r["score"] for r in rollout_results) / len(rollout_results)
         await _emit(_pool, run_id, "rollout", "summary",
-            f"{len(failures)}/{len(rollout_results)} items failed (score < 0.7)",
-            {"total": len(rollout_results), "failures": len(failures)})
+            f"{len(failures)}/{len(rollout_results)} items failed (score < 0.7) — baseline {baseline_score:.3f}",
+            {"total": len(rollout_results), "failures": len(failures), "baseline_score": baseline_score})
 
         if not failures:
             await _emit(_pool, run_id, "epoch", "stage_start",
@@ -527,16 +604,37 @@ class SkillTrainer:
             workspace_id=workspace_id,
             system_prompt=candidate_md,
         )
-        eval_score = eval_result.get("avg_score", 0.0)
 
-        accepted = eval_score > baseline_score + config.min_val_improvement
-        await _emit(_pool, run_id, "evaluate", "score",
-            f"{'✓ Accepted' if accepted else '✗ Rejected'} — score {eval_score:.3f} "
-            f"(baseline {baseline_score:.3f}, delta {eval_score - baseline_score:+.3f})",
-            {"eval_score": eval_score, "baseline_score": baseline_score, "accepted": accepted})
+        # 11. Gate — compare candidate vs baseline per item on the SAME set. Block
+        #     activation if any item regresses beyond the floor, even if the avg rises.
+        candidate_items = eval_result.get("results", [])
+        gate = self._decide_gate(rollout_results, candidate_items, config)
+        eval_score = gate.candidate_avg
+        baseline_score = gate.baseline_avg
+        accepted = gate.accepted
+
+        verdict = {"accepted": "✓ Accepted", "blocked": "⛔ Blocked", "rejected": "✗ Rejected"}[gate.status]
+        msg = (
+            f"{verdict} — score {eval_score:.3f} "
+            f"(baseline {baseline_score:.3f}, delta {eval_score - baseline_score:+.3f}, "
+            f"worst item Δ {gate.min_delta:+.3f})"
+        )
+        if gate.blocked_reason:
+            msg += f" — {gate.blocked_reason}"
+        await _emit(_pool, run_id, "evaluate", "gate", msg, {
+            "status": gate.status,
+            "eval_score": eval_score,
+            "baseline_score": baseline_score,
+            "accepted": accepted,
+            "blocked_reason": gate.blocked_reason,
+            "item_scores": gate.item_scores,
+        })
 
         return {
             "accepted": accepted,
+            "status": gate.status,
+            "blocked_reason": gate.blocked_reason,
+            "item_scores": gate.item_scores,
             "eval_score": eval_score,
             "baseline_score": baseline_score,
             "candidate_skill_id": candidate_skill_id,

@@ -11,6 +11,14 @@ export interface TrainingEvent {
   created_at: string
 }
 
+export interface ItemScore {
+  item_id: string
+  input: string
+  baseline_score: number
+  candidate_score: number
+  delta: number
+}
+
 export interface TrainingEpoch {
   epoch: number
   eval_score: number
@@ -18,6 +26,13 @@ export interface TrainingEpoch {
   accepted: boolean
   patch_count: number
   created_at: string
+  item_scores?: ItemScore[] | null
+}
+
+export interface GoldenSetSummary {
+  id: string
+  name: string
+  item_count: number
 }
 
 export interface TrainingPatch {
@@ -120,13 +135,19 @@ export function useStartTraining(
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (goldenSetId?: string | null) => {
     setBusy(true)
     setError(null)
     try {
       await apiFetch(`/api/v1/skills/${skillId}/train`, {
         method: 'POST',
-        json: { agent_id: agentId, workspace_id: workspaceId, edit_budget: 5, max_epochs: 3 },
+        json: {
+          agent_id: agentId,
+          workspace_id: workspaceId,
+          edit_budget: 5,
+          max_epochs: 3,
+          ...(goldenSetId ? { golden_set_id: goldenSetId } : {}),
+        },
       })
       onStarted()
     } catch (e) {
@@ -137,6 +158,17 @@ export function useStartTraining(
   }, [skillId, agentId, workspaceId, onStarted])
 
   return { start, busy, error }
+}
+
+// List the workspace's golden sets so the user can pick which dataset to train on.
+export function useGoldenSets() {
+  const [sets, setSets] = useState<GoldenSetSummary[]>([])
+  useEffect(() => {
+    apiFetch<{ sets: GoldenSetSummary[] }>(`/api/v1/golden-sets`)
+      .then((res) => setSets(res.sets ?? []))
+      .catch(() => { /* ignore */ })
+  }, [])
+  return sets
 }
 
 // Toggle training_mode on a skill.
