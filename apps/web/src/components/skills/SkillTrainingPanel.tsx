@@ -139,10 +139,10 @@ function GateVerdict({ run, skillId, onOverride }: { run: TrainingRun; skillId: 
   if (v.kind === 'blocked') {
     if (done) {
       return (
-        <div className=”mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2”>
-          <div className=”flex items-center gap-2”>
-            <CheckCircle2 className=”h-3.5 w-3.5 shrink-0 text-emerald-400” />
-            <span className=”font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400”>
+        <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
               ✓ Override approved — skill activated
             </span>
           </div>
@@ -150,26 +150,26 @@ function GateVerdict({ run, skillId, onOverride }: { run: TrainingRun; skillId: 
       )
     }
     return (
-      <div className=”mt-3 rounded-lg border-2 border-red-500 bg-red-500/15 px-3 py-2.5”>
-        <div className=”flex items-center gap-2”>
-          <XCircle className=”h-4 w-4 shrink-0 text-red-400” />
-          <span className=”font-mono text-[11px] font-bold uppercase tracking-wider text-red-300”>
+      <div className="mt-3 rounded-lg border-2 border-red-500 bg-red-500/15 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+          <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-red-300">
             ⛔ Activation blocked — regression
           </span>
         </div>
         {v.worst && (
-          <p className=”mt-1 pl-6 font-mono text-[10px] leading-relaxed text-red-300/90”>
-            “{v.worst.input}” dropped {(v.worst.baseline_score * 100).toFixed(0)}% →{' '}
+          <p className="mt-1 pl-6 font-mono text-[10px] leading-relaxed text-red-300/90">
+            "{v.worst.input}" dropped {(v.worst.baseline_score * 100).toFixed(0)}% →{' '}
             {(v.worst.candidate_score * 100).toFixed(0)}% ({(v.worst.delta * 100).toFixed(0)}%). Filed a proposal for review.
           </p>
         )}
-        <div className=”mt-2 pl-6”>
+        <div className="mt-2 pl-6">
           <button
             onClick={override}
             disabled={busy}
-            className=”inline-flex items-center gap-1.5 rounded border border-red-500/50 bg-red-500/20 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-red-200 transition-colors hover:bg-red-500/30 disabled:opacity-50”
+            className="inline-flex items-center gap-1.5 rounded border border-red-500/50 bg-red-500/20 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-red-200 transition-colors hover:bg-red-500/30 disabled:opacity-50"
           >
-            {busy && <Loader2 className=”h-3 w-3 animate-spin” />}
+            {busy && <Loader2 className="h-3 w-3 animate-spin" />}
             Approve override
           </button>
         </div>
