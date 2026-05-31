@@ -213,3 +213,8 @@ class TrainingEventOut(BaseModel):
 
 class TrainingEventsOut(BaseModel):
     events: list[TrainingEventOut]
+
+
+class TrainingOverrideOut(BaseModel):
+    skill_version_id: str | None
+    activated: bool

@@ -157,6 +157,53 @@ async def test_train_forwards_golden_set_id_to_run_and_arq_payload(app):
 
 
 @pytest.mark.asyncio
+async def test_override_activates_blocked_candidate(app):
+    """POST /override finds the latest epoch's candidate and activates it."""
+    skill_id, run_id, candidate_id = uuid4(), uuid4(), uuid4()
+    repo: MagicMock = app.state._repo
+
+    repo.get_training_run = AsyncMock(return_value={"accepted": False})
+    repo.list_training_epochs = AsyncMock(return_value=[
+        {"candidate_skill_id": candidate_id, "accepted": False},
+    ])
+    repo.activate_skill_version = AsyncMock(return_value={"id": candidate_id})
+    repo.update_training_run = AsyncMock()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            f"/api/v1/skills/{skill_id}/training-runs/{run_id}/override",
+            headers=_auth(),
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["activated"] is True
+    assert body["skill_version_id"] == str(candidate_id)
+    repo.activate_skill_version.assert_awaited_once_with(candidate_id)
+    repo.update_training_run.assert_awaited_once_with(run_id, accepted=True)
+
+
+@pytest.mark.asyncio
+async def test_override_is_idempotent_when_already_accepted(app):
+    """POST /override on an already-accepted run returns activated=False without re-activating."""
+    skill_id, run_id = uuid4(), uuid4()
+    repo: MagicMock = app.state._repo
+
+    repo.get_training_run = AsyncMock(return_value={"accepted": True})
+    repo.activate_skill_version = AsyncMock()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            f"/api/v1/skills/{skill_id}/training-runs/{run_id}/override",
+            headers=_auth(),
+        )
+
+    assert r.status_code == 200
+    assert r.json()["activated"] is False
+    repo.activate_skill_version.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_training_run_persists_golden_set_id():
     pool = MagicMock()
     pool.fetchrow = AsyncMock(return_value={"id": _RUN_ID})

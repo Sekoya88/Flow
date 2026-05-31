@@ -23,6 +23,7 @@ import {
   Wand2,
   Workflow,
   CheckCircle,
+  History,
   X,
 } from "lucide-react";
 import { FlowLogo } from "@/components/brand/FlowLogo";
@@ -59,6 +60,7 @@ const primaryNav = [
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/projects", label: "Projects", icon: BookOpen },
   { href: "/evals", label: "Evals", icon: CheckCircle },
+  { href: "/executions", label: "Executions", icon: History },
   { href: "/logs", label: "Logs", icon: Terminal },
   { href: "/research", label: "Research", icon: Newspaper },
   { href: "/onboarding", label: "Start", icon: BookOpen },

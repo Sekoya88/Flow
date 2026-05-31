@@ -39,6 +39,7 @@ from flow.interfaces.http.schemas import (
     TrainingRunDetailOut,
     TrainingRunOut,
     TrainingRunsOut,
+    TrainingOverrideOut,
     TrainingStartOut,
 )
 
@@ -1107,6 +1108,38 @@ async def get_skill_training_run(
         original_content=original_content,
         candidate_content=candidate_content,
     )
+
+
+@router.post("/{skill_id}/training-runs/{run_id}/override", response_model=TrainingOverrideOut)
+async def override_training_run(
+    skill_id: UUID,
+    run_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> TrainingOverrideOut:
+    """Activate a blocked training candidate over the regression gate's objection."""
+    run = await repo.get_training_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    if run["accepted"]:
+        return TrainingOverrideOut(skill_version_id=None, activated=False)
+
+    epochs = await repo.list_training_epochs(run_id)
+    candidate_id = None
+    for ep in reversed(epochs):
+        if ep["candidate_skill_id"]:
+            candidate_id = ep["candidate_skill_id"]
+            break
+
+    if candidate_id is None:
+        raise HTTPException(status_code=422, detail="No candidate skill found for this training run")
+
+    activated = await repo.activate_skill_version(candidate_id)
+    if activated is None:
+        raise HTTPException(status_code=404, detail="Candidate skill version not found")
+
+    await repo.update_training_run(run_id, accepted=True)
+    return TrainingOverrideOut(skill_version_id=str(candidate_id), activated=True)
 
 
 @router.get("/{skill_id}/training-runs/{run_id}/events", response_model=TrainingEventsOut)

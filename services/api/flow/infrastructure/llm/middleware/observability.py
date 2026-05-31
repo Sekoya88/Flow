@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from flow.infrastructure.llm.middleware.base import AgentMiddleware
+from flow.infrastructure.llm.middleware.base import AgentMiddleware, HarnessRuntime
 from flow.infrastructure.observability.logging import get_logger
 
 _default_logger = get_logger(__name__)
@@ -61,3 +61,11 @@ class FlowObservabilityMiddleware(AgentMiddleware):
                 duration_ms=int((time.monotonic() - t0) * 1000),
             )
             raise
+
+    async def on_tool_result(self, tool_name: str, output: str, runtime: HarnessRuntime) -> None:
+        self._log.info(
+            "tool.result",
+            tool=tool_name,
+            output_chars=len(output),
+            execution_id=str(runtime.execution_id),
+        )

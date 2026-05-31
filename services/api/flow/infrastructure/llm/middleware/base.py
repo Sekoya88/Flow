@@ -39,13 +39,11 @@ class AgentMiddleware:
         return await invoke(messages)
 
     async def wrap_tool_call(self, invoke: Callable, args: dict) -> Any:
-        """Wrap a tool invocation. Call await invoke(args) to proceed.
-
-        NOTE (Phase 2): Tool calls inside LangGraph's ToolNode require wrapping the tool
-        objects themselves (not the LLM). This hook is correctly defined here but is not yet
-        wired — wiring it requires patching tools before they are passed to create_react_agent.
-        """
+        """Wrap a tool invocation. Call await invoke(args) to proceed."""
         return await invoke(args)
+
+    async def on_tool_result(self, tool_name: str, output: str, runtime: HarnessRuntime) -> None:  # noqa: ARG002
+        """Called after each tool completes. Observed from the messages stream."""
 
 
 class FlowMiddlewareHarness:
@@ -73,6 +71,8 @@ class FlowMiddlewareHarness:
             if updated is not None:
                 state = updated
 
+        from langchain_core.messages import ToolMessage
+
         # Stream graph, collecting node updates for after_agent
         final_chunks: dict = {}
         try:
@@ -82,6 +82,21 @@ class FlowMiddlewareHarness:
                     mode, chunk = item
                     if mode == "updates" and isinstance(chunk, dict):
                         final_chunks.update(chunk)
+                    elif mode == "messages":
+                        # chunk is (BaseMessage, metadata) when stream_mode includes "messages"
+                        msg = chunk[0] if isinstance(chunk, (list, tuple)) else chunk
+                        if isinstance(msg, ToolMessage):
+                            tool_name = msg.name or "unknown"
+                            tool_output = str(msg.content or "")
+                            for m in self._middleware:
+                                try:
+                                    await m.on_tool_result(tool_name, tool_output, self._runtime)
+                                except Exception as exc:
+                                    logger.warning(
+                                        "middleware.on_tool_result.error",
+                                        middleware=type(m).__name__,
+                                        error=str(exc),
+                                    )
                 yield item
         finally:
             # Merge node partials into a flat final-state dict for after_agent

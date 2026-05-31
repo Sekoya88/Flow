@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, Brain, Clock, Loader2, MessageSquare, Search, Sparkles } from "lucide-react";
+import { Activity, AlertCircle, Brain, Clock, Loader2, MessageSquare, Pin, Search, ShieldX, Sparkles, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -35,6 +35,18 @@ type MemoryEntry = {
   execution_id?: string | null;
 };
 
+type PreferenceRow = {
+  id: string;
+  class: string;
+  value: string;
+  score: number;
+  status: string;
+  pinned: boolean;
+  agent_id: string | null;
+  last_reinforced_at: string;
+  created_at: string;
+};
+
 export default function MemoryPage() {
   const router = useRouter();
   const routerRef = useRef(router);
@@ -50,6 +62,9 @@ export default function MemoryPage() {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [globalPrefs, setGlobalPrefs] = useState<PreferenceRow[]>([]);
+  const [agentPrefs, setAgentPrefs] = useState<PreferenceRow[]>([]);
+  const [loadingPrefs, setLoadingPrefs] = useState(false);
 
   useEffect(() => {
     routerRef.current = router;
@@ -105,6 +120,41 @@ export default function MemoryPage() {
     if (!wsId || !agentId) return;
     void loadTiered(wsId, agentId);
   }, [wsId, agentId, loadTiered]);
+
+  const loadPreferences = useCallback(async (wid: string, aid: string | null) => {
+    setLoadingPrefs(true);
+    try {
+      const r = await apiFetch<{ global: PreferenceRow[]; agent_specific: PreferenceRow[] }>(
+        `/api/v1/preferences?workspace_id=${wid}${aid ? `&agent_id=${aid}` : ""}`,
+      );
+      setGlobalPrefs(r.global ?? []);
+      setAgentPrefs(r.agent_specific ?? []);
+    } catch {
+      setGlobalPrefs([]);
+      setAgentPrefs([]);
+    } finally {
+      setLoadingPrefs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!wsId) return;
+    void loadPreferences(wsId, agentId);
+  }, [wsId, agentId, loadPreferences]);
+
+  async function patchPref(id: string, action: string) {
+    try {
+      await apiFetch(`/api/v1/preferences/${id}`, { method: "PATCH", json: { action } });
+      if (wsId) await loadPreferences(wsId, agentId);
+    } catch { /* silently ignore */ }
+  }
+
+  async function deletePref(id: string) {
+    try {
+      await apiFetch(`/api/v1/preferences/${id}`, { method: "DELETE" });
+      if (wsId) await loadPreferences(wsId, agentId);
+    } catch { /* silently ignore */ }
+  }
 
   async function saveSemantic() {
     if (!wsId || !agentId || !draft.trim()) return;
@@ -215,9 +265,10 @@ export default function MemoryPage() {
 
       {/* Tiers */}
       <Tabs defaultValue="episodic">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="episodic">Episodic</TabsTrigger>
           <TabsTrigger value="semantic">Semantic</TabsTrigger>
+          <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
 
         <TabsContent value="episodic" className="mt-5 space-y-4">
@@ -319,7 +370,116 @@ export default function MemoryPage() {
             </AnimatedList>
           )}
         </TabsContent>
+
+        <TabsContent value="preferences" className="mt-5 space-y-4">
+          {loadingPrefs ? (
+            <SkeletonGrid />
+          ) : globalPrefs.length === 0 && agentPrefs.length === 0 ? (
+            <EmptyState
+              icon={Sparkles}
+              tone="muted"
+              title="No preferences yet"
+              description="Preferences are extracted from your conversations with agents and evolve over time. Run some agents to start building your profile."
+            />
+          ) : (
+            <div className="space-y-6">
+              {globalPrefs.length > 0 && (
+                <PrefSection title="Global" prefs={globalPrefs} onPatch={patchPref} onDelete={deletePref} />
+              )}
+              {agentPrefs.length > 0 && (
+                <PrefSection title="Agent-specific" prefs={agentPrefs} onPatch={patchPref} onDelete={deletePref} />
+              )}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+const CLASS_COLORS: Record<string, string> = {
+  style: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  tooling: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  goal: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  veto: "bg-red-500/15 text-red-400 border-red-500/30",
+  domain: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  channel: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+};
+
+function PrefCard({
+  pref,
+  onPatch,
+  onDelete,
+}: {
+  pref: PreferenceRow;
+  onPatch: (id: string, action: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const colorCls = CLASS_COLORS[pref.class] ?? "bg-flow-800 text-flow-400 border-flow-700";
+  return (
+    <article className="flex items-center gap-3 rounded-lg border border-flow-800 bg-flow-900/50 px-4 py-3 transition-colors hover:bg-flow-900">
+      <span className={cn("shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider", colorCls)}>
+        {pref.class}
+      </span>
+      <p className="flex-1 truncate text-sm text-flow-200" title={pref.value}>{pref.value}</p>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="h-1.5 w-16 overflow-hidden rounded bg-flow-800">
+          <div className="h-full rounded bg-flow-violet transition-all" style={{ width: `${Math.min(pref.score * 100, 100)}%` }} />
+        </div>
+        <span className="w-8 text-right font-mono text-[10px] text-flow-500">{(pref.score * 100).toFixed(0)}%</span>
+      </div>
+      <span className={cn(
+        "shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider",
+        pref.status === "active" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+          : pref.status === "vetoed" ? "bg-red-500/15 text-red-400 border-red-500/30"
+          : "bg-flow-800 text-flow-500 border-flow-700",
+      )}>
+        {pref.status}
+      </span>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          title={pref.pinned ? "Unpin" : "Pin (locks decay)"}
+          onClick={() => void onPatch(pref.id, pref.pinned ? "unpin" : "pin")}
+          className={cn("rounded p-1 transition-colors hover:bg-flow-800", pref.pinned ? "text-flow-violet" : "text-flow-600 hover:text-flow-300")}
+        >
+          <Pin className="h-3 w-3" />
+        </button>
+        <button
+          title="Veto this preference"
+          onClick={() => void onPatch(pref.id, "veto")}
+          className="rounded p-1 text-flow-600 transition-colors hover:bg-flow-800 hover:text-red-400"
+        >
+          <ShieldX className="h-3 w-3" />
+        </button>
+        <button
+          title="Delete"
+          onClick={() => void onDelete(pref.id)}
+          className="rounded p-1 text-flow-600 transition-colors hover:bg-flow-800 hover:text-red-400"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PrefSection({
+  title,
+  prefs,
+  onPatch,
+  onDelete,
+}: {
+  title: string;
+  prefs: PreferenceRow[];
+  onPatch: (id: string, action: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="font-mono text-[10px] uppercase tracking-wider text-flow-500">{title} · {prefs.length}</p>
+      {prefs.map((p) => (
+        <PrefCard key={p.id} pref={p} onPatch={onPatch} onDelete={onDelete} />
+      ))}
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import {
   useGoldenSets,
+  useOverrideTraining,
   useSkillTrainingRuns,
   useStartTraining,
   useTrainingEvents,
@@ -131,25 +132,47 @@ function runVerdict(run: TrainingRun): Verdict | null {
   return { kind: 'rejected', worst }
 }
 
-function GateVerdict({ run }: { run: TrainingRun }) {
+function GateVerdict({ run, skillId, onOverride }: { run: TrainingRun; skillId: string; onOverride?: () => void }) {
   const v = runVerdict(run)
+  const { override, busy, done } = useOverrideTraining(skillId, run.id, onOverride ?? (() => {}))
   if (!v) return null
   if (v.kind === 'blocked') {
-    // Bold, impossible-to-miss banner — a candidate regressed a critical item.
+    if (done) {
+      return (
+        <div className=”mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2”>
+          <div className=”flex items-center gap-2”>
+            <CheckCircle2 className=”h-3.5 w-3.5 shrink-0 text-emerald-400” />
+            <span className=”font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400”>
+              ✓ Override approved — skill activated
+            </span>
+          </div>
+        </div>
+      )
+    }
     return (
-      <div className="mt-3 rounded-lg border-2 border-red-500 bg-red-500/15 px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <XCircle className="h-4 w-4 shrink-0 text-red-400" />
-          <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-red-300">
+      <div className=”mt-3 rounded-lg border-2 border-red-500 bg-red-500/15 px-3 py-2.5”>
+        <div className=”flex items-center gap-2”>
+          <XCircle className=”h-4 w-4 shrink-0 text-red-400” />
+          <span className=”font-mono text-[11px] font-bold uppercase tracking-wider text-red-300”>
             ⛔ Activation blocked — regression
           </span>
         </div>
         {v.worst && (
-          <p className="mt-1 pl-6 font-mono text-[10px] leading-relaxed text-red-300/90">
+          <p className=”mt-1 pl-6 font-mono text-[10px] leading-relaxed text-red-300/90”>
             “{v.worst.input}” dropped {(v.worst.baseline_score * 100).toFixed(0)}% →{' '}
             {(v.worst.candidate_score * 100).toFixed(0)}% ({(v.worst.delta * 100).toFixed(0)}%). Filed a proposal for review.
           </p>
         )}
+        <div className=”mt-2 pl-6”>
+          <button
+            onClick={override}
+            disabled={busy}
+            className=”inline-flex items-center gap-1.5 rounded border border-red-500/50 bg-red-500/20 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-red-200 transition-colors hover:bg-red-500/30 disabled:opacity-50”
+          >
+            {busy && <Loader2 className=”h-3 w-3 animate-spin” />}
+            Approve override
+          </button>
+        </div>
       </div>
     )
   }
@@ -474,7 +497,7 @@ function LiveEventFeed({ events }: { events: TrainingEvent[] }) {
   )
 }
 
-function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?: boolean; skillId: string }) {
+function RunCard({ run, defaultOpen, skillId, onRunUpdated }: { run: TrainingRun; defaultOpen?: boolean; skillId: string; onRunUpdated?: (runId: string) => void }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
   const date = new Date(run.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const isActive = run.status === 'running' || run.status === 'pending'
@@ -524,7 +547,7 @@ function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?
         <div className="border-t border-flow-800 px-3 pb-3">
           {isActive && <ActiveRunProgress run={run} />}
           {isActive && <LiveEventFeed events={events} />}
-          <GateVerdict run={run} />
+          <GateVerdict run={run} skillId={skillId} onOverride={() => onRunUpdated?.(run.id)} />
           <EpochTimeline run={run} />
           <ItemScores items={latestItemScores(run)} />
           {(run.patches ?? []).length > 0 && <PatchList patches={run.patches!} />}
@@ -546,7 +569,7 @@ function RunCard({ run, defaultOpen, skillId }: { run: TrainingRun; defaultOpen?
 }
 
 export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, trainingMode, initialOpen }: Props) {
-  const { runs, loading, reload, startPolling } = useSkillTrainingRuns(skillId)
+  const { runs, loading, reload, startPolling, forceReloadRun } = useSkillTrainingRuns(skillId)
   const setActiveTask = useStore((s) => s.setActiveTask)
 
   const hasActiveRun = runs.some(r => r.status === 'pending' || r.status === 'running')
@@ -681,6 +704,7 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
               key={run.id}
               run={run}
               skillId={skillId}
+              onRunUpdated={forceReloadRun}
               defaultOpen={
                 (i === 0 && !!initialOpen) ||
                 (i === 0 && (run.status === 'running' || run.status === 'pending' || run.status === 'failed'))

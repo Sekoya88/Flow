@@ -78,3 +78,12 @@ class FlowCostMiddleware(AgentMiddleware):
         except Exception as exc:
             logger.warning("cost.summarize_failed", error=str(exc))
             return None
+
+    async def on_tool_result(self, tool_name: str, output: str, runtime: HarnessRuntime) -> None:
+        self._call_count += 1
+        logger.info(
+            "cost.tool_call",
+            tool=tool_name,
+            total_calls=self._call_count,
+            limit=self._call_limit,
+        )

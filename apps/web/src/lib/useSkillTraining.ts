@@ -122,7 +122,12 @@ export function useSkillTrainingRuns(skillId: string | undefined) {
     }
   }, [load])
 
-  return { runs, loading, reload: load, startPolling }
+  const forceReloadRun = useCallback(async (runId: string) => {
+    enrichedRef.current.delete(runId)
+    await load()
+  }, [load])
+
+  return { runs, loading, reload: load, startPolling, forceReloadRun }
 }
 
 // Trigger a training run and start polling.
@@ -169,6 +174,27 @@ export function useGoldenSets() {
       .catch(() => { /* ignore */ })
   }, [])
   return sets
+}
+
+// Override a regression-blocked training run, activating its candidate skill.
+export function useOverrideTraining(skillId: string, runId: string, onSuccess: () => void) {
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const override = useCallback(async () => {
+    setBusy(true)
+    try {
+      await apiFetch(`/api/v1/skills/${skillId}/training-runs/${runId}/override`, { method: 'POST' })
+      setDone(true)
+      onSuccess()
+    } catch {
+      // silently ignore — banner stays visible
+    } finally {
+      setBusy(false)
+    }
+  }, [skillId, runId, onSuccess])
+
+  return { override, busy, done }
 }
 
 // Toggle training_mode on a skill.

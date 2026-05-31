@@ -128,6 +128,7 @@ from flow.interfaces.http.schemas.skills import (
     TrainingRunDetailOut,
     TrainingRunOut,
     TrainingRunsOut,
+    TrainingOverrideOut,
     TrainingStartOut,
 )
 
