@@ -144,6 +144,14 @@ class TrainingStartOut(BaseModel):
     status: str
 
 
+class ItemScoreOut(BaseModel):
+    item_id: str
+    input: str
+    baseline_score: float
+    candidate_score: float
+    delta: float
+
+
 class TrainingEpochOut(BaseModel):
     epoch: int
     eval_score: float
@@ -151,6 +159,7 @@ class TrainingEpochOut(BaseModel):
     accepted: bool
     patch_count: int
     created_at: str  # ISO format
+    item_scores: list[ItemScoreOut] | None = None
 
 
 class PatchOut(BaseModel):

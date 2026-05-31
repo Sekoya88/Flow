@@ -32,6 +32,8 @@ def _make_repo_mock() -> MagicMock:
     repo.list_training_runs = AsyncMock(return_value=[])
     repo.get_training_run = AsyncMock(return_value=None)
     repo.list_training_epochs = AsyncMock(return_value=[])
+    repo.list_run_patches = AsyncMock(return_value=[])
+    repo.get_skill_content = AsyncMock(return_value=None)
     return repo
 
 
@@ -221,12 +223,21 @@ async def test_get_training_run_detail_returns_run_with_epochs(app):
         baseline_score=0.60,
         accepted=True,
         patch_count=3,
+        candidate_skill_id=None,
+        item_scores=None,
         created_at=_TS,
     )
+
+    patch_rows = [
+        {"patch_json": {"op": "replace", "target": f"## S{i}", "content": "x", "impact_score": 0.8},
+         "applied": True, "rejected": False}
+        for i in range(3)
+    ]
 
     repo = _make_repo_mock()
     repo.get_training_run = AsyncMock(return_value=run_row)
     repo.list_training_epochs = AsyncMock(return_value=[epoch_row])
+    repo.list_run_patches = AsyncMock(return_value=patch_rows)
     app.dependency_overrides[get_repo] = lambda: repo
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

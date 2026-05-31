@@ -969,6 +969,7 @@ async def start_skill_training(
         agent_id=body.agent_id,
         workspace_id=body.workspace_id,
         edit_budget=body.edit_budget,
+        golden_set_id=body.golden_set_id,
     )
     from flow.infrastructure.queue.client import get_arq_pool
 
@@ -983,6 +984,7 @@ async def start_skill_training(
             "edit_budget": body.edit_budget,
             "max_epochs": body.max_epochs,
             "min_val_improvement": body.min_val_improvement,
+            "golden_set_id": str(body.golden_set_id) if body.golden_set_id else None,
         },
     )
     return TrainingStartOut(run_id=str(run_id), skill_id=str(skill_id), status="pending")
@@ -1029,6 +1031,16 @@ async def get_skill_training_run(
         repo.list_run_patches(run_id),
     )
 
+    def _item_scores(raw) -> list | None:
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            try:
+                return _json.loads(raw)
+            except Exception:
+                return None
+        return raw
+
     epoch_outs = [
         TrainingEpochOut(
             epoch=e["epoch"],
@@ -1037,6 +1049,7 @@ async def get_skill_training_run(
             accepted=e["accepted"],
             patch_count=e["patch_count"],
             created_at=e["created_at"].isoformat(),
+            item_scores=_item_scores(e["item_scores"]),
         )
         for e in epochs
     ]

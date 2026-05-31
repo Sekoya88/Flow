@@ -145,6 +145,9 @@ async def task_run_skill_training(
     stream_hub = ctx.get("stream_hub")
     repo = FlowRepository(pool)
     trainer = SkillTrainer(pool)
+    # golden_set_id is carried in the payload but isn't a TrainingConfig field — pop it out.
+    _gs_raw = config_dict.pop("golden_set_id", None)
+    golden_set_id = _UUID(_gs_raw) if _gs_raw else None
     config = TrainingConfig(**config_dict)
 
     _run_id = _UUID(run_id)
@@ -218,6 +221,7 @@ async def task_run_skill_training(
                 agent_id=_agent_id,
                 workspace_id=_workspace_id,
                 config=config,
+                golden_set_id=golden_set_id,
                 pool=pool,
             )
 
@@ -229,6 +233,7 @@ async def task_run_skill_training(
                 baseline_score=result.get("baseline_score", 0.0),
                 accepted=result.get("accepted", False),
                 patch_count=result.get("patches_applied", 0),
+                item_scores=result.get("item_scores"),
             )
             _train_log.info(
                 "training.epoch.done",
@@ -313,6 +318,40 @@ async def task_run_skill_training(
                     except Exception as _snap_exc:
                         _train_log.warning("training.genome_snapshot.failed", run_id=run_id, error=str(_snap_exc))
                 break  # early stop after acceptance
+
+            elif result.get("status") == "blocked":
+                # Aggregate improved but an item regressed beyond the floor — never
+                # auto-activate. File a proposal for human review instead.
+                reason = result.get("blocked_reason") or "per-item regression"
+                candidate_id = result.get("candidate_skill_id")
+                try:
+                    owner = await pool.fetchrow(
+                        """SELECT user_id FROM workspace_members
+                           WHERE workspace_id = $1
+                           ORDER BY (role = 'owner') DESC LIMIT 1""",
+                        _workspace_id,
+                    )
+                    if owner:
+                        await pool.execute(
+                            """INSERT INTO proposals (workspace_id, user_id, title, body, status)
+                               VALUES ($1, $2, $3, $4, 'pending')""",
+                            _workspace_id,
+                            owner["user_id"],
+                            f"[Regression gate] Skill candidate blocked — {reason}",
+                            (
+                                f"ReflACT epoch {epoch} produced a candidate skill "
+                                f"(id {candidate_id}) whose average improved but which "
+                                f"regressed an item beyond the floor: {reason}. "
+                                f"Review the per-item scores before activating."
+                            ),
+                        )
+                        _train_log.info("training.blocked.proposal_created", run_id=run_id, reason=reason)
+                except Exception as _prop_exc:
+                    _train_log.warning("training.blocked.proposal_failed", run_id=run_id, error=str(_prop_exc))
+                if stream_hub:
+                    await stream_hub.publish_global(workspace_id, kind="skill.training.blocked", payload={
+                        "run_id": run_id, "skill_id": skill_id, "epoch": epoch, "reason": reason,
+                    })
 
         await repo.update_training_run(
             _run_id,
