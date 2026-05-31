@@ -34,11 +34,11 @@ export default function SkillTrainingPage() {
     if (!agentId) return
     Promise.all([
       apiFetch<AgentResponse>(`/api/v1/agents/${agentId}`),
-      // We need workspace_id to list skills
     ])
       .then(([agent]) => {
         setWorkspaceId(agent.workspace_id)
-        return apiFetch<SkillsResponse>(`/api/v1/skills/catalog?workspace_id=${agent.workspace_id}`)
+        // Same endpoint as the Skills page — filtered by workspace_id + agent_id.
+        return apiFetch<SkillsResponse>(`/api/v1/skills?workspace_id=${agent.workspace_id}&agent_id=${agentId}`)
       })
       .then(res => setSkills(res.skills ?? []))
       .catch(() => {})
@@ -84,7 +84,7 @@ export default function SkillTrainingPage() {
             <SkillTrainingPanel
               skillId={skill.id}
               skillName={skill.name}
-              agentId={skill.agent_id}
+              agentId={agentId}
               workspaceId={workspaceId ?? ''}
               trainingMode={(skill.metadata?.training_mode as string | null) ?? null}
               initialOpen={skill.id === targetSkillId}
