@@ -8,15 +8,11 @@ import { apiFetch } from '@/lib/api'
 
 type SkillRow = {
   id: string
-  agent_id: string
   name: string
   metadata: Record<string, unknown>
 }
 
 type SkillsResponse = { skills: SkillRow[] }
-
-// The agent detail API returns workspace_id on the agent
-type AgentResponse = { id: string; workspace_id: string; name: string }
 
 export default function SkillTrainingPage() {
   const params = useParams<{ id: string }>()
@@ -32,15 +28,16 @@ export default function SkillTrainingPage() {
 
   useEffect(() => {
     if (!agentId) return
-    Promise.all([
-      apiFetch<AgentResponse>(`/api/v1/agents/${agentId}`),
-    ])
-      .then(([agent]) => {
-        setWorkspaceId(agent.workspace_id)
-        // Same endpoint as the Skills page — filtered by workspace_id + agent_id.
-        return apiFetch<SkillsResponse>(`/api/v1/skills?workspace_id=${agent.workspace_id}&agent_id=${agentId}`)
+    // Same pattern as the Skills page: get workspace_id from /auth/me,
+    // then fetch the agent's active skills. No single-agent detail endpoint exists.
+    apiFetch<{ workspaces: { id: string }[] }>('/api/v1/auth/me')
+      .then((me) => {
+        const wsId = me.workspaces[0]?.id
+        if (!wsId) return { skills: [] } as SkillsResponse
+        setWorkspaceId(wsId)
+        return apiFetch<SkillsResponse>(`/api/v1/skills?workspace_id=${wsId}&agent_id=${agentId}`)
       })
-      .then(res => setSkills(res.skills ?? []))
+      .then(res => setSkills((res as SkillsResponse).skills ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [agentId])
