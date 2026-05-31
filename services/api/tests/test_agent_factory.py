@@ -127,8 +127,8 @@ def test_build_agent_from_ctx_returns_harness_for_react_template(monkeypatch):
     assert isinstance(result, FlowMiddlewareHarness)
 
 
-def test_build_agent_from_ctx_deer_graph_not_wrapped():
-    """Non react-agent template → returns raw graph, not a harness."""
+def test_build_agent_from_ctx_deer_graph_wrapped_in_harness():
+    """Phase 2: non react-agent template → deer graph wrapped in the middleware harness."""
     from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness
 
     ctx = _make_ctx(template="linear-3", provider="openai")
@@ -137,12 +137,15 @@ def test_build_agent_from_ctx_deer_graph_not_wrapped():
         from flow.infrastructure.llm.agent_factory import build_agent_from_ctx
 
         result = build_agent_from_ctx(ctx)
-    assert not isinstance(result, FlowMiddlewareHarness)
-    assert result is mock_graph
+    assert isinstance(result, FlowMiddlewareHarness)
+    # The harness wraps the deer graph it built.
+    assert result._graph is mock_graph
 
 
 def test_build_agent_from_ctx_uses_deer_graph_for_non_react_template():
-    """Non react-agent template → routes through build_deer_flow_graph."""
+    """Non react-agent template → routes through build_deer_flow_graph (then wraps it)."""
+    from flow.infrastructure.llm.middleware.base import FlowMiddlewareHarness
+
     ctx = _make_ctx(template="linear-3", provider="openai")
     mock_graph = MagicMock()
     # build_deer_flow_graph is lazily imported inside build_agent_from_ctx — patch at source
@@ -151,7 +154,8 @@ def test_build_agent_from_ctx_uses_deer_graph_for_non_react_template():
 
         result = build_agent_from_ctx(ctx)
     mock_build.assert_called_once_with(ctx, checkpointer=None)
-    assert result is mock_graph
+    assert isinstance(result, FlowMiddlewareHarness)
+    assert result._graph is mock_graph
 
 
 def test_build_agent_from_ctx_wraps_anthropic_prompt_with_cache_control(monkeypatch):

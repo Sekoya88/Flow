@@ -229,9 +229,25 @@ def build_agent_from_ctx(ctx: GraphContext, checkpointer: Any | None = None) -> 
 
         return FlowMiddlewareHarness(raw_graph, middleware=middleware, runtime=runtime)
 
+    # Phase 2: all non-react templates (deer_flow, linear-3, …) now run the same
+    # middleware harness as react-agent, so the typed profile + persona + memory are
+    # injected before planning and prefs/facts are extracted after every run.
     from flow.infrastructure.graph.deer_graph import build_deer_flow_graph
 
-    return build_deer_flow_graph(ctx, checkpointer=checkpointer)
+    raw_graph = build_deer_flow_graph(ctx, checkpointer=checkpointer)
+    if raw_graph is None:
+        return None
+
+    _null_uuid = UUID("00000000-0000-0000-0000-000000000000")
+    runtime = HarnessRuntime(
+        workspace_id=ctx.workspace_id,
+        agent_id=ctx.agent_id,
+        user_id=getattr(ctx, "user_id", None) or _null_uuid,
+        execution_id=getattr(ctx, "execution_id", None) or _null_uuid,
+        thread_id=str(getattr(ctx, "execution_id", None) or "unknown"),
+    )
+    middleware = _build_middleware(ctx, runtime)
+    return FlowMiddlewareHarness(raw_graph, middleware=middleware, runtime=runtime)
 
 
 def build_agent(

@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_planner_reads_store_facts_when_store_present():
-    """Planner node calls store.asearch when ctx.store is set."""
+async def test_planner_does_not_read_store_directly():
+    """Phase 2: facts are injected by FlowMemoryMiddleware, not read inline by the planner.
+
+    The planner must not call store.asearch itself anymore — that read moved to the
+    middleware's before_agent (which injects facts as SystemMessages the planner folds in).
+    """
     from langchain_core.messages import HumanMessage
 
     from flow.infrastructure.graph.deer_graph import GraphContext
     from flow.infrastructure.graph.nodes import make_planner
 
     mock_store = AsyncMock()
-    mock_store.asearch = AsyncMock(return_value=[MagicMock(value={"content": "fact: user prefers concise answers"})])
+    mock_store.asearch = AsyncMock(return_value=[])
 
     ctx = GraphContext(
         pool=AsyncMock(),
@@ -32,10 +36,7 @@ async def test_planner_reads_store_facts_when_store_present():
     state = {"messages": [HumanMessage(content="What is RAG?")]}
     await planner(state)
 
-    mock_store.asearch.assert_awaited_once()
-    call_args = mock_store.asearch.call_args
-    namespace = call_args[0][0] if call_args[0] else call_args[1].get("namespace")
-    assert "facts" in namespace
+    mock_store.asearch.assert_not_awaited()
 
 
 @pytest.mark.asyncio
