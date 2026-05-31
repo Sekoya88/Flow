@@ -255,18 +255,8 @@ def make_planner(ctx: GraphContext):
             except Exception:
                 pass
 
-            # Read cross-thread facts from AsyncPostgresStore
-            store_facts_block = ""
-            if ctx.store is not None:
-                try:
-                    namespace = (str(ctx.workspace_id), str(ctx.agent_id), "facts")
-                    store_results = await ctx.store.asearch(namespace, query=user_text, limit=5)
-                    if store_results:
-                        lines = [r.value.get("content", "") for r in store_results if r.value.get("content")]
-                        if lines:
-                            store_facts_block = "Remembered facts:\n" + "\n".join(f"- {fact}" for fact in lines)
-                except Exception:
-                    pass  # store read is best-effort
+            # Cross-thread facts are injected by FlowMemoryMiddleware.before_agent as
+            # SystemMessages (see the injected-context fold below) — no inline read here.
 
             if llm is None:
                 plan = "Offline plan: clarify goal, gather facts, draft answer."
@@ -274,8 +264,6 @@ def make_planner(ctx: GraphContext):
                     plan = f"[Reasoning patterns found]\n{pattern_block}\n\n{plan}"
             else:
                 system = "You are a planning node. Output a short numbered plan (max 5 bullets)."
-                if store_facts_block:
-                    system += f"\n\n{store_facts_block}"
                 if pattern_block:
                     system = (
                         "You are a planning node. Output a short numbered plan (max 5 bullets).\n\n"
@@ -285,6 +273,20 @@ def make_planner(ctx: GraphContext):
                     system += f"\n\n{skills_block}"
                 if prediction_hint:
                     system += prediction_hint
+
+                # Fold middleware-injected context (persona, typed profile, memory facts)
+                # into the system prompt. Applied last so it survives the pattern_block
+                # reassignment above; empty when nothing is injected → byte-identical.
+                injected = "\n\n".join(
+                    m.content
+                    for m in state.get("messages", [])
+                    if isinstance(m, SystemMessage)
+                    and isinstance(m.content, str)
+                    and m.content.strip()
+                )
+                if injected:
+                    system = injected + "\n\n" + system
+
                 out = await llm.ainvoke(
                     [
                         SystemMessage(content=system),

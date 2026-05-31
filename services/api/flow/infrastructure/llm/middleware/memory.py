@@ -118,8 +118,10 @@ class FlowMemoryMiddleware(AgentMiddleware):
             except Exception as exc:
                 logger.warning("memory.before_agent.profile_failed", error=str(exc))
 
-        ns_facts = (runtime.workspace_id, runtime.agent_id, "facts")
-        ns_patterns = (runtime.workspace_id, runtime.agent_id, "patterns")
+        # String-form namespace — must match what the planner/store writes with
+        # (nodes.py uses (str(ws), str(agent), ...)). UUID tuples read a different namespace.
+        ns_facts = (str(runtime.workspace_id), str(runtime.agent_id), "facts")
+        ns_patterns = (str(runtime.workspace_id), str(runtime.agent_id), "patterns")
 
         try:
             facts = await self._store.asearch(ns_facts, query=query, limit=self._max_facts)
@@ -146,8 +148,8 @@ class FlowMemoryMiddleware(AgentMiddleware):
         if not answer:
             return
 
-        # Extract and store facts
-        ns_facts = (runtime.workspace_id, runtime.agent_id, "facts")
+        # Extract and store facts (string-form namespace — see before_agent)
+        ns_facts = (str(runtime.workspace_id), str(runtime.agent_id), "facts")
         try:
             facts = await extract_facts_from_answer(self._llm, question, answer)
             for fact in facts:
@@ -188,7 +190,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
             pattern = await extract_pattern_summary(self._llm, question, answer)
             if pattern:
                 problem, solution = pattern
-                ns_pat = (runtime.workspace_id, runtime.agent_id, "patterns")
+                ns_pat = (str(runtime.workspace_id), str(runtime.agent_id), "patterns")
                 await self._store.aput(ns_pat, _stable_key(problem), {"problem": problem, "solution": solution})
         except Exception as exc:
             logger.warning("memory.after_agent.pattern_failed", error=str(exc))
