@@ -35,6 +35,29 @@ export interface GoldenSetSummary {
   item_count: number
 }
 
+export interface GoldenSetItem {
+  id: string
+  input_text: string
+  expected_output: string
+  scoring_criteria: string
+}
+
+export function useGoldenSetItems(setId: string | null) {
+  const [items, setItems] = useState<GoldenSetItem[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!setId) { setItems([]); return }
+    setLoading(true)
+    apiFetch<{ items: GoldenSetItem[] }>(`/api/v1/golden-sets/${setId}`)
+      .then(res => setItems(res.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }, [setId])
+
+  return { items, loading }
+}
+
 export interface TrainingPatch {
   op: string             // "replace" | "append" | "insert" | "delete"
   target: string         // section heading
