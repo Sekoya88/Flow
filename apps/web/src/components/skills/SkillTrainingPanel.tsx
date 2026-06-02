@@ -2,10 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
+  BookOpen,
   Brain,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Eye,
   GitBranch,
   Layers,
   Loader2,
@@ -21,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import {
   useGoldenSets,
+  useGoldenSetItems,
   useOverrideTraining,
   useSkillTrainingRuns,
   useStartTraining,
@@ -594,6 +597,11 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
   const { toggle: toggleMode, busy: modeBusy } = useTrainingModeToggle(skillId, reload)
   const goldenSets = useGoldenSets()
   const [selectedSet, setSelectedSet] = useState<string>('')
+  const [showDatasetPreview, setShowDatasetPreview] = useState(false)
+  const previewSetId = selectedSet || (goldenSets[0]?.id ?? null)
+  const { items: previewItems, loading: previewLoading } = useGoldenSetItems(
+    showDatasetPreview ? previewSetId : null
+  )
 
   async function handleTrainNow() {
     await start(selectedSet || null)
@@ -627,19 +635,83 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
             </div>
           )}
 
-          {/* Dataset picker — choose which golden set trains (and gates) this skill */}
-          <div className="flex items-center gap-2 pl-9">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-flow-600">Dataset</span>
-            <select
-              value={selectedSet}
-              onChange={(e) => setSelectedSet(e.target.value)}
-              className="h-7 flex-1 min-w-0 rounded border border-flow-700 bg-flow-800 px-2 font-mono text-[11px] text-flow-300 focus:border-flow-violet focus:outline-none"
-            >
-              <option value="">Auto (first set)</option>
-              {goldenSets.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.item_count})</option>
-              ))}
-            </select>
+          {/* Dataset picker */}
+          <div className="flex flex-col gap-1.5 pl-9">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-flow-600">Dataset</span>
+              <select
+                value={selectedSet}
+                onChange={(e) => setSelectedSet(e.target.value)}
+                className="h-7 flex-1 min-w-0 rounded border border-flow-700 bg-flow-800 px-2 font-mono text-[11px] text-flow-300 focus:border-flow-violet focus:outline-none"
+              >
+                <option value="">Auto (first set)</option>
+                {goldenSets.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.item_count})</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowDatasetPreview(v => !v)}
+                title="Preview dataset items"
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded border transition-colors",
+                  showDatasetPreview
+                    ? "border-flow-violet/50 bg-flow-violet/10 text-flow-violet"
+                    : "border-flow-700 bg-flow-800 text-flow-500 hover:text-flow-300"
+                )}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {showDatasetPreview && (
+              <div className="rounded-lg border border-flow-700/50 bg-flow-950 p-2.5 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <BookOpen className="h-3 w-3 text-flow-500 shrink-0" />
+                  <span className="font-mono text-[10px] text-flow-500 uppercase tracking-wider">
+                    {selectedSet
+                      ? goldenSets.find(s => s.id === selectedSet)?.name
+                      : `Auto — ${goldenSets[0]?.name ?? 'first set'}`}
+                  </span>
+                </div>
+                {previewLoading ? (
+                  <div className="flex justify-center py-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-flow-600" />
+                  </div>
+                ) : previewItems.length === 0 ? (
+                  <p className="font-mono text-[10px] text-flow-600">No items in this dataset.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {previewItems.slice(0, 3).map((item) => (
+                      <div key={item.id} className="rounded border border-flow-800 bg-flow-900 p-2 space-y-1">
+                        <div className="flex items-start gap-1.5">
+                          <span className="shrink-0 font-mono text-[9px] text-flow-600 mt-0.5">IN</span>
+                          <p className="font-mono text-[10px] text-flow-300 line-clamp-2 leading-tight">
+                            {item.input_text}
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <span className="shrink-0 font-mono text-[9px] text-emerald-600 mt-0.5">OK</span>
+                          <p className="font-mono text-[10px] text-emerald-400/80 line-clamp-1 leading-tight">
+                            {item.expected_output.slice(0, 120)}{item.expected_output.length > 120 ? '…' : ''}
+                          </p>
+                        </div>
+                        {item.scoring_criteria && (
+                          <p className="font-mono text-[9px] text-flow-600 line-clamp-1 italic pl-5">
+                            ↳ {item.scoring_criteria}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    {previewItems.length > 3 && (
+                      <p className="font-mono text-[10px] text-flow-600 text-right">
+                        +{previewItems.length - 3} more items
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Buttons row — own line, never overflows */}
@@ -689,7 +761,11 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
           <Layers className="mx-auto mb-2 h-7 w-7 text-flow-700" />
           <p className="font-mono text-xs font-medium text-flow-400">No training runs yet</p>
           <p className="mt-1 text-[11px] leading-relaxed text-flow-600">
-            Mark agent responses as "Golden" in the Run page,<br />then click "Train now" to start.
+            <span className="font-semibold text-flow-500 block mb-1">How it works:</span>
+            1. In the Run page, mark good responses as &quot;Golden&quot;<br />
+            2. Select a dataset above (defines scoring criteria)<br />
+            3. Click &quot;Train now&quot; — ReflACT edits the skill prompt<br />
+            4. Changes only apply if eval score improves
           </p>
         </div>
       )}
