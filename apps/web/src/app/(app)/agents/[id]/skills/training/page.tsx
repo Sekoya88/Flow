@@ -64,6 +64,40 @@ export default function SkillTrainingPage() {
         }
       />
 
+      {/* Workflow guide */}
+      <div className="rounded-xl border border-flow-800 bg-flow-950 p-4">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-flow-500 mb-3">How training works</p>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            {
+              step: '1',
+              label: 'Mark Golden',
+              detail: 'In the Run page, mark good agent responses as "Golden" to build your training dataset.',
+            },
+            {
+              step: '2',
+              label: 'Select Dataset',
+              detail: 'Each skill trains on a golden set — test cases with input/expected-output pairs and scoring criteria.',
+            },
+            {
+              step: '3',
+              label: 'Train & Gate',
+              detail: 'ReflACT edits the skill prompt across epochs. Changes only apply if the eval score improves.',
+            },
+          ].map(({ step, label, detail }) => (
+            <div key={step} className="flex gap-3">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-flow-700 bg-flow-900 font-mono text-[11px] text-flow-400">
+                {step}
+              </div>
+              <div>
+                <p className="font-mono text-[11px] font-semibold text-flow-200">{label}</p>
+                <p className="mt-0.5 text-[10px] leading-relaxed text-flow-500">{detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {loading && (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
