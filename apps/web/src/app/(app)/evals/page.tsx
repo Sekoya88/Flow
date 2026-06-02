@@ -20,6 +20,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,6 +95,7 @@ export default function EvalsPage() {
   const [addingItem, setAddingItem] = useState(false);
   const [newItem, setNewItem] = useState({ input_text: "", expected_output: "", scoring_criteria: "" });
   const [addingItemToSet, setAddingItemToSet] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<GoldenItem | null>(null);
 
   const [logs, setLogs] = useState<EvalLog[]>([]);
   const [running, setRunning] = useState(false);
@@ -451,10 +458,17 @@ export default function EvalsPage() {
                           <p className="text-[10px] text-muted-foreground py-1 pl-5">No items yet.</p>
                         ) : (
                           items.map((item) => (
-                            <div key={item.id} className="group ml-5 rounded-lg border border-border/30 bg-card/50 p-2 space-y-1">
+                            <div
+                              key={item.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setPreviewItem(item)}
+                              onKeyDown={(e) => e.key === 'Enter' && setPreviewItem(item)}
+                              className="group ml-5 cursor-pointer rounded-lg border border-border/30 bg-card/50 p-2 space-y-1 hover:border-flow-violet/40 hover:bg-flow-900/50 transition-colors"
+                            >
                               <div className="flex items-start justify-between gap-1">
                                 <p className="text-[11px] font-medium text-foreground/90 line-clamp-2 flex-1">{item.input_text}</p>
-                                <button onClick={() => deleteItem(s.id, item.id)} className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 text-muted-foreground hover:text-destructive transition-all">
+                                <button onClick={(e) => { e.stopPropagation(); deleteItem(s.id, item.id); }} className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 text-muted-foreground hover:text-destructive transition-all">
                                   <Trash2 className="h-2.5 w-2.5" />
                                 </button>
                               </div>
@@ -841,6 +855,39 @@ export default function EvalsPage() {
           </div>
         </div>
       </div>
+
+      {/* Dataset item full-content dialog */}
+      <Dialog open={!!previewItem} onOpenChange={(open) => { if (!open) setPreviewItem(null); }}>
+        <DialogContent className="max-w-2xl bg-flow-900 border-flow-700">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm text-flow-100">Dataset Item</DialogTitle>
+          </DialogHeader>
+          {previewItem && (
+            <div className="space-y-4 mt-2">
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-flow-500">Input</p>
+                <div className="rounded-lg border border-flow-700 bg-flow-950 p-3 max-h-40 overflow-y-auto">
+                  <p className="text-sm text-flow-200 whitespace-pre-wrap leading-relaxed">{previewItem.input_text}</p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600">Expected Output</p>
+                <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 p-3 max-h-48 overflow-y-auto">
+                  <p className="text-sm text-emerald-300 whitespace-pre-wrap leading-relaxed">{previewItem.expected_output}</p>
+                </div>
+              </div>
+              {previewItem.scoring_criteria && (
+                <div className="space-y-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-flow-500">Scoring Criteria</p>
+                  <div className="rounded-lg border border-flow-700 bg-flow-950 p-3">
+                    <p className="text-sm text-flow-400 italic leading-relaxed">{previewItem.scoring_criteria}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
