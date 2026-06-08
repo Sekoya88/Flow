@@ -218,3 +218,47 @@ class TrainingEventsOut(BaseModel):
 class TrainingOverrideOut(BaseModel):
     skill_version_id: str | None
     activated: bool
+
+
+# ── Curated collections schemas ───────────────────────────────────────────────
+
+
+class CollectionSkillOut(BaseModel):
+    path: str
+    name: str
+
+
+class CollectionOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    repo: str
+    category: str
+    skill_count: int
+    skills: list[CollectionSkillOut]
+
+
+class CollectionsListOut(BaseModel):
+    collections: list[CollectionOut]
+
+
+class CollectionImportIn(BaseModel):
+    workspace_id: UUID
+    agent_id: UUID | None = None  # None → first agent in workspace
+
+
+class CollectionImportStep(BaseModel):
+    path: str
+    name: str
+    status: str           # "installed" | "skipped" | "error"
+    reason: str
+    skill_id: str | None = None
+    category: str | None = None
+
+
+class CollectionImportOut(BaseModel):
+    collection_id: str
+    installed: int
+    skipped: int
+    errors: int
+    steps: list[CollectionImportStep]

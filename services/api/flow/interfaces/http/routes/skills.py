@@ -18,6 +18,12 @@ from flow.infrastructure.persistence.skill_templates import SKILL_TEMPLATES
 from flow.interfaces.http.deps import get_current_user_id, get_repo, get_settings_dep
 from flow.interfaces.http.rate_limit import skill_test_rate_limit
 from flow.interfaces.http.schemas import (
+    CollectionImportIn,
+    CollectionImportOut,
+    CollectionImportStep,
+    CollectionOut,
+    CollectionSkillOut,
+    CollectionsListOut,
     DeactivateOut,
     SkillActivateOut,
     SkillCatalogOut,
@@ -348,6 +354,130 @@ async def preview_repo(
         skills=skills,
         total=len(skills),
         truncated=payload.get("truncated", False),
+    )
+
+
+# ── Curated collections (must precede /{skill_id} catch-all) ─────────────────
+
+
+async def _fetch_raw_skill(repo: str, path: str) -> str | None:
+    """Fetch one SKILL.md from raw.githubusercontent.com. Returns text or None on failure.
+    Isolated as a module-level function so tests can monkeypatch it."""
+    import httpx
+
+    from flow.infrastructure.persistence.skill_collections import raw_url
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as http:
+            r = await http.get(raw_url(repo, path))
+    except httpx.RequestError:
+        return None
+    if r.status_code != 200 or not r.text.strip():
+        return None
+    return r.text
+
+
+@router.get("/collections", response_model=CollectionsListOut)
+async def list_collections(
+    _user_id: Annotated[UUID, Depends(get_current_user_id)],
+) -> CollectionsListOut:
+    """Return the curated collection manifest (no network)."""
+    from flow.infrastructure.persistence.skill_collections import CURATED_COLLECTIONS
+
+    return CollectionsListOut(
+        collections=[
+            CollectionOut(
+                id=c["id"],
+                name=c["name"],
+                description=c["description"],
+                repo=c["repo"],
+                category=c["category"],
+                skill_count=len(c["skills"]),
+                skills=[CollectionSkillOut(path=s["path"], name=s["name"]) for s in c["skills"]],
+            )
+            for c in CURATED_COLLECTIONS
+        ]
+    )
+
+
+@router.post(
+    "/collections/{collection_id}/import",
+    response_model=CollectionImportOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_collection(
+    collection_id: str,
+    body: CollectionImportIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> CollectionImportOut:
+    """Import a curated collection's pinned SKILL.md files with a per-skill step log."""
+    from flow.infrastructure.persistence.skill_collections import get_collection, is_skill_file
+
+    collection = get_collection(collection_id)
+    if collection is None:
+        raise HTTPException(status_code=404, detail="collection not found")
+
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if body.workspace_id not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    effective_agent_id = body.agent_id
+    if effective_agent_id is None:
+        first_agent = await repo._pool.fetchrow(
+            "SELECT id FROM agents WHERE workspace_id = $1 ORDER BY created_at LIMIT 1",
+            body.workspace_id,
+        )
+        if not first_agent:
+            raise HTTPException(status_code=422, detail="no agents in workspace")
+        effective_agent_id = first_agent["id"]
+
+    existing_names = {
+        r["name"]
+        for r in await repo._pool.fetch(
+            "SELECT name FROM agent_skills WHERE agent_id = $1 AND active = true",
+            effective_agent_id,
+        )
+    }
+
+    steps: list[CollectionImportStep] = []
+    for s in collection["skills"]:
+        path, fallback_name = s["path"], s["name"]
+        content_md = await _fetch_raw_skill(collection["repo"], path)
+        if content_md is None:
+            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error",
+                                              reason="fetch failed (404 or network)"))
+            continue
+        if not is_skill_file(path, content_md):
+            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error",
+                                              reason="not a valid SKILL file"))
+            continue
+        parsed = parse_skill_md(content_md)
+        skill_name = parsed.name if parsed.name != "unnamed" else fallback_name
+        if skill_name in existing_names:
+            steps.append(CollectionImportStep(path=path, name=skill_name, status="skipped",
+                                              reason="already installed"))
+            continue
+        category = parsed.category if parsed.category != "General" else collection["category"]
+        skill_id = await repo.upsert_agent_skill(
+            agent_id=effective_agent_id,
+            workspace_id=body.workspace_id,
+            name=skill_name,
+            content_md=content_md,
+            category=category,
+            initial_active=True,
+        )
+        existing_names.add(skill_name)
+        steps.append(CollectionImportStep(path=path, name=skill_name, status="installed",
+                                          reason=f"installed in {category}", skill_id=str(skill_id),
+                                          category=category))
+
+    return CollectionImportOut(
+        collection_id=collection_id,
+        installed=sum(1 for s in steps if s.status == "installed"),
+        skipped=sum(1 for s in steps if s.status == "skipped"),
+        errors=sum(1 for s in steps if s.status == "error"),
+        steps=steps,
     )
 
 

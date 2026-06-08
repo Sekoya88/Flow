@@ -103,6 +103,12 @@ from flow.interfaces.http.schemas.schedules import (
     ScheduleToggleIn,
 )
 from flow.interfaces.http.schemas.skills import (
+    CollectionImportIn,
+    CollectionImportOut,
+    CollectionImportStep,
+    CollectionOut,
+    CollectionSkillOut,
+    CollectionsListOut,
     DeactivateOut,
     PatchOut,
     SkillActivateOut,
@@ -203,6 +209,13 @@ __all__ = [
     "ProposalOut",
     "ProposalListOut",
     "ProposalActionOut",
+    # collections
+    "CollectionSkillOut",
+    "CollectionOut",
+    "CollectionsListOut",
+    "CollectionImportIn",
+    "CollectionImportStep",
+    "CollectionImportOut",
     # skills
     "SkillCreateIn",
     "SkillPatchIn",
