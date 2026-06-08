@@ -42,7 +42,7 @@ async def main() -> None:
                 out.write_text(r.text, encoding="utf-8")
                 print(f"  ok   {out.name}")
                 written += 1
-    print(f"\nVendored {written} skills, skipped {skipped} → {VENDOR_DIR}")
+    print(f"\nVendored {written} skills, skipped {skipped} -> {VENDOR_DIR}")
 
 
 if __name__ == "__main__":
