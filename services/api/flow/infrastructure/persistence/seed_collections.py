@@ -10,8 +10,8 @@ from pathlib import Path
 import asyncpg
 
 from flow.application.skill_parser import parse_skill_md
-from flow.infrastructure.persistence.golden_seed import seed_curated_golden_sets
 from flow.infrastructure.observability.logging import get_logger
+from flow.infrastructure.persistence.golden_seed import seed_curated_golden_sets
 
 log = get_logger("seed_collections")
 
@@ -20,9 +20,7 @@ DEFAULT_AGENT_NAME = "Skill Library"
 
 
 async def _ensure_library_agent(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> uuid.UUID:
-    row = await pool.fetchrow(
-        "SELECT id FROM agents WHERE workspace_id=$1 AND name=$2", workspace_id, DEFAULT_AGENT_NAME
-    )
+    row = await pool.fetchrow("SELECT id FROM agents WHERE workspace_id=$1 AND name=$2", workspace_id, DEFAULT_AGENT_NAME)
     if row:
         return row["id"]
     agent_id = uuid.uuid4()
@@ -40,12 +38,7 @@ async def _ensure_library_agent(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> 
 
 async def seed_collections(pool: asyncpg.Pool, workspace_id: uuid.UUID) -> dict:
     agent_id = await _ensure_library_agent(pool, workspace_id)
-    existing = {
-        r["name"]
-        for r in await pool.fetch(
-            "SELECT name FROM agent_skills WHERE agent_id=$1 AND active=true", agent_id
-        )
-    }
+    existing = {r["name"] for r in await pool.fetch("SELECT name FROM agent_skills WHERE agent_id=$1 AND active=true", agent_id)}
     created = 0
     if VENDOR_DIR.exists():
         for f in sorted(VENDOR_DIR.glob("*.md")):

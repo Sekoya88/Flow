@@ -125,8 +125,6 @@ async def test_import_collection_dedupes_on_second_run(monkeypatch, app):
     monkeypatch.setattr(mod, "_fetch_raw_skill", fake_fetch_raw)
 
     # Override pool.fetch to track installed names between calls
-    original_upsert = app.dependency_overrides[get_repo]().upsert_agent_skill
-
     async def tracking_upsert(**kwargs):
         installed_names.append(kwargs["name"])
         return uuid4()

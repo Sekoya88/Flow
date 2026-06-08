@@ -28,6 +28,7 @@ from flow.interfaces.http.schemas import (
     GenerateDatasetIn,
     GenerateDatasetOut,
     GeneratedItemOut,
+    PatchOut,
     SkillActivateOut,
     SkillCatalogOut,
     SkillCreateIn,
@@ -37,7 +38,6 @@ from flow.interfaces.http.schemas import (
     SkillListOut,
     SkillPatchIn,
     SkillTestIn,
-    PatchOut,
     SkillUsageOut,
     SkillVibeCreateIn,
     SkillVibeModifyIn,
@@ -45,10 +45,10 @@ from flow.interfaces.http.schemas import (
     TrainingEpochOut,
     TrainingEventOut,
     TrainingEventsOut,
+    TrainingOverrideOut,
     TrainingRunDetailOut,
     TrainingRunOut,
     TrainingRunsOut,
-    TrainingOverrideOut,
     TrainingStartOut,
 )
 
@@ -233,6 +233,7 @@ async def list_workspace_training_runs(
 
 # ── Gist preview (must be before /{skill_id} catch-all) ──────────────────────
 
+
 @router.get("/preview-gist")
 async def preview_gist(
     url: str,
@@ -240,6 +241,7 @@ async def preview_gist(
 ) -> dict:
     """Server-side proxy for GitHub Gist preview (avoids browser rate-limits)."""
     import re
+
     import httpx
 
     match = re.search(r"([0-9a-f]{20,})", url)
@@ -282,6 +284,7 @@ async def preview_gist(
 
 # ── GitHub repo preview (must be before /{skill_id} catch-all) ───────────────
 
+
 class RepoSkillFile(BaseModel):
     path: str
     name: str
@@ -299,6 +302,7 @@ class RepoPreviewOut(BaseModel):
 def _parse_repo_url(url: str) -> tuple[str, str]:
     """Accept 'owner/repo' or full github.com URL; return (owner, repo)."""
     import re
+
     url = url.strip().rstrip("/")
     m = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$", url)
     if m:
@@ -349,8 +353,7 @@ async def preview_repo(
             size=item.get("size", 0),
         )
         for item in tree
-        if item.get("type") == "blob"
-        and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
+        if item.get("type") == "blob" and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
     ]
     return RepoPreviewOut(
         repo=f"{owner}/{repo_name}",
@@ -448,18 +451,15 @@ async def import_collection(
         path, fallback_name = s["path"], s["name"]
         content_md = await _fetch_raw_skill(collection["repo"], path)
         if content_md is None:
-            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error",
-                                              reason="fetch failed (404 or network)"))
+            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error", reason="fetch failed (404 or network)"))
             continue
         if not is_skill_file(path, content_md):
-            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error",
-                                              reason="not a valid SKILL file"))
+            steps.append(CollectionImportStep(path=path, name=fallback_name, status="error", reason="not a valid SKILL file"))
             continue
         parsed = parse_skill_md(content_md)
         skill_name = parsed.name if parsed.name != "unnamed" else fallback_name
         if skill_name in existing_names:
-            steps.append(CollectionImportStep(path=path, name=skill_name, status="skipped",
-                                              reason="already installed"))
+            steps.append(CollectionImportStep(path=path, name=skill_name, status="skipped", reason="already installed"))
             continue
         category = parsed.category if parsed.category != "General" else collection["category"]
         skill_id = await repo.upsert_agent_skill(
@@ -471,9 +471,11 @@ async def import_collection(
             initial_active=True,
         )
         existing_names.add(skill_name)
-        steps.append(CollectionImportStep(path=path, name=skill_name, status="installed",
-                                          reason=f"installed in {category}", skill_id=str(skill_id),
-                                          category=category))
+        steps.append(
+            CollectionImportStep(
+                path=path, name=skill_name, status="installed", reason=f"installed in {category}", skill_id=str(skill_id), category=category
+            )
+        )
 
     return CollectionImportOut(
         collection_id=collection_id,
@@ -729,9 +731,7 @@ async def generate_skill_dataset(
     parsed = parse_skill_md(skill["content_md"])
     skill_name = parsed.name if parsed.name != "unnamed" else skill["name"]
     n = max(1, min(body.n, 10))
-    items, prompt_used = await generate_golden_items(
-        skill_name=skill_name, skill_body=parsed.body_md or skill["content_md"], n=n
-    )
+    items, prompt_used = await generate_golden_items(skill_name=skill_name, skill_body=parsed.body_md or skill["content_md"], n=n)
     if not items:
         raise HTTPException(status_code=502, detail="generation produced no items — try again")
 
@@ -744,8 +744,7 @@ async def generate_skill_dataset(
     )
     for it in items:
         await repo._pool.execute(
-            "INSERT INTO golden_items (set_id, skill_id, input_text, expected_output, scoring_criteria) "
-            "VALUES ($1,$2,$3,$4,$5)",
+            "INSERT INTO golden_items (set_id, skill_id, input_text, expected_output, scoring_criteria) VALUES ($1,$2,$3,$4,$5)",
             set_id,
             skill_id,
             it.input_text,
@@ -883,8 +882,8 @@ async def vibe_modify_skill(
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-
 # ── Gist import ──────────────────────────────────────────────────────────────
+
 
 class GistImportIn(BaseModel):
     gist_url: str  # e.g. "https://gist.github.com/user/abc123" or just "abc123"
@@ -900,6 +899,7 @@ async def import_skill_from_gist(
 ) -> dict:
     """Fetch a public GitHub Gist and install its first .md file as a skill."""
     import re
+
     import httpx
 
     ws_rows = await repo.list_workspaces_for_user(user_id)
@@ -972,9 +972,7 @@ async def import_skill_from_gist(
 
 # ── Obsidian Skills import ───────────────────────────────────────────────────
 
-_OBSIDIAN_SKILLS_TREE_URL = (
-    "https://api.github.com/repos/kepano/obsidian-skills/git/trees/main?recursive=1"
-)
+_OBSIDIAN_SKILLS_TREE_URL = "https://api.github.com/repos/kepano/obsidian-skills/git/trees/main?recursive=1"
 _OBSIDIAN_RAW_BASE = "https://raw.githubusercontent.com/kepano/obsidian-skills/main/"
 
 
@@ -1009,11 +1007,7 @@ async def import_obsidian_skills(
     if tree_resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"GitHub API error {tree_resp.status_code}")
 
-    skill_paths = [
-        item["path"]
-        for item in tree_resp.json().get("tree", [])
-        if item["path"].endswith("SKILL.md")
-    ]
+    skill_paths = [item["path"] for item in tree_resp.json().get("tree", []) if item["path"].endswith("SKILL.md")]
 
     if body.skills:
         skill_paths = [p for p in skill_paths if any(s in p for s in body.skills)]
@@ -1047,6 +1041,7 @@ async def import_obsidian_skills(
 
 # ── GitHub repo import ────────────────────────────────────────────────────────
 
+
 class RepoImportIn(BaseModel):
     repo_url: str
     workspace_id: UUID
@@ -1067,8 +1062,9 @@ async def import_skills_from_repo(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> RepoImportOut:
     """Fetch .md skill files from a public GitHub repo and install them as Flow skills."""
-    import httpx
     from pathlib import Path as _Path
+
+    import httpx
 
     from flow.infrastructure.persistence.skill_collections import is_skill_file
 
@@ -1108,8 +1104,7 @@ async def import_skills_from_repo(
         paths_to_import = [
             item["path"]
             for item in tree_resp.json().get("tree", [])
-            if item.get("type") == "blob"
-            and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
+            if item.get("type") == "blob" and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
         ]
 
     raw_base = f"https://raw.githubusercontent.com/{owner}/{repo_name}/HEAD/"
@@ -1131,9 +1126,7 @@ async def import_skills_from_repo(
                     errors.append(f"{path}: not a skill file (no SKILL.md / frontmatter) — skipped")
                     continue
                 parsed = parse_skill_md(content_md)
-                skill_name = (
-                    parsed.name if parsed.name != "unnamed" else _Path(path).stem
-                )
+                skill_name = parsed.name if parsed.name != "unnamed" else _Path(path).stem
                 skill_id = await repo.upsert_agent_skill(
                     agent_id=effective_agent_id,
                     workspace_id=body.workspace_id,
@@ -1260,14 +1253,16 @@ async def get_skill_training_run(
                 pj = _json.loads(pj)
             except Exception:
                 pj = {}
-        patch_outs.append(PatchOut(
-            op=str(pj.get("op", "")),
-            target=str(pj.get("target", "")),
-            content=str(pj.get("content", "")) if pj.get("content") else None,
-            impact_score=float(pj["impact_score"]) if pj.get("impact_score") is not None else None,
-            applied=bool(p["applied"]),
-            rejected=bool(p["rejected"]),
-        ))
+        patch_outs.append(
+            PatchOut(
+                op=str(pj.get("op", "")),
+                target=str(pj.get("target", "")),
+                content=str(pj.get("content", "")) if pj.get("content") else None,
+                impact_score=float(pj["impact_score"]) if pj.get("impact_score") is not None else None,
+                applied=bool(p["applied"]),
+                rejected=bool(p["rejected"]),
+            )
+        )
         if p["applied"]:
             patches_applied += 1
         if p["rejected"]:

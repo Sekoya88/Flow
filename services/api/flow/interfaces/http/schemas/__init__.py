@@ -134,10 +134,10 @@ from flow.interfaces.http.schemas.skills import (
     TrainingEpochOut,
     TrainingEventOut,
     TrainingEventsOut,
+    TrainingOverrideOut,
     TrainingRunDetailOut,
     TrainingRunOut,
     TrainingRunsOut,
-    TrainingOverrideOut,
     TrainingStartOut,
 )
 
@@ -249,6 +249,7 @@ __all__ = [
     "TrainingRunOut",
     "TrainingRunsOut",
     "TrainingRunDetailOut",
+    "TrainingOverrideOut",
     "PatchOut",
     # ab_tests
     "ABTestCreateIn",

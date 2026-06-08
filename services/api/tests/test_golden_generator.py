@@ -1,5 +1,3 @@
-import pytest
-
 from flow.application.golden_generator import GeneratedItem, build_generation_prompt, parse_generation_response
 
 

@@ -24,9 +24,7 @@ def test_get_collection_found_and_missing():
 
 
 def test_raw_url_builds_github_raw_path():
-    assert raw_url("owner/repo", ".agents/skills/x/SKILL.md") == (
-        "https://raw.githubusercontent.com/owner/repo/HEAD/.agents/skills/x/SKILL.md"
-    )
+    assert raw_url("owner/repo", ".agents/skills/x/SKILL.md") == ("https://raw.githubusercontent.com/owner/repo/HEAD/.agents/skills/x/SKILL.md")
 
 
 def test_is_skill_file_accepts_skill_md_by_name():

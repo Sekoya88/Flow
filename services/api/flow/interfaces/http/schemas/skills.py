@@ -163,8 +163,8 @@ class TrainingEpochOut(BaseModel):
 
 
 class PatchOut(BaseModel):
-    op: str             # "replace" | "append" | "insert" | "delete"
-    target: str         # section heading targeted
+    op: str  # "replace" | "append" | "insert" | "delete"
+    target: str  # section heading targeted
     content: str | None
     impact_score: float | None
     applied: bool
@@ -204,8 +204,8 @@ class TrainingRunDetailOut(BaseModel):
 
 class TrainingEventOut(BaseModel):
     id: str
-    stage: str   # 'epoch' | 'rollout' | 'reflect' | 'select' | 'update' | 'evaluate'
-    kind: str    # 'stage_start' | 'item_result' | 'patch_proposed' | 'analysis' | 'summary' | 'score' | 'error'
+    stage: str  # 'epoch' | 'rollout' | 'reflect' | 'select' | 'update' | 'evaluate'
+    kind: str  # 'stage_start' | 'item_result' | 'patch_proposed' | 'analysis' | 'summary' | 'score' | 'error'
     message: str
     data: dict[str, Any] | None = None
     created_at: str
@@ -250,7 +250,7 @@ class CollectionImportIn(BaseModel):
 class CollectionImportStep(BaseModel):
     path: str
     name: str
-    status: str           # "installed" | "skipped" | "error"
+    status: str  # "installed" | "skipped" | "error"
     reason: str
     skill_id: str | None = None
     category: str | None = None

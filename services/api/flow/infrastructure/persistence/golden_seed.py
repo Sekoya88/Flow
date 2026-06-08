@@ -103,9 +103,7 @@ async def seed_curated_golden_sets(pool: asyncpg.Pool, workspace_id: uuid.UUID) 
     """Insert curated golden sets for a workspace. Idempotent by set name. Returns count created."""
     created = 0
     for gs in CURATED_GOLDEN_SETS:
-        exists = await pool.fetchval(
-            "SELECT id FROM golden_sets WHERE workspace_id=$1 AND name=$2", workspace_id, gs["name"]
-        )
+        exists = await pool.fetchval("SELECT id FROM golden_sets WHERE workspace_id=$1 AND name=$2", workspace_id, gs["name"])
         if exists:
             continue
         set_id = await pool.fetchval(
@@ -116,8 +114,7 @@ async def seed_curated_golden_sets(pool: asyncpg.Pool, workspace_id: uuid.UUID) 
         )
         for it in gs["items"]:
             await pool.execute(
-                "INSERT INTO golden_items (set_id, input_text, expected_output, scoring_criteria) "
-                "VALUES ($1,$2,$3,$4)",
+                "INSERT INTO golden_items (set_id, input_text, expected_output, scoring_criteria) VALUES ($1,$2,$3,$4)",
                 set_id,
                 it["input_text"],
                 it["expected_output"],

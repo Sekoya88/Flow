@@ -33,9 +33,7 @@ def is_skill_file(path: str, content: str) -> bool:
     if not m:
         return False
     fm = m.group(1)
-    return bool(re.search(r"^name\s*:", fm, re.MULTILINE)) and bool(
-        re.search(r"^description\s*:", fm, re.MULTILINE)
-    )
+    return bool(re.search(r"^name\s*:", fm, re.MULTILINE)) and bool(re.search(r"^description\s*:", fm, re.MULTILINE))
 
 
 def raw_url(repo: str, path: str) -> str:
