@@ -10,6 +10,7 @@ rebuild:
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py --prune
 	docker compose exec api uv run python scripts/seed_skills.py
+	docker compose exec api uv run python -m flow.infrastructure.persistence.seed_collections
 	@echo "\n✓ Ready → http://localhost:13000"
 
 # ── Normal start (no rebuild) ─────────────────────────────────────────────────
@@ -23,6 +24,7 @@ build:
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
 	docker compose exec api uv run python scripts/seed_skills.py
+	docker compose exec api uv run python -m flow.infrastructure.persistence.seed_collections
 	@echo "\n✓ Ready → http://localhost:13000"
 
 # ── Apply migrations + restart services WITHOUT wiping volumes ────────────────
@@ -34,6 +36,7 @@ update:
 	docker compose exec api uv run alembic upgrade head
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
 	docker compose exec api uv run python scripts/seed_skills.py
+	docker compose exec api uv run python -m flow.infrastructure.persistence.seed_collections
 	@echo "\n✓ Updated (data preserved, seeds refreshed) → http://localhost:13000"
 
 # ── Stop everything ───────────────────────────────────────────────────────────
@@ -43,6 +46,7 @@ down:
 # ── Seed only (agents + golden sets) ─────────────────────────────────────────
 seed:
 	docker compose exec api uv run python scripts/seed_agents_and_datasets.py
+	docker compose exec api uv run python -m flow.infrastructure.persistence.seed_collections
 
 # ── Migrations only ───────────────────────────────────────────────────────────
 migrate:
