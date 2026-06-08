@@ -335,12 +335,13 @@ async def preview_repo(
     skills = [
         RepoSkillFile(
             path=item["path"],
-            name=_Path(item["path"]).stem,
+            name=_Path(item["path"]).parent.name or _Path(item["path"]).stem,
             sha=item.get("sha", ""),
             size=item.get("size", 0),
         )
         for item in tree
-        if item.get("type") == "blob" and item["path"].endswith(".md")
+        if item.get("type") == "blob"
+        and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
     ]
     return RepoPreviewOut(
         repo=f"{owner}/{repo_name}",
@@ -881,6 +882,8 @@ async def import_skills_from_repo(
     import httpx
     from pathlib import Path as _Path
 
+    from flow.infrastructure.persistence.skill_collections import is_skill_file
+
     ws_rows = await repo.list_workspaces_for_user(user_id)
     if body.workspace_id not in {r["id"] for r in ws_rows}:
         raise HTTPException(status_code=403, detail="workspace access denied")
@@ -917,7 +920,8 @@ async def import_skills_from_repo(
         paths_to_import = [
             item["path"]
             for item in tree_resp.json().get("tree", [])
-            if item.get("type") == "blob" and item["path"].endswith(".md")
+            if item.get("type") == "blob"
+            and (item["path"].lower().endswith("/skill.md") or item["path"].lower() == "skill.md")
         ]
 
     raw_base = f"https://raw.githubusercontent.com/{owner}/{repo_name}/HEAD/"
@@ -934,6 +938,9 @@ async def import_skills_from_repo(
                 content_md = r.text
                 if not content_md.strip():
                     errors.append(f"{path}: empty file")
+                    continue
+                if not is_skill_file(path, content_md):
+                    errors.append(f"{path}: not a skill file (no SKILL.md / frontmatter) — skipped")
                     continue
                 parsed = parse_skill_md(content_md)
                 skill_name = (
