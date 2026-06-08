@@ -229,8 +229,7 @@ async def test_get_training_run_detail_returns_run_with_epochs(app):
     )
 
     patch_rows = [
-        {"patch_json": {"op": "replace", "target": f"## S{i}", "content": "x", "impact_score": 0.8},
-         "applied": True, "rejected": False}
+        {"patch_json": {"op": "replace", "target": f"## S{i}", "content": "x", "impact_score": 0.8}, "applied": True, "rejected": False}
         for i in range(3)
     ]
 

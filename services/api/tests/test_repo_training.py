@@ -4,13 +4,12 @@ All tests mock self._pool so no live database is required.
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, call
-from uuid import UUID, uuid4
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
 from flow.infrastructure.persistence.repo import FlowRepository
-
 
 # ---------------------------------------------------------------------------
 # Helpers

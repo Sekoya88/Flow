@@ -1,4 +1,5 @@
 """Tests for Obsidian export — path traversal guard + safe write."""
+
 from __future__ import annotations
 
 import tempfile

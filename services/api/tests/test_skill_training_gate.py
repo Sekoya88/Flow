@@ -30,10 +30,7 @@ def _trainer() -> SkillTrainer:
 
 def _items(*scores: float) -> list[dict]:
     """Build per-item score rows keyed by stable item ids 'i0', 'i1', …."""
-    return [
-        {"item_id": f"i{idx}", "input_text": f"item {idx}", "score": s}
-        for idx, s in enumerate(scores)
-    ]
+    return [{"item_id": f"i{idx}", "input_text": f"item {idx}", "score": s} for idx, s in enumerate(scores)]
 
 
 _CFG = TrainingConfig(min_val_improvement=0.02, regression_floor=0.1)
@@ -163,9 +160,11 @@ async def test_override_activates_blocked_candidate(app):
     repo: MagicMock = app.state._repo
 
     repo.get_training_run = AsyncMock(return_value={"accepted": False})
-    repo.list_training_epochs = AsyncMock(return_value=[
-        {"candidate_skill_id": candidate_id, "accepted": False},
-    ])
+    repo.list_training_epochs = AsyncMock(
+        return_value=[
+            {"candidate_skill_id": candidate_id, "accepted": False},
+        ]
+    )
     repo.activate_skill_version = AsyncMock(return_value={"id": candidate_id})
     repo.update_training_run = AsyncMock()
 
@@ -212,8 +211,11 @@ async def test_create_training_run_persists_golden_set_id():
     set_id = uuid4()
 
     await repo.create_training_run(
-        skill_id=uuid4(), agent_id=uuid4(), workspace_id=uuid4(),
-        edit_budget=5, golden_set_id=set_id,
+        skill_id=uuid4(),
+        agent_id=uuid4(),
+        workspace_id=uuid4(),
+        edit_budget=5,
+        golden_set_id=set_id,
     )
 
     # golden_set_id must appear among the positional params handed to the INSERT.

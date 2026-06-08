@@ -76,10 +76,12 @@ async def test_register_rejects_duplicate_email(app):
 @pytest.mark.asyncio
 async def test_login_valid_credentials_returns_token(app):
     repo: MagicMock = app.state._repo
-    repo.get_user_by_email = AsyncMock(return_value={
-        "id": _USER_ID,
-        "password_hash": hash_password("secret123"),
-    })
+    repo.get_user_by_email = AsyncMock(
+        return_value={
+            "id": _USER_ID,
+            "password_hash": hash_password("secret123"),
+        }
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/api/v1/auth/login", json={"email": "a@b.com", "password": "secret123"})
@@ -91,10 +93,12 @@ async def test_login_valid_credentials_returns_token(app):
 @pytest.mark.asyncio
 async def test_login_wrong_password_returns_401(app):
     repo: MagicMock = app.state._repo
-    repo.get_user_by_email = AsyncMock(return_value={
-        "id": _USER_ID,
-        "password_hash": hash_password("correct"),
-    })
+    repo.get_user_by_email = AsyncMock(
+        return_value={
+            "id": _USER_ID,
+            "password_hash": hash_password("correct"),
+        }
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/api/v1/auth/login", json={"email": "a@b.com", "password": "wrong"})
@@ -120,9 +124,11 @@ async def test_login_unknown_email_returns_401(app):
 async def test_me_returns_user_and_workspaces(app):
     repo: MagicMock = app.state._repo
     repo.get_user = AsyncMock(return_value={"id": _USER_ID, "email": "a@b.com"})
-    repo.list_workspaces_for_user = AsyncMock(return_value=[
-        {"id": _WS_ID, "name": "Personal", "role": "admin"},
-    ])
+    repo.list_workspaces_for_user = AsyncMock(
+        return_value=[
+            {"id": _WS_ID, "name": "Personal", "role": "admin"},
+        ]
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/api/v1/auth/me", headers=_auth())

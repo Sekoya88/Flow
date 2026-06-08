@@ -1,4 +1,5 @@
 """Unit tests for FlowRepository digest_run methods (mock asyncpg pool)."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -23,6 +24,7 @@ def mock_pool():
 @pytest.fixture
 def repo(mock_pool):
     from flow.infrastructure.persistence.repo import FlowRepository
+
     return FlowRepository(mock_pool)
 
 

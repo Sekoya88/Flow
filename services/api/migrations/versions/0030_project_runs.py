@@ -28,9 +28,7 @@ def upgrade() -> None:
             created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
         );
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_project_runs_project ON project_runs (project_id, created_at DESC);"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_project_runs_project ON project_runs (project_id, created_at DESC);")
 
 
 def downgrade() -> None:

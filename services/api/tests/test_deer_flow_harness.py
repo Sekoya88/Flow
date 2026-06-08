@@ -127,8 +127,11 @@ async def test_memory_middleware_reads_facts_from_string_namespace():
 
     mw = FlowMemoryMiddleware(store=_Store(), llm=None, embed=None, pool=None)
     runtime = HarnessRuntime(
-        workspace_id=ws, agent_id=agent, user_id=uuid4(),
-        execution_id=uuid4(), thread_id="t",
+        workspace_id=ws,
+        agent_id=agent,
+        user_id=uuid4(),
+        execution_id=uuid4(),
+        thread_id="t",
     )
     await mw.before_agent({"messages": [HumanMessage(content="hi")]}, runtime)
 

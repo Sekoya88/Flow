@@ -50,10 +50,7 @@ async def get_mcp_tools_for_agent(
     if not rows:
         return []
 
-    server_configs: dict[str, dict] = {
-        str(row["id"]): {"transport": "http", "url": _http_url(row["url"], jwt_token)}
-        for row in rows
-    }
+    server_configs: dict[str, dict] = {str(row["id"]): {"transport": "http", "url": _http_url(row["url"], jwt_token)} for row in rows}
 
     try:
         client = MultiServerMCPClient(server_configs)
@@ -87,9 +84,7 @@ async def list_tools_for_server(url: str, jwt_token: str = "") -> list[dict]:
         return []
 
 
-async def invoke_tool_on_server(
-    url: str, tool_name: str, args: dict, jwt_token: str = ""
-) -> dict:
+async def invoke_tool_on_server(url: str, tool_name: str, args: dict, jwt_token: str = "") -> dict:
     """Invoke a named tool on an MCP server via Streamable HTTP."""
     try:
         from langchain_mcp_adapters.client import MultiServerMCPClient

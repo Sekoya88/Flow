@@ -59,9 +59,7 @@ async def test_patch_skill_sets_training_mode(monkeypatch):
     repo = _make_repo_mock(patch_returns=True)
     _app.dependency_overrides[get_repo] = lambda: repo
 
-    async with AsyncClient(
-        transport=ASGITransport(app=_app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as client:
         resp = await client.patch(
             f"/api/v1/skills/{_SKILL_ID}",
             json={"training_mode": "react"},
@@ -92,9 +90,7 @@ async def test_patch_skill_disables_training_mode(monkeypatch):
     repo = _make_repo_mock(patch_returns=True)
     _app.dependency_overrides[get_repo] = lambda: repo
 
-    async with AsyncClient(
-        transport=ASGITransport(app=_app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as client:
         resp = await client.patch(
             f"/api/v1/skills/{_SKILL_ID}",
             json={"training_mode": None},
@@ -125,9 +121,7 @@ async def test_patch_skill_not_found_returns_404(monkeypatch):
     repo = _make_repo_mock(patch_returns=False)
     _app.dependency_overrides[get_repo] = lambda: repo
 
-    async with AsyncClient(
-        transport=ASGITransport(app=_app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as client:
         resp = await client.patch(
             f"/api/v1/skills/{_SKILL_ID}",
             json={"training_mode": "react"},

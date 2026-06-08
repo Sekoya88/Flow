@@ -75,16 +75,8 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
                     completed_at TIMESTAMPTZ
                 )
             """)
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS digest_runs_ws_idx ON digest_runs (workspace_id, started_at DESC)"
-            )
-            await conn.execute(
-                "ALTER TABLE digest_papers ADD COLUMN IF NOT EXISTS digest_run_id UUID REFERENCES digest_runs(id) ON DELETE SET NULL"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS digest_papers_run_idx ON digest_papers (digest_run_id)"
-            )
-            await conn.execute(
-                "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS obsidian_vault_path TEXT"
-            )
+            await conn.execute("CREATE INDEX IF NOT EXISTS digest_runs_ws_idx ON digest_runs (workspace_id, started_at DESC)")
+            await conn.execute("ALTER TABLE digest_papers ADD COLUMN IF NOT EXISTS digest_run_id UUID REFERENCES digest_runs(id) ON DELETE SET NULL")
+            await conn.execute("CREATE INDEX IF NOT EXISTS digest_papers_run_idx ON digest_papers (digest_run_id)")
+            await conn.execute("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS obsidian_vault_path TEXT")
     logger.info("schema.digest_runs_and_obsidian_vault_path")

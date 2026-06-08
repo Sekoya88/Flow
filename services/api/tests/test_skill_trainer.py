@@ -5,10 +5,7 @@ Covers pure (no-IO) stages: aggregate, select, update.
 
 from __future__ import annotations
 
-import pytest
-
-from flow.application.skill_trainer import RawPatch, SkillTrainer, TrainingConfig
-
+from flow.application.skill_trainer import RawPatch, SkillTrainer
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -71,10 +68,7 @@ def test_stage_aggregate_empty_input_returns_empty():
 
 def test_stage_select_returns_top_n_by_impact_score():
     trainer = _trainer()
-    patches = [
-        RawPatch(op="append", target=f"## Section{i}", content=f"c{i}", impact_score=float(i) / 10)
-        for i in range(6)
-    ]
+    patches = [RawPatch(op="append", target=f"## Section{i}", content=f"c{i}", impact_score=float(i) / 10) for i in range(6)]
     # Budget = 3 → top 3 should be indices 5, 4, 3 (scores 0.5, 0.4, 0.3)
     result = trainer._stage_select(patches, budget=3)
     assert len(result) == 3

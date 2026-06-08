@@ -68,14 +68,12 @@ async def test_execute_injects_mcp_token_when_active_servers(app):
         captured.update(kwargs)
 
     with patch("flow.infrastructure.queue.client.enqueue_execution", side_effect=fake_enqueue):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                resp = await client.post(
-                    f"/api/v1/agents/{_AGENT_ID}/execute",
-                    json={"message": "hello"},
-                    headers=_auth(),
-                )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                f"/api/v1/agents/{_AGENT_ID}/execute",
+                json={"message": "hello"},
+                headers=_auth(),
+            )
 
     assert resp.status_code == 200
     cfg = captured.get("agent_config", {})
@@ -94,9 +92,7 @@ async def test_execute_no_mcp_when_no_active_servers(app):
         captured.update(kwargs)
 
     with patch("flow.infrastructure.queue.client.enqueue_execution", side_effect=fake_enqueue):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 f"/api/v1/agents/{_AGENT_ID}/execute",
                 json={"message": "hello"},
@@ -121,9 +117,7 @@ async def test_execute_preserves_existing_tools_config(app):
         captured.update(kwargs)
 
     with patch("flow.infrastructure.queue.client.enqueue_execution", side_effect=fake_enqueue):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 f"/api/v1/agents/{_AGENT_ID}/execute",
                 json={"message": "hello"},

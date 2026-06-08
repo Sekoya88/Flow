@@ -1691,7 +1691,11 @@ class FlowRepository:
                    (skill_id, agent_id, workspace_id, edit_budget, status, golden_set_id)
                VALUES ($1, $2, $3, $4, 'pending', $5)
                RETURNING id""",
-            skill_id, agent_id, workspace_id, edit_budget, golden_set_id,
+            skill_id,
+            agent_id,
+            workspace_id,
+            edit_budget,
+            golden_set_id,
         )
         assert row is not None
         return row["id"]
@@ -1772,11 +1776,14 @@ class FlowRepository:
     ) -> UUID:
         """Store one patch candidate from the Reflect stage."""
         import json as _json
+
         row = await self._pool.fetchrow(
             """INSERT INTO skill_raw_patches (run_id, epoch, patch_json)
                VALUES ($1, $2, $3)
                RETURNING id""",
-            run_id, epoch, _json.dumps(patch_json),
+            run_id,
+            epoch,
+            _json.dumps(patch_json),
         )
         assert row is not None
         return row["id"]
@@ -1802,6 +1809,7 @@ class FlowRepository:
             skill_id,
         )
         import json as _json
+
         result = []
         for r in rows:
             pj = r["patch_json"]
@@ -1823,14 +1831,20 @@ class FlowRepository:
     ) -> UUID:
         """Record the result of one training epoch."""
         import json as _json
+
         row = await self._pool.fetchrow(
             """INSERT INTO skill_training_epochs
                    (run_id, epoch, candidate_skill_id, eval_score, baseline_score,
                     accepted, patch_count, item_scores)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id""",
-            run_id, epoch, candidate_skill_id, eval_score, baseline_score,
-            accepted, patch_count,
+            run_id,
+            epoch,
+            candidate_skill_id,
+            eval_score,
+            baseline_score,
+            accepted,
+            patch_count,
             _json.dumps(item_scores) if item_scores is not None else None,
         )
         assert row is not None

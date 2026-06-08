@@ -1,4 +1,5 @@
 """Tests for skill_training_tick ARQ cron function."""
+
 from __future__ import annotations
 
 import uuid
@@ -57,9 +58,7 @@ async def test_skill_training_tick_one_skill_enqueues_job():
 
     mock_arq_pool.enqueue_job.assert_called_once()
     call_args = mock_arq_pool.enqueue_job.call_args[0]
-    assert call_args[0] == "run_skill_training", (
-        f"Expected job name 'run_skill_training', got '{call_args[0]}'"
-    )
+    assert call_args[0] == "run_skill_training", f"Expected job name 'run_skill_training', got '{call_args[0]}'"
     assert call_args[1] == str(created_run_id)
     assert call_args[2] == str(skill_id)
     assert call_args[3] == str(agent_id)

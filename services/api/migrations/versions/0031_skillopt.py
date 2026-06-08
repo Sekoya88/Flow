@@ -58,15 +58,9 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_skill_training_runs_skill ON skill_training_runs (skill_id, created_at DESC);"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_skill_raw_patches_run ON skill_raw_patches (run_id, epoch);"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_skill_training_epochs_run ON skill_training_epochs (run_id, epoch);"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_skill_training_runs_skill ON skill_training_runs (skill_id, created_at DESC);")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_skill_raw_patches_run ON skill_raw_patches (run_id, epoch);")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_skill_training_epochs_run ON skill_training_epochs (run_id, epoch);")
     op.execute("""
         ALTER TABLE agent_skills
             ADD COLUMN IF NOT EXISTS training_mode TEXT DEFAULT NULL,

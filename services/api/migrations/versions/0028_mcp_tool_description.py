@@ -14,12 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE mcp_server_tool_assignments ADD COLUMN IF NOT EXISTS description TEXT"
-    )
+    op.execute("ALTER TABLE mcp_server_tool_assignments ADD COLUMN IF NOT EXISTS description TEXT")
 
 
 def downgrade() -> None:
-    op.execute(
-        "ALTER TABLE mcp_server_tool_assignments DROP COLUMN IF EXISTS description"
-    )
+    op.execute("ALTER TABLE mcp_server_tool_assignments DROP COLUMN IF EXISTS description")

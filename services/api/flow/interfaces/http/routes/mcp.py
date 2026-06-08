@@ -111,10 +111,7 @@ async def patch_mcp_server(
         return row
 
     _JSONB_COLS = {"metadata"}
-    set_clauses = ", ".join(
-        f"{col} = ${i + 2}::jsonb" if col in _JSONB_COLS else f"{col} = ${i + 2}"
-        for i, col in enumerate(updates)
-    )
+    set_clauses = ", ".join(f"{col} = ${i + 2}::jsonb" if col in _JSONB_COLS else f"{col} = ${i + 2}" for i, col in enumerate(updates))
     values = [server_id, *updates.values()]
     updated = await repo._pool.fetchrow(
         f"UPDATE mcp_servers SET {set_clauses}, updated_at = now() WHERE id = $1 RETURNING *",

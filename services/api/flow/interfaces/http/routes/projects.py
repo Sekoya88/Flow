@@ -106,9 +106,7 @@ async def get_project(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM research_projects WHERE id = $1", project_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM research_projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="project not found")
     await _assert_workspace_access(user_id, row["workspace_id"], repo)
@@ -122,9 +120,7 @@ async def patch_project(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM research_projects WHERE id = $1", project_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM research_projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="project not found")
     await _assert_workspace_access(user_id, row["workspace_id"], repo)
@@ -149,9 +145,7 @@ async def delete_project(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> None:
-    row = await repo._pool.fetchrow(
-        "SELECT workspace_id FROM research_projects WHERE id = $1", project_id
-    )
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM research_projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="project not found")
     await _assert_workspace_access(user_id, row["workspace_id"], repo)
@@ -166,9 +160,7 @@ async def trigger_project(
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
     """Kick off a digest run for this project immediately."""
-    row = await repo._pool.fetchrow(
-        "SELECT * FROM research_projects WHERE id = $1", project_id
-    )
+    row = await repo._pool.fetchrow("SELECT * FROM research_projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="project not found")
     await _assert_workspace_access(user_id, row["workspace_id"], repo)
@@ -209,16 +201,18 @@ async def trigger_project(
         nodes_after = int(nodes_after_row["cnt"]) if nodes_after_row else 0
 
         # Update project + record run
-        await repo._pool.execute(
-            "UPDATE research_projects SET last_run_at = now() WHERE id = $1", project_id
-        )
+        await repo._pool.execute("UPDATE research_projects SET last_run_at = now() WHERE id = $1", project_id)
         await repo._pool.execute(
             """
             INSERT INTO project_runs
                 (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status, digest_run_id)
             VALUES ($1, $2, $3, $4, 'completed', $5)
             """,
-            project_id, persisted, nodes_before, nodes_after, digest_run_uuid,
+            project_id,
+            persisted,
+            nodes_before,
+            nodes_after,
+            digest_run_uuid,
         )
         return {"status": "ok", "papers_processed": persisted, "digest_run_id": digest_run_id_str}
     except Exception as exc:
@@ -228,7 +222,9 @@ async def trigger_project(
                 (project_id, papers_processed, kg_nodes_before, kg_nodes_after, status, error_message)
             VALUES ($1, 0, $2, $2, 'failed', $3)
             """,
-            project_id, nodes_before, str(exc)[:500],
+            project_id,
+            nodes_before,
+            str(exc)[:500],
         )
         logger.warning("project.trigger.failed", exc_info=True, project_id=str(project_id))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -240,9 +236,7 @@ async def list_project_runs(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
 ) -> dict:
-    row = await repo._pool.fetchrow(
-        "SELECT workspace_id FROM research_projects WHERE id = $1", project_id
-    )
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM research_projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="project not found")
     await _assert_workspace_access(user_id, row["workspace_id"], repo)

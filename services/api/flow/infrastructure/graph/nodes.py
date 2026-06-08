@@ -278,11 +278,7 @@ def make_planner(ctx: GraphContext):
                 # into the system prompt. Applied last so it survives the pattern_block
                 # reassignment above; empty when nothing is injected → byte-identical.
                 injected = "\n\n".join(
-                    m.content
-                    for m in state.get("messages", [])
-                    if isinstance(m, SystemMessage)
-                    and isinstance(m.content, str)
-                    and m.content.strip()
+                    m.content for m in state.get("messages", []) if isinstance(m, SystemMessage) and isinstance(m.content, str) and m.content.strip()
                 )
                 if injected:
                     system = injected + "\n\n" + system

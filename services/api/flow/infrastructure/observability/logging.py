@@ -30,32 +30,32 @@ _LOG_LEVEL_COLORS = {
 }
 
 _HTTP_METHOD_COLORS: dict[str, str] = {
-    "GET":     "\033[94m",   # bright blue
-    "POST":    "\033[92m",   # bright green
-    "PUT":     "\033[93m",   # yellow
-    "PATCH":   "\033[33m",   # orange
-    "DELETE":  "\033[91m",   # bright red
-    "HEAD":    "\033[2m",    # dim
-    "OPTIONS": "\033[2m",    # dim
+    "GET": "\033[94m",  # bright blue
+    "POST": "\033[92m",  # bright green
+    "PUT": "\033[93m",  # yellow
+    "PATCH": "\033[33m",  # orange
+    "DELETE": "\033[91m",  # bright red
+    "HEAD": "\033[2m",  # dim
+    "OPTIONS": "\033[2m",  # dim
 }
 
 
 def _status_color(status: int) -> str:
     if status < 300:
-        return "\033[92m"   # green
+        return "\033[92m"  # green
     if status < 400:
-        return "\033[96m"   # cyan
+        return "\033[96m"  # cyan
     if status < 500:
-        return "\033[93m"   # yellow
-    return "\033[91m"       # red
+        return "\033[93m"  # yellow
+    return "\033[91m"  # red
 
 
 def _duration_color(ms: int) -> str:
     if ms < 100:
-        return "\033[2m"    # dim — fast, background noise
+        return "\033[2m"  # dim — fast, background noise
     if ms < 500:
-        return "\033[93m"   # yellow — slow
-    return "\033[91m"       # red — very slow
+        return "\033[93m"  # yellow — slow
+    return "\033[91m"  # red — very slow
 
 
 class AgenticConsoleRenderer:

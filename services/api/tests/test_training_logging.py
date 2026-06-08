@@ -1,26 +1,25 @@
 """Tests for skill_trainer structlog events and SQL fix."""
-from __future__ import annotations
 
-import re
+from __future__ import annotations
 
 
 def test_sql_version_cast_uses_text():
     """The SQL in skill_trainer must cast version to text before concatenation."""
     import inspect
+
     from flow.application.skill_trainer import SkillTrainer
+
     src = inspect.getsource(SkillTrainer)
     # Must use ::text cast — raw `version || '-reflact'` fails on INT column
-    assert "version::text ||" in src or "CAST(version" in src.upper(), (
-        "version column must be cast to text before string concatenation"
-    )
+    assert "version::text ||" in src or "CAST(version" in src.upper(), "version column must be cast to text before string concatenation"
 
 
-import asyncio
-import structlog
-import structlog.testing
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
+import structlog
+import structlog.testing
 
 
 @pytest.mark.asyncio
@@ -59,10 +58,13 @@ async def test_worker_emits_training_structlog_events():
     mock_training_config = MagicMock(max_epochs=1)
 
     with structlog.testing.capture_logs() as cap:
-        with patch("flow.application.skill_trainer.SkillTrainer", return_value=mock_trainer), \
-             patch("flow.application.skill_trainer.TrainingConfig", return_value=mock_training_config), \
-             patch("flow.infrastructure.persistence.repo.FlowRepository", return_value=mock_repo):
+        with (
+            patch("flow.application.skill_trainer.SkillTrainer", return_value=mock_trainer),
+            patch("flow.application.skill_trainer.TrainingConfig", return_value=mock_training_config),
+            patch("flow.infrastructure.persistence.repo.FlowRepository", return_value=mock_repo),
+        ):
             from flow.infrastructure.queue.worker import task_run_skill_training
+
             try:
                 await task_run_skill_training(
                     ctx,
@@ -77,5 +79,4 @@ async def test_worker_emits_training_structlog_events():
 
     events = [e["event"] for e in cap]
     assert "training.run.start" in events, f"training.run.start not in {events}"
-    assert any(e in events for e in ("training.run.done", "training.run.failed")), \
-        f"neither training.run.done nor training.run.failed in {events}"
+    assert any(e in events for e in ("training.run.done", "training.run.failed")), f"neither training.run.done nor training.run.failed in {events}"

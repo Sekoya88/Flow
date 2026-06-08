@@ -41,10 +41,12 @@ def build_kg_ingestion_graph(config: IngestionConfig):
     def _llm() -> ChatOpenAI:
         return ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=api_key)
 
-    _ingest_meta = RunnableConfig(metadata={
-        "kind": "kg_ingestion",
-        "workspace_id": str(workspace_id),
-    })
+    _ingest_meta = RunnableConfig(
+        metadata={
+            "kind": "kg_ingestion",
+            "workspace_id": str(workspace_id),
+        }
+    )
 
     # ── Node 1: parse ──────────────────────────────────────────────────────
     def parse_note(state: IngestionState) -> dict:

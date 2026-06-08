@@ -51,9 +51,7 @@ async def judge_single(
 ) -> dict[str, Any]:
     """Score one golden item. Returns {"score": float, "rationale": str}."""
     if client is None:
-        client = AsyncOpenAI(
-            api_key=os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        )
+        client = AsyncOpenAI(api_key=os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY"))
 
     criteria_block = f"\nScoring criteria: {scoring_criteria}" if scoring_criteria else ""
     user_content = f"""\

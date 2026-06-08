@@ -31,9 +31,7 @@ def upgrade() -> None:
             last_run_at      TIMESTAMPTZ
         );
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_research_projects_ws ON research_projects (workspace_id);"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_research_projects_ws ON research_projects (workspace_id);")
 
 
 def downgrade() -> None:

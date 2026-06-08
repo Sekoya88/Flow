@@ -200,11 +200,13 @@ async def filter_by_interest(state: DigestState) -> dict:
 
         user_interests = config.get("user_interests", "").strip()
 
-        run_meta = RunnableConfig(metadata={
-            "kind": "research_digest",
-            "workspace_id": state["workspace_id"],
-            "kg_namespace": config.get("kg_namespace", ""),
-        })
+        run_meta = RunnableConfig(
+            metadata={
+                "kind": "research_digest",
+                "workspace_id": state["workspace_id"],
+                "kg_namespace": config.get("kg_namespace", ""),
+            }
+        )
 
         async def score_one(paper: dict) -> float:
             async with sem:
@@ -275,11 +277,13 @@ async def summarize_papers(state: DigestState) -> dict:
     logger.info("digest.summarize.start", count=len(state["filtered_papers"]))
 
     sem = asyncio.Semaphore(5)
-    summarize_meta = RunnableConfig(metadata={
-        "kind": "research_digest",
-        "workspace_id": state["workspace_id"],
-        "kg_namespace": state["config"].get("kg_namespace", ""),
-    })
+    summarize_meta = RunnableConfig(
+        metadata={
+            "kind": "research_digest",
+            "workspace_id": state["workspace_id"],
+            "kg_namespace": state["config"].get("kg_namespace", ""),
+        }
+    )
 
     async def summarize_one(paper: dict) -> dict:
         async with sem:
@@ -583,7 +587,6 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
 
     run_id: UUID | None = None
     result: dict = {}
-    error_exc: Exception | None = None
     try:
         run_id = await repo.create_digest_run(
             UUID(workspace_id),
@@ -613,7 +616,6 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
                 completed_at=True,
             )
     except Exception as e:
-        error_exc = e
         logger.exception("digest.run.failed", workspace_id=workspace_id)
         if run_id is not None:
             try:

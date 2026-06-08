@@ -18,8 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 from uuid import UUID
 
 import asyncpg
@@ -27,8 +26,8 @@ from openai import AsyncOpenAI
 
 from flow.application.golden_evaluator import evaluate_golden_set, judge_single, run_agent_on_item
 from flow.application.skill_rewriter import _bump_version_in_frontmatter, _split_frontmatter
-
 from flow.infrastructure.observability.logging import get_logger
+
 log = get_logger("flow.training")
 
 
@@ -60,15 +59,15 @@ async def _emit(
 
 @dataclass
 class RawPatch:
-    op: str            # "append" | "insert" | "replace" | "delete"
-    target: str        # section heading anchor (e.g., "## Output Format")
-    content: str       # replacement/new text (max ~125 chars)
+    op: str  # "append" | "insert" | "replace" | "delete"
+    target: str  # section heading anchor (e.g., "## Output Format")
+    content: str  # replacement/new text (max ~125 chars)
     impact_score: float  # 0.0-1.0
 
 
 @dataclass
 class TrainingConfig:
-    edit_budget: int = 5          # max edits per epoch (the "learning rate")
+    edit_budget: int = 5  # max edits per epoch (the "learning rate")
     max_epochs: int = 3
     min_val_improvement: float = 0.02
     mini_batch_size: int = 10
@@ -86,10 +85,11 @@ class GateResult:
                    (needs human review — never auto-activated)
       "rejected" — aggregate did not improve enough
     """
+
     status: str
     accepted: bool
     blocked_reason: str | None
-    item_scores: list[dict]   # {item_id, input, baseline_score, candidate_score, delta}
+    item_scores: list[dict]  # {item_id, input, baseline_score, candidate_score, delta}
     baseline_avg: float
     candidate_avg: float
     min_delta: float
@@ -205,9 +205,7 @@ class SkillTrainer:
 """
 
         if rejected_patches:
-            rejected_lines = "\n".join(
-                f'- op: {r["op"]}, target: "{r["target"]}"' for r in rejected_patches
-            )
+            rejected_lines = "\n".join(f'- op: {r["op"]}, target: "{r["target"]}"' for r in rejected_patches)
             user_content += f"""
 ## Previously rejected edits — do NOT re-propose these:
 {rejected_lines}
@@ -306,7 +304,6 @@ class SkillTrainer:
             # Heading not found
             if op in ("append", "replace"):
                 # Append a new section at end of body
-                separator = "\n\n" if not body.endswith("\n\n") else ""
                 return body.rstrip("\n") + "\n\n" + target + "\n" + content + "\n"
             elif op == "insert":
                 # Insert at beginning of body
@@ -334,7 +331,6 @@ class SkillTrainer:
 
         elif op == "append":
             # Insert content before the next heading (end of section)
-            insert_pos = section_content_end
             # Strip trailing newlines from section, add content, then newlines
             section_body = body[heading_end:section_content_end].rstrip("\n")
             new_section_body = section_body + "\n" + content + "\n"
@@ -379,13 +375,15 @@ class SkillTrainer:
                 continue
             base_s = float(b["score"])
             cand_s = float(c["score"])
-            item_scores.append({
-                "item_id": b["item_id"],
-                "input": b.get("input_text", "")[:150],
-                "baseline_score": base_s,
-                "candidate_score": cand_s,
-                "delta": cand_s - base_s,
-            })
+            item_scores.append(
+                {
+                    "item_id": b["item_id"],
+                    "input": b.get("input_text", "")[:150],
+                    "baseline_score": base_s,
+                    "candidate_score": cand_s,
+                    "delta": cand_s - base_s,
+                }
+            )
 
         if not item_scores:
             return GateResult("rejected", False, "no comparable items", [], 0.0, 0.0, 0.0)
@@ -480,9 +478,9 @@ class SkillTrainer:
                 "patches_rejected": 0,
             }
 
-        await _emit(_pool, run_id, "epoch", "stage_start",
-            "Epoch starting — measuring baseline on the golden set…",
-            {"skill_name": skill_row["name"]})
+        await _emit(
+            _pool, run_id, "epoch", "stage_start", "Epoch starting — measuring baseline on the golden set…", {"skill_name": skill_row["name"]}
+        )
 
         # 4. Get rejected patches (cross-epoch buffer)
         rejected = await _pool.fetch(
@@ -491,10 +489,7 @@ class SkillTrainer:
                WHERE str.skill_id = $1 AND srp.rejected = true""",
             skill_id,
         )
-        rejected_targets = [
-            {"op": r["patch_json"]["op"], "target": r["patch_json"]["target"]}
-            for r in rejected
-        ]
+        rejected_targets = [{"op": r["patch_json"]["op"], "target": r["patch_json"]["target"]} for r in rejected]
 
         # 5. Rollout — fetch items and run agent
         await _emit(_pool, run_id, "rollout", "stage_start", "Running agent on golden items…")
@@ -519,21 +514,29 @@ class SkillTrainer:
         )
         for r in rollout_results:
             passed = r["score"] >= 0.7
-            await _emit(_pool, run_id, "rollout", "item_result",
+            await _emit(
+                _pool,
+                run_id,
+                "rollout",
+                "item_result",
                 f"{'✓' if passed else '✗'} Score {r['score']:.3f} — {r['input_text'][:80]}",
-                {"score": r["score"], "input": r["input_text"][:150],
-                 "actual": r["actual_output"][:300], "rationale": r.get("rationale", "")})
+                {"score": r["score"], "input": r["input_text"][:150], "actual": r["actual_output"][:300], "rationale": r.get("rationale", "")},
+            )
         failures = [r for r in rollout_results if r["score"] < 0.7]
         # Baseline = mean of the same-set rollout scores (the gate's reference point).
         if rollout_results:
             baseline_score = sum(r["score"] for r in rollout_results) / len(rollout_results)
-        await _emit(_pool, run_id, "rollout", "summary",
+        await _emit(
+            _pool,
+            run_id,
+            "rollout",
+            "summary",
             f"{len(failures)}/{len(rollout_results)} items failed (score < 0.7) — baseline {baseline_score:.3f}",
-            {"total": len(rollout_results), "failures": len(failures), "baseline_score": baseline_score})
+            {"total": len(rollout_results), "failures": len(failures), "baseline_score": baseline_score},
+        )
 
         if not failures:
-            await _emit(_pool, run_id, "epoch", "stage_start",
-                "Skill already performing well — no patches needed.")
+            await _emit(_pool, run_id, "epoch", "stage_start", "Skill already performing well — no patches needed.")
             return {
                 "accepted": False,
                 "eval_score": baseline_score,
@@ -544,29 +547,36 @@ class SkillTrainer:
             }
 
         # 6. Reflect — propose patches
-        await _emit(_pool, run_id, "reflect", "stage_start",
-            f"Analyzing {len(failures)} failure(s) with LLM — proposing patches…")
+        await _emit(_pool, run_id, "reflect", "stage_start", f"Analyzing {len(failures)} failure(s) with LLM — proposing patches…")
         patches, failure_analysis = await self._stage_reflect(body, failures[:3], rejected_targets)
         if failure_analysis:
             await _emit(_pool, run_id, "reflect", "analysis", failure_analysis)
         for p in patches:
-            await _emit(_pool, run_id, "reflect", "patch_proposed",
+            await _emit(
+                _pool,
+                run_id,
+                "reflect",
+                "patch_proposed",
                 f"{p.op.upper()} `{p.target}` (impact: {p.impact_score:.2f})",
-                {"op": p.op, "target": p.target,
-                 "content": p.content[:500], "impact_score": p.impact_score})
+                {"op": p.op, "target": p.target, "content": p.content[:500], "impact_score": p.impact_score},
+            )
 
         # 7. Aggregate + Select — track count before capping for patches_rejected
         raw_patch_count = len(patches)
         patches = self._stage_aggregate(patches)
         patches = self._stage_select(patches, config.edit_budget)
         patches_rejected = raw_patch_count - len(patches)
-        await _emit(_pool, run_id, "select", "summary",
+        await _emit(
+            _pool,
+            run_id,
+            "select",
+            "summary",
             f"{len(patches)} patch{'es' if len(patches) != 1 else ''} selected, {patches_rejected} rejected",
-            {"selected": len(patches), "rejected": patches_rejected})
+            {"selected": len(patches), "rejected": patches_rejected},
+        )
 
         if not patches:
-            await _emit(_pool, run_id, "select", "error",
-                "No patches passed selection — try adding more golden examples.")
+            await _emit(_pool, run_id, "select", "error", "No patches passed selection — try adding more golden examples.")
             return {
                 "accepted": False,
                 "eval_score": baseline_score,
@@ -577,8 +587,7 @@ class SkillTrainer:
             }
 
         # 8. Update — produce candidate skill body
-        await _emit(_pool, run_id, "update", "stage_start",
-            f"Applying {len(patches)} patch{'es' if len(patches) != 1 else ''} to skill…")
+        await _emit(_pool, run_id, "update", "stage_start", f"Applying {len(patches)} patch{'es' if len(patches) != 1 else ''} to skill…")
         new_body = self._stage_update(body, patches)
         bumped_front = _bump_version_in_frontmatter(frontmatter) if frontmatter else frontmatter
         candidate_md = (bumped_front + "\n\n" + new_body) if bumped_front else new_body
@@ -594,8 +603,7 @@ class SkillTrainer:
         )
 
         # 10. Evaluate candidate
-        await _emit(_pool, run_id, "evaluate", "stage_start",
-            "Evaluating candidate skill on golden set…")
+        await _emit(_pool, run_id, "evaluate", "stage_start", "Evaluating candidate skill on golden set…")
         eval_result = await evaluate_golden_set(
             pool=_pool,
             golden_set_id=effective_golden_set_id,
@@ -621,14 +629,21 @@ class SkillTrainer:
         )
         if gate.blocked_reason:
             msg += f" — {gate.blocked_reason}"
-        await _emit(_pool, run_id, "evaluate", "gate", msg, {
-            "status": gate.status,
-            "eval_score": eval_score,
-            "baseline_score": baseline_score,
-            "accepted": accepted,
-            "blocked_reason": gate.blocked_reason,
-            "item_scores": gate.item_scores,
-        })
+        await _emit(
+            _pool,
+            run_id,
+            "evaluate",
+            "gate",
+            msg,
+            {
+                "status": gate.status,
+                "eval_score": eval_score,
+                "baseline_score": baseline_score,
+                "accepted": accepted,
+                "blocked_reason": gate.blocked_reason,
+                "item_scores": gate.item_scores,
+            },
+        )
 
         return {
             "accepted": accepted,

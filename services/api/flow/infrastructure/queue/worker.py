@@ -161,6 +161,7 @@ async def task_run_skill_training(
     _ls_run_id: str | None = None
     try:
         from langsmith import Client as _LSClient
+
         _ls_client = _LSClient()
 
         def _start_ls_run() -> None:
@@ -181,6 +182,7 @@ async def task_run_skill_training(
                 return
             try:
                 import uuid as _uuid
+
                 if error:
                     _ls_client.update_run(
                         _uuid.UUID(_ls_run_id),
@@ -198,15 +200,24 @@ async def task_run_skill_training(
 
         _start_ls_run()
     except ImportError:
-        def _start_ls_run() -> None: pass  # type: ignore[misc]
-        def _end_ls_run(outputs: dict, error: str | None = None) -> None: pass  # type: ignore[misc]
+
+        def _start_ls_run() -> None:
+            pass  # type: ignore[misc]
+
+        def _end_ls_run(outputs: dict, error: str | None = None) -> None:
+            pass  # type: ignore[misc]
 
     await repo.update_training_run(_run_id, status="running", started_at=True)
     _train_log.info("training.run.start", run_id=run_id, skill_id=skill_id, agent_id=agent_id)
     if stream_hub:
-        await stream_hub.publish_global(workspace_id, kind="skill.training.started", payload={
-            "run_id": run_id, "skill_id": skill_id,
-        })
+        await stream_hub.publish_global(
+            workspace_id,
+            kind="skill.training.started",
+            payload={
+                "run_id": run_id,
+                "skill_id": skill_id,
+            },
+        )
 
     best_score = None
     final_accepted = False
@@ -255,10 +266,17 @@ async def task_run_skill_training(
             )
 
             if stream_hub:
-                await stream_hub.publish_global(workspace_id, kind="skill.training.epoch", payload={
-                    "run_id": run_id, "skill_id": skill_id, "epoch": epoch,
-                    "eval_score": eval_score, "accepted": result.get("accepted", False),
-                })
+                await stream_hub.publish_global(
+                    workspace_id,
+                    kind="skill.training.epoch",
+                    payload={
+                        "run_id": run_id,
+                        "skill_id": skill_id,
+                        "epoch": epoch,
+                        "eval_score": eval_score,
+                        "accepted": result.get("accepted", False),
+                    },
+                )
 
             if result.get("accepted"):
                 final_accepted = True
@@ -271,7 +289,8 @@ async def task_run_skill_training(
                     )
                     await pool.execute(
                         "UPDATE agent_skills SET last_training_run_id = $1 WHERE id = $2",
-                        _run_id, _skill_id,
+                        _run_id,
+                        _skill_id,
                     )
                     # KG tracking: upsert node for improved skill, edge from original
                     try:
@@ -291,9 +310,7 @@ async def task_run_skill_training(
                                 "patches_applied": result.get("patches_applied", 0),
                             },
                         )
-                        old_node = await repo.get_kg_node_by_label(
-                            _workspace_id, f"skill:{_skill_id}", "skill"
-                        )
+                        old_node = await repo.get_kg_node_by_label(_workspace_id, f"skill:{_skill_id}", "skill")
                         if old_node:
                             await repo.upsert_kg_edge(
                                 workspace_id=_workspace_id,
@@ -308,6 +325,7 @@ async def task_run_skill_training(
                     try:
                         from flow.application.genome_service import snapshot_genome
                         from flow.domain.genome import VersionTrigger
+
                         await snapshot_genome(
                             pool=pool,
                             agent_id=_agent_id,
@@ -349,9 +367,16 @@ async def task_run_skill_training(
                 except Exception as _prop_exc:
                     _train_log.warning("training.blocked.proposal_failed", run_id=run_id, error=str(_prop_exc))
                 if stream_hub:
-                    await stream_hub.publish_global(workspace_id, kind="skill.training.blocked", payload={
-                        "run_id": run_id, "skill_id": skill_id, "epoch": epoch, "reason": reason,
-                    })
+                    await stream_hub.publish_global(
+                        workspace_id,
+                        kind="skill.training.blocked",
+                        payload={
+                            "run_id": run_id,
+                            "skill_id": skill_id,
+                            "epoch": epoch,
+                            "reason": reason,
+                        },
+                    )
 
         await repo.update_training_run(
             _run_id,
@@ -362,19 +387,31 @@ async def task_run_skill_training(
         _train_log.info("training.run.done", run_id=run_id, skill_id=skill_id)
         _end_ls_run({"run_id": run_id, "accepted": final_accepted, "best_score": best_score})
         if stream_hub:
-            await stream_hub.publish_global(workspace_id, kind="skill.training.done", payload={
-                "run_id": run_id, "skill_id": skill_id,
-                "accepted": final_accepted, "best_score": best_score,
-            })
+            await stream_hub.publish_global(
+                workspace_id,
+                kind="skill.training.done",
+                payload={
+                    "run_id": run_id,
+                    "skill_id": skill_id,
+                    "accepted": final_accepted,
+                    "best_score": best_score,
+                },
+            )
 
     except Exception as exc:
         _train_log.error("training.run.failed", run_id=run_id, skill_id=skill_id, error=str(exc))
         _end_ls_run({}, error=str(exc))
         await repo.update_training_run(_run_id, status="failed", error_message=str(exc), completed_at=True)
         if stream_hub:
-            await stream_hub.publish_global(workspace_id, kind="skill.training.failed", payload={
-                "run_id": run_id, "skill_id": skill_id, "error": str(exc),
-            })
+            await stream_hub.publish_global(
+                workspace_id,
+                kind="skill.training.failed",
+                payload={
+                    "run_id": run_id,
+                    "skill_id": skill_id,
+                    "error": str(exc),
+                },
+            )
         raise
 
     return {"run_id": run_id, "accepted": final_accepted, "best_score": best_score}

@@ -113,11 +113,13 @@ async def get_execution_replay(
         if node_name not in node_first_visit:
             node_first_visit[node_name] = len(node_first_visit)
         node_visit_count[node_name] = node_visit_count.get(node_name, 0) + 1
-        timeline.append({
-            "seq": len(timeline) + 1,
-            "node": node_name,
-            "created_at": ev["created_at"].isoformat() if ev["created_at"] else None,
-        })
+        timeline.append(
+            {
+                "seq": len(timeline) + 1,
+                "node": node_name,
+                "created_at": ev["created_at"].isoformat() if ev["created_at"] else None,
+            }
+        )
 
     edge_set: set[tuple[str, str]] = set()
     edges = []

@@ -670,9 +670,7 @@ async def export_digest_to_obsidian(
         raise HTTPException(status_code=404, detail="digest run not found")
 
     ws_id = run_row["workspace_id"]
-    vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get(
-        "FLOW_OBSIDIAN_VAULT_PATH"
-    )
+    vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get("FLOW_OBSIDIAN_VAULT_PATH")
     if not vault_str:
         raise HTTPException(
             status_code=400,
@@ -681,9 +679,7 @@ async def export_digest_to_obsidian(
 
     vault_root = Path(vault_str).expanduser().resolve()
     if not vault_root.exists():
-        raise HTTPException(
-            status_code=400, detail="Vault path does not exist on this server."
-        )
+        raise HTTPException(status_code=400, detail="Vault path does not exist on this server.")
 
     papers = await repo.get_digest_run_papers(run_id)
     written_paths: list[str] = []
@@ -698,17 +694,14 @@ async def export_digest_to_obsidian(
             out = _safe_write(vault_root, note_path, content)
             written_paths.append(str(out.relative_to(vault_root)))
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid note path in digest paper.")
+            raise HTTPException(status_code=400, detail="Invalid note path in digest paper.") from None
 
     # Write index note with wikilinks to each paper
     if papers:
         from datetime import date
+
         today = date.today().isoformat()
-        paper_links = "\n".join(
-            f"- [[{p['obsidian_path'].replace('.md', '')}|{p['title'][:70]}]]"
-            for p in papers
-            if p.get("obsidian_path")
-        )
+        paper_links = "\n".join(f"- [[{p['obsidian_path'].replace('.md', '')}|{p['title'][:70]}]]" for p in papers if p.get("obsidian_path"))
         index_content = (
             f"---\ndate: {today}\ntype: daily-digest\ntags:\n  - research\n  - digest\n---\n"
             f"# Research Digest — {today}\n\n{paper_links or '_No papers._'}\n"

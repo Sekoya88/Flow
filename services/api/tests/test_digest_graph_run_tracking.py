@@ -1,8 +1,9 @@
 """Verify run_research_digest creates a digest_run row and wires FlowCallbackHandler."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -18,9 +19,7 @@ async def test_run_research_digest_creates_run_row():
     mock_repo.update_digest_run = AsyncMock()
 
     mock_graph = MagicMock()
-    mock_graph.ainvoke = AsyncMock(
-        return_value={"persisted_ids": ["p1", "p2"], "obsidian_notes": []}
-    )
+    mock_graph.ainvoke = AsyncMock(return_value={"persisted_ids": ["p1", "p2"], "obsidian_notes": []})
 
     mock_pool = AsyncMock()
     mock_pool.close = AsyncMock()

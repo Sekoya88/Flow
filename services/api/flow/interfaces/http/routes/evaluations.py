@@ -102,12 +102,16 @@ async def run_evaluation_sse(
         yield evt("info", message=f"Running {len(items)} items through {llm_config['model']}…")
 
         if stream_hub:
-            await stream_hub.publish_global(str(workspace_id), kind="eval.started", payload={
-                "agent_id": str(resolved_agent_id),
-                "golden_set_id": str(resolved_set_id),
-                "total": len(items),
-                "model": llm_config["model"],
-            })
+            await stream_hub.publish_global(
+                str(workspace_id),
+                kind="eval.started",
+                payload={
+                    "agent_id": str(resolved_agent_id),
+                    "golden_set_id": str(resolved_set_id),
+                    "total": len(items),
+                    "model": llm_config["model"],
+                },
+            )
 
         openai_key = os.environ.get("FLOW_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
         judge_client = AsyncOpenAI(api_key=openai_key)
@@ -192,13 +196,18 @@ async def run_evaluation_sse(
         )
 
         if stream_hub:
-            await stream_hub.publish_global(str(workspace_id), kind="eval.done", payload={
-                "agent_id": str(resolved_agent_id),
-                "golden_set_id": str(resolved_set_id),
-                "total": total, "scored": scored,
-                "avg_score": round(avg_score, 3),
-                "pass_rate": round(pass_rate, 3),
-            })
+            await stream_hub.publish_global(
+                str(workspace_id),
+                kind="eval.done",
+                payload={
+                    "agent_id": str(resolved_agent_id),
+                    "golden_set_id": str(resolved_set_id),
+                    "total": total,
+                    "scored": scored,
+                    "avg_score": round(avg_score, 3),
+                    "pass_rate": round(pass_rate, 3),
+                },
+            )
 
         if pass_rate < 0.7:
             yield evt("warning", message="REGRESSION — pass rate below 70% threshold")
