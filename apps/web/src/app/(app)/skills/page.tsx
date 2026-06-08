@@ -366,8 +366,23 @@ export default function SkillsHubPage() {
 
       {/* Empty overview state */}
       {!loading && showOverview && sortedCategories.length === 0 && (
-        <div className="rounded-[6px] border border-flow-800 p-10 text-center text-sm text-muted-foreground">
-          No skills found. Create your first skill with the button above.
+        <div className="rounded-[8px] border border-dashed border-flow-700 bg-flow-950 p-10 text-center">
+          <Store className="mx-auto mb-3 h-8 w-8 text-flow-violet/70" />
+          <p className="text-sm font-medium text-foreground">Your hub is empty</p>
+          <p className="mx-auto mt-1 max-w-md text-[12px] text-muted-foreground">
+            Import a vetted collection (TDD, scientific, academic, product-eng) in one click, or create your own.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Link
+              href="/skills/marketplace"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-flow-violet px-4 font-mono text-xs text-white hover:bg-flow-violet/90"
+            >
+              <Store className="h-3.5 w-3.5" /> Browse collections
+            </Link>
+            <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)} className="h-9 gap-1.5 text-xs">
+              <Plus className="h-3.5 w-3.5" /> New skill
+            </Button>
+          </div>
         </div>
       )}
 
