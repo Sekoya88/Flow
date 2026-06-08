@@ -10,8 +10,10 @@ def test_sql_version_cast_uses_text():
     from flow.application.skill_trainer import SkillTrainer
 
     src = inspect.getsource(SkillTrainer)
-    # Must use ::text cast — raw `version || '-reflact'` fails on INT column
-    assert "version::text ||" in src or "CAST(version" in src.upper(), "version column must be cast to text before string concatenation"
+    # Guard against the old bug: raw `version || '-reflact'` concatenation fails on an
+    # INT column. The trainer must avoid SQL-side version concat (current code uses the
+    # integer `version + 1`) OR cast with ::text. Fail only if unsafe concat reappears.
+    assert "version || " not in src or "version::text" in src, "version column must be cast to text before string concatenation"
 
 
 from unittest.mock import AsyncMock, MagicMock, patch
