@@ -2,6 +2,48 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api'
 
+export type GeneratedItem = {
+  input_text: string
+  expected_output: string
+  scoring_criteria: string
+  rationale: string
+}
+export type GenerateResult = {
+  set_id: string
+  set_name: string
+  skill_id: string
+  model: string
+  prompt_used: string
+  items: GeneratedItem[]
+}
+
+export function useGenerateDataset(skillId: string) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<GenerateResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const generate = useCallback(
+    async (n = 5) => {
+      setBusy(true)
+      setError(null)
+      try {
+        const res = await apiFetch<GenerateResult>(`/api/v1/skills/${skillId}/generate-dataset`, {
+          method: 'POST',
+          json: { n },
+        })
+        setResult(res)
+        return res
+      } catch (e) {
+        setError(String(e))
+        return null
+      } finally {
+        setBusy(false)
+      }
+    },
+    [skillId],
+  )
+  return { generate, busy, result, error }
+}
+
 export type CollectionSkill = { path: string; name: string }
 export type Collection = {
   id: string

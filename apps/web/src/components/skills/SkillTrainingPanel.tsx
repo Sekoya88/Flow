@@ -34,6 +34,7 @@ import {
   type TrainingPatch,
   type TrainingRun,
 } from '@/lib/useSkillTraining'
+import { GenerateDatasetPanel } from '@/components/skills/GenerateDatasetPanel'
 
 interface Props {
   skillId: string
@@ -712,6 +713,8 @@ export function SkillTrainingPanel({ skillId, skillName, agentId, workspaceId, t
                 )}
               </div>
             )}
+
+            <GenerateDatasetPanel skillId={skillId} />
           </div>
 
           {/* Buttons row — own line, never overflows */}
