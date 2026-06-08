@@ -90,3 +90,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "flow/infrastructure/queue/worker.py" = ["E402"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
