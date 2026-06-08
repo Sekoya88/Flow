@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { useWorkspaceId } from "@/lib/useWorkspace";
+import { CuratedCollections } from "@/components/skills/CuratedCollections";
 
 type RepoSkillFile = {
   path: string;
@@ -156,6 +157,10 @@ export default function MarketplacePage() {
           the ones you want, then import them directly to your workspace.
         </p>
       </header>
+
+      <CuratedCollections workspaceId={workspaceId ?? undefined} />
+
+      <div className="h-px bg-flow-800" />
 
       {/* URL input */}
       <div className="rounded-xl border border-flow-800 bg-flow-900 p-5 space-y-3">
