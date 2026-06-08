@@ -262,3 +262,26 @@ class CollectionImportOut(BaseModel):
     skipped: int
     errors: int
     steps: list[CollectionImportStep]
+
+
+# ── Golden dataset generation schemas ─────────────────────────────────────────
+
+
+class GenerateDatasetIn(BaseModel):
+    n: int = 5
+
+
+class GeneratedItemOut(BaseModel):
+    input_text: str
+    expected_output: str
+    scoring_criteria: str
+    rationale: str
+
+
+class GenerateDatasetOut(BaseModel):
+    set_id: str
+    set_name: str
+    skill_id: str
+    model: str
+    prompt_used: str
+    items: list[GeneratedItemOut]

@@ -110,6 +110,9 @@ from flow.interfaces.http.schemas.skills import (
     CollectionSkillOut,
     CollectionsListOut,
     DeactivateOut,
+    GenerateDatasetIn,
+    GenerateDatasetOut,
+    GeneratedItemOut,
     PatchOut,
     SkillActivateOut,
     SkillCatalogItemOut,
@@ -216,6 +219,10 @@ __all__ = [
     "CollectionImportIn",
     "CollectionImportStep",
     "CollectionImportOut",
+    # golden dataset generation
+    "GenerateDatasetIn",
+    "GeneratedItemOut",
+    "GenerateDatasetOut",
     # skills
     "SkillCreateIn",
     "SkillPatchIn",

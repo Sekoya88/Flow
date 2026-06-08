@@ -25,6 +25,9 @@ from flow.interfaces.http.schemas import (
     CollectionSkillOut,
     CollectionsListOut,
     DeactivateOut,
+    GenerateDatasetIn,
+    GenerateDatasetOut,
+    GeneratedItemOut,
     SkillActivateOut,
     SkillCatalogOut,
     SkillCreateIn,
@@ -703,6 +706,61 @@ async def improve_skill(
         "changelog": result.changelog,
         "failure_analysis": result.failure_analysis,
     }
+
+
+@router.post("/{skill_id}/generate-dataset", response_model=GenerateDatasetOut)
+async def generate_skill_dataset(
+    skill_id: UUID,
+    body: GenerateDatasetIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> GenerateDatasetOut:
+    """Generate a golden set for a skill via LLM; link items to the skill; echo the
+    exact prompt + items for transparency."""
+    from flow.application.golden_generator import generate_golden_items
+
+    skill = await repo.get_skill_by_id(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if skill["workspace_id"] not in {r["id"] for r in ws_rows}:
+        raise HTTPException(status_code=403, detail="workspace access denied")
+
+    parsed = parse_skill_md(skill["content_md"])
+    skill_name = parsed.name if parsed.name != "unnamed" else skill["name"]
+    n = max(1, min(body.n, 10))
+    items, prompt_used = await generate_golden_items(
+        skill_name=skill_name, skill_body=parsed.body_md or skill["content_md"], n=n
+    )
+    if not items:
+        raise HTTPException(status_code=502, detail="generation produced no items — try again")
+
+    set_name = f"{skill_name} — generated"
+    set_id = await repo._pool.fetchval(
+        "INSERT INTO golden_sets (workspace_id, name, description) VALUES ($1,$2,$3) RETURNING id",
+        skill["workspace_id"],
+        set_name,
+        f"Auto-generated from skill '{skill_name}' ({len(items)} items)",
+    )
+    for it in items:
+        await repo._pool.execute(
+            "INSERT INTO golden_items (set_id, skill_id, input_text, expected_output, scoring_criteria) "
+            "VALUES ($1,$2,$3,$4,$5)",
+            set_id,
+            skill_id,
+            it.input_text,
+            it.expected_output,
+            it.scoring_criteria,
+        )
+
+    return GenerateDatasetOut(
+        set_id=str(set_id),
+        set_name=set_name,
+        skill_id=str(skill_id),
+        model="gpt-4o-mini",
+        prompt_used=prompt_used,
+        items=[GeneratedItemOut(**it.__dict__) for it in items],
+    )
 
 
 @router.get("/{skill_id}/usage", response_model=SkillUsageOut)
