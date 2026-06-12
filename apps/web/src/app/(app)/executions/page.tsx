@@ -44,16 +44,36 @@ function duration(created: string | null, completed: string | null): string | nu
   return `${(ms / 1000).toFixed(1)}s`
 }
 
+const PAGE_SIZE = 60
+
 export default function ExecutionsPage() {
   const [executions, setExecutions] = useState<ExecutionRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
 
   useEffect(() => {
-    apiFetch<{ executions: ExecutionRow[] }>('/api/v1/executions')
-      .then((res) => setExecutions(res.executions ?? []))
+    apiFetch<{ executions: ExecutionRow[]; has_more: boolean }>(`/api/v1/executions?limit=${PAGE_SIZE}&offset=0`)
+      .then((res) => {
+        setExecutions(res.executions ?? [])
+        setHasMore(res.has_more ?? false)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  const loadMore = () => {
+    setLoadingMore(true)
+    apiFetch<{ executions: ExecutionRow[]; has_more: boolean }>(
+      `/api/v1/executions?limit=${PAGE_SIZE}&offset=${executions.length}`,
+    )
+      .then((res) => {
+        setExecutions((prev) => [...prev, ...(res.executions ?? [])])
+        setHasMore(res.has_more ?? false)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false))
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -129,6 +149,18 @@ export default function ExecutionsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {hasMore && (
+        <button
+          type="button"
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="mx-auto inline-flex items-center gap-2 rounded-md border border-flow-800 bg-flow-900 px-4 py-2 font-mono text-xs text-flow-300 transition-colors hover:bg-flow-800 hover:text-flow-100 disabled:opacity-50"
+        >
+          {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {loadingMore ? 'Loading…' : 'Load more'}
+        </button>
       )}
     </div>
   )

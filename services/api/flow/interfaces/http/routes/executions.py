@@ -19,9 +19,16 @@ router = APIRouter(prefix="/api/v1/executions", tags=["executions"])
 async def list_executions(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = 60,
+    offset: int = 0,
 ) -> dict:
-    rows = await repo.list_executions_for_user(user_id)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    rows = await repo.list_executions_for_user(user_id, limit=limit, offset=offset)
     return {
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rows) == limit,
         "executions": [
             {
                 "id": str(r["id"]),
@@ -35,7 +42,7 @@ async def list_executions(
                 "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
             }
             for r in rows
-        ]
+        ],
     }
 
 

@@ -39,8 +39,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { logger } from "@/lib/logger";
@@ -194,10 +194,12 @@ export function AgentDetailDrawer({
         method: "POST",
         json: { version_label: snapshotLabel.trim() },
       });
+      toast.success(`Snapshot "${snapshotLabel.trim()}" saved`);
       setSnapshotLabel("");
       void loadVersions();
     } catch (e) {
       logger.warn("snapshot failed", { error: String(e) });
+      toast.error("Snapshot failed");
     } finally {
       setSaving(false);
     }
@@ -209,9 +211,11 @@ export function AgentDetailDrawer({
       await apiFetch(`/api/v1/agents/${agent.id}/versions/${versionId}/restore`, {
         method: "POST",
       });
+      toast.success("Version restored");
       void loadVersions();
     } catch (e) {
       logger.warn("restore failed", { error: String(e) });
+      toast.error("Restore failed");
     }
   }, [agent, loadVersions]);
 
@@ -248,8 +252,10 @@ export function AgentDetailDrawer({
     try {
       await apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" });
       setSkills((prev) => prev.filter((s) => s.id !== skillId));
+      toast.success("Skill deactivated");
     } catch (e) {
       logger.warn("skill deactivate failed", { error: String(e) });
+      toast.error("Failed to deactivate skill");
     }
   }, []);
 
@@ -261,9 +267,9 @@ export function AgentDetailDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md border-l border-flow-800 p-0"
+        className="w-full sm:max-w-md border-l border-flow-800 p-0 gap-0 overflow-hidden"
       >
-        <ScrollArea className="h-full">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex flex-col">
             {/* Header with gradient */}
             <div className="relative overflow-hidden border-b border-flow-800 px-6 pb-6 pt-6">
@@ -728,7 +734,10 @@ export function AgentDetailDrawer({
                     setDeleteLoading(true);
                     try {
                       await onDelete(agent.id);
+                      toast.success(`Agent "${agent.name}" deleted`);
                       onOpenChange(false);
+                    } catch {
+                      toast.error("Failed to delete agent");
                     } finally {
                       setDeleteLoading(false);
                     }
@@ -739,7 +748,7 @@ export function AgentDetailDrawer({
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -5,7 +5,6 @@ import { Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -48,71 +47,65 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
           <SheetTitle className="text-base">Memory</SheetTitle>
         </SheetHeader>
 
-        <Tabs defaultValue="working" className="flex h-full flex-col">
-          <TabsList className="mx-5 mt-4 grid w-auto grid-cols-3 rounded-lg">
+        <Tabs defaultValue="working" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="mx-5 mt-4 grid w-auto shrink-0 grid-cols-3 rounded-lg">
             <TabsTrigger value="working" className="text-xs">Working</TabsTrigger>
             <TabsTrigger value="episodic" className="text-xs">Episodic</TabsTrigger>
             <TabsTrigger value="semantic" className="text-xs">Semantic</TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1">
             {/* Working memory — current execution tokens */}
-            <TabsContent value="working" className="mt-0 h-full">
-              <ScrollArea className="h-full px-5 pb-6 pt-4">
-                {workingText ? (
-                  <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-foreground/80">
-                    {workingText}
-                  </pre>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Working memory holds the current run's output. Start a run to see live content here.
-                  </p>
-                )}
-              </ScrollArea>
+            <TabsContent value="working" className="mt-0 h-full overflow-y-auto px-5 pb-6 pt-4">
+              {workingText ? (
+                <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-foreground/80">
+                  {workingText}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Working memory holds the current run's output. Start a run to see live content here.
+                </p>
+              )}
             </TabsContent>
 
             {/* Episodic memory — past run summaries */}
-            <TabsContent value="episodic" className="mt-0 h-full">
-              <ScrollArea className="h-full px-5 pb-6 pt-4">
-                {episodic.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Episodic memories are saved after each run. Complete a run to build history.
-                  </p>
-                ) : (
-                  <ul className="space-y-3">
-                    {episodic.map((m) => (
-                      <MemoryCard
-                        key={m.id}
-                        entry={m}
-                        tier="episodic"
-                        onDelete={async () => {
-                          await apiFetch(`/api/v1/memory/episodic/${m.id}?workspace_id=${workspaceId}`, {
-                            method: "DELETE",
-                          });
-                          setEpisodic((prev) => prev.filter((x) => x.id !== m.id));
-                        }}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </ScrollArea>
+            <TabsContent value="episodic" className="mt-0 h-full overflow-y-auto px-5 pb-6 pt-4">
+              {episodic.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Episodic memories are saved after each run. Complete a run to build history.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {episodic.map((m) => (
+                    <MemoryCard
+                      key={m.id}
+                      entry={m}
+                      tier="episodic"
+                      onDelete={async () => {
+                        await apiFetch(`/api/v1/memory/episodic/${m.id}?workspace_id=${workspaceId}`, {
+                          method: "DELETE",
+                        });
+                        setEpisodic((prev) => prev.filter((x) => x.id !== m.id));
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
             </TabsContent>
 
             {/* Semantic memory — long-term knowledge */}
-            <TabsContent value="semantic" className="mt-0 h-full">
-              <ScrollArea className="h-full px-5 pb-6 pt-4">
-                {semantic.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Semantic memories are promoted from episodic when feedback score is high (&gt; 0.85) or explicitly saved.
-                  </p>
-                ) : (
-                  <ul className="space-y-3">
-                    {semantic.map((m) => (
-                      <MemoryCard key={m.id} entry={m} tier="semantic" />
-                    ))}
-                  </ul>
-                )}
-              </ScrollArea>
+            <TabsContent value="semantic" className="mt-0 h-full overflow-y-auto px-5 pb-6 pt-4">
+              {semantic.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Semantic memories are promoted from episodic when feedback score is high (&gt; 0.85) or explicitly saved.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {semantic.map((m) => (
+                    <MemoryCard key={m.id} entry={m} tier="semantic" />
+                  ))}
+                </ul>
+              )}
             </TabsContent>
           </div>
         </Tabs>

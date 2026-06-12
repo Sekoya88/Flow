@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 
 export interface Persona {
@@ -50,8 +51,10 @@ export function usePersona(workspaceId: string | undefined) {
         json: { workspace_id: workspaceId, content_md },
       })
       setPersona(res.persona)
+      toast.success('SOUL.md saved')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save persona')
+      toast.error('Failed to save SOUL.md')
     } finally {
       setBusy(null)
     }

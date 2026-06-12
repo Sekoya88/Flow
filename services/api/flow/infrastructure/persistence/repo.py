@@ -209,7 +209,7 @@ class FlowRepository:
         )
         return row["thread_id"] if row else None
 
-    async def list_executions_for_user(self, user_id: UUID, *, limit: int = 60) -> list[asyncpg.Record]:
+    async def list_executions_for_user(self, user_id: UUID, *, limit: int = 60, offset: int = 0) -> list[asyncpg.Record]:
         return await self._pool.fetch(
             """
             SELECT e.id, e.status, e.agent_id, e.workspace_id, COALESCE(e.thread_id, e.id) AS thread_id, e.user_message,
@@ -224,10 +224,11 @@ class FlowRepository:
             JOIN workspace_members m ON m.workspace_id = e.workspace_id
             WHERE m.user_id = $1
             ORDER BY e.created_at DESC
-            LIMIT $2
+            LIMIT $2 OFFSET $3
             """,
             user_id,
             limit,
+            offset,
         )
 
     async def list_executions_in_thread(self, thread_id: UUID, user_id: UUID) -> list[asyncpg.Record]:
@@ -337,7 +338,7 @@ class FlowRepository:
             error,
         )
 
-    async def list_knowledge_sources(self, workspace_id: UUID) -> list[asyncpg.Record]:
+    async def list_knowledge_sources(self, workspace_id: UUID, *, limit: int = 100, offset: int = 0) -> list[asyncpg.Record]:
         return await self._pool.fetch(
             """
             SELECT s.id, s.title, s.created_at, s.ingest_status, s.ingest_error,
@@ -345,8 +346,11 @@ class FlowRepository:
             FROM knowledge_sources s
             WHERE s.workspace_id = $1
             ORDER BY s.created_at DESC
+            LIMIT $2 OFFSET $3
             """,
             workspace_id,
+            limit,
+            offset,
         )
 
     async def list_chunks_for_source(self, source_id: UUID, workspace_id: UUID) -> list[asyncpg.Record]:

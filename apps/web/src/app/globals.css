@@ -4,6 +4,9 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap");
 
 @custom-variant dark (&:is(.dark *));
+/* Base UI emits data-orientation="..." — these variants map the shorthand used by ui/ primitives (tabs, slider, separator, scroll-area). Without them data-horizontal:/data-vertical: never match. */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
   --color-background: var(--background);

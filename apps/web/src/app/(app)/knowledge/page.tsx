@@ -20,6 +20,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
@@ -36,7 +37,9 @@ type SourceRow = {
   ingest_error?: string;
 };
 
-type Sources = { sources: SourceRow[] };
+type Sources = { sources: SourceRow[]; has_more?: boolean };
+
+const SOURCES_PAGE_SIZE = 100;
 
 type Chunk = { id: string; index: number; content: string };
 
@@ -153,13 +156,16 @@ export default function KnowledgePage() {
   const [crawling, setCrawling] = useState(false);
   const [crawlMsg, setCrawlMsg] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hasMoreSources, setHasMoreSources] = useState(false);
+  const [loadingMoreSources, setLoadingMoreSources] = useState(false);
 
   const loadSources = useCallback(async (id: string) => {
     setLoadingSources(true);
     setListErr(null);
     try {
-      const r = await apiFetch<Sources>(`/api/v1/knowledge?workspace_id=${id}`);
+      const r = await apiFetch<Sources>(`/api/v1/knowledge?workspace_id=${id}&limit=${SOURCES_PAGE_SIZE}&offset=0`);
       setSources(r.sources);
+      setHasMoreSources(r.has_more ?? false);
       track("knowledge_list_viewed", { count: r.sources.length });
     } catch (e) {
       setListErr(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
@@ -167,6 +173,22 @@ export default function KnowledgePage() {
       setLoadingSources(false);
     }
   }, []);
+
+  const loadMoreSources = useCallback(async () => {
+    if (!wsId) return;
+    setLoadingMoreSources(true);
+    try {
+      const r = await apiFetch<Sources>(
+        `/api/v1/knowledge?workspace_id=${wsId}&limit=${SOURCES_PAGE_SIZE}&offset=${sources.length}`,
+      );
+      setSources((prev) => [...prev, ...r.sources]);
+      setHasMoreSources(r.has_more ?? false);
+    } catch {
+      toast.error("Failed to load more sources");
+    } finally {
+      setLoadingMoreSources(false);
+    }
+  }, [wsId, sources.length]);
 
   useEffect(() => {
     routerRef.current = router;
@@ -242,8 +264,9 @@ export default function KnowledgePage() {
       await apiFetch(`/api/v1/knowledge/${sourceId}`, { method: "DELETE" });
       setSources((prev) => prev.filter((s) => s.id !== sourceId));
       if (selectedSource?.id === sourceId) setSelectedSource(null);
+      toast.success(`Source "${title}" deleted`);
     } catch (e) {
-      alert(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+      toast.error(e instanceof ApiError ? `Delete failed (${e.status})` : "Delete failed");
     } finally {
       setDeletingId(null);
     }
@@ -547,6 +570,17 @@ export default function KnowledgePage() {
                 </li>
               ))}
             </ul>
+            {hasMoreSources && (
+              <button
+                type="button"
+                onClick={() => void loadMoreSources()}
+                disabled={loadingMoreSources}
+                className="mt-3 mx-auto flex items-center gap-2 rounded-md border border-flow-800 bg-flow-900 px-4 py-2 font-mono text-xs text-flow-300 transition-colors hover:bg-flow-800 hover:text-flow-100 disabled:opacity-50"
+              >
+                {loadingMoreSources && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {loadingMoreSources ? "Loading…" : "Load more"}
+              </button>
+            )}
             </>
           )}
         </CardContent>

@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 
 export type GeneratedItem = {
@@ -100,8 +101,14 @@ export function useImportCollection(workspaceId: string | undefined) {
           { method: 'POST', json: { workspace_id: workspaceId } },
         )
         setResults((r) => ({ ...r, [collectionId]: res }))
+        if (res.errors > 0) {
+          toast.warning(`Import: ${res.installed} installed, ${res.errors} failed`)
+        } else {
+          toast.success(`Import: ${res.installed} installed, ${res.skipped} skipped`)
+        }
       } catch (e) {
         setErrors((er) => ({ ...er, [collectionId]: String(e) }))
+        toast.error('Collection import failed')
       } finally {
         setBusyId(null)
       }

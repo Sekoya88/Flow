@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { BrainCircuit, CheckCircle2, GitBranch, History, Loader2, Play, Sparkles, Wand2 } from 'lucide-react'
 import { SkillDiffView } from '@/components/agents/SkillDiffView'
 import { Badge } from '@/components/ui/badge'
@@ -155,6 +156,7 @@ export function SkillDetailSheet({
         headers: { Authorization: `Bearer ${localStorage.getItem('flow_token')}` },
       })
       setVibeActivated(true)
+      toast.success('New skill version activated')
       onActivated?.()
     } finally {
       setVibeActivating(false)
@@ -178,8 +180,13 @@ export function SkillDetailSheet({
   }, [vibeCandidateId, skill?.name, onActivated])
 
   const handleActivate = async (id: string) => {
-    await activate(id)
-    onActivated?.()
+    try {
+      await activate(id)
+      toast.success('Version activated')
+      onActivated?.()
+    } catch {
+      toast.error('Failed to activate version')
+    }
   }
 
   return (

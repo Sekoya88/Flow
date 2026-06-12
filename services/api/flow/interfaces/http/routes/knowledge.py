@@ -214,10 +214,17 @@ async def list_knowledge(
     workspace_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     repo: Annotated[FlowRepository, Depends(get_repo)],
+    limit: int = 100,
+    offset: int = 0,
 ) -> dict:
     await _assert_workspace(user_id, workspace_id, repo)
-    rows = await repo.list_knowledge_sources(workspace_id)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    rows = await repo.list_knowledge_sources(workspace_id, limit=limit, offset=offset)
     return {
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rows) == limit,
         "sources": [
             {
                 "id": str(r["id"]),
@@ -228,7 +235,7 @@ async def list_knowledge(
                 **({"ingest_error": r["ingest_error"]} if "ingest_error" in r and r["ingest_error"] else {}),
             }
             for r in rows
-        ]
+        ],
     }
 
 
