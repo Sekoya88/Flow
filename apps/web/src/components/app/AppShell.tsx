@@ -70,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingProposals, setPendingProposals] = useState(0);
   const setWorkspaces = useStore((s) => s.setWorkspaces);
   const setUser = useStore((s) => s.setUser);
   const activeTask = useStore((s) => s.activeTask);
@@ -84,6 +85,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {/* token invalid → middleware redirects */});
   }, [setUser, setWorkspaces]);
+
+  // Pending-proposals badge — refreshed on navigation so approving/rejecting updates it.
+  useEffect(() => {
+    apiFetch<{ proposals: unknown[] }>("/api/v1/proposals?status=pending")
+      .then((r) => setPendingProposals(r.proposals.length))
+      .catch(() => {});
+  }, [path]);
 
   const settingsActive = path === "/settings" || path.startsWith("/settings/");
 
@@ -115,6 +123,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   {label}
+                  {href === "/proposals" && pendingProposals > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-flow-violet px-1 font-mono text-[9px] font-bold text-white">
+                      {pendingProposals > 9 ? "9+" : pendingProposals}
+                    </span>
+                  )}
                 </Link>
               );
             })}

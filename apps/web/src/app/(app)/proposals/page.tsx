@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, ExternalLink, Eye, Loader2, Sparkles, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Eye, GitBranch, Loader2, ShieldAlert, Sparkles, XCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -26,11 +25,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { toast } from "sonner";
 import { ApiError, apiFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
+import { SkillDiffView } from "@/components/agents/SkillDiffView";
 
 type ProposalRow = {
   id: string;
@@ -41,6 +42,99 @@ type ProposalRow = {
   execution_id?: string;
   auto_approved?: boolean;
 };
+
+/* Structured metadata embedded as JSON in proposal bodies (regression gate,
+   skill improvements). Plain-text bodies return null. */
+type ProposalMeta = {
+  kind?: string;
+  skill_candidate_id?: string;
+  skill_id?: string;
+  run_id?: string;
+  epoch?: number;
+  reason?: string;
+  summary?: string;
+};
+
+function parseProposalMeta(body: string): ProposalMeta | null {
+  if (!body.trim().startsWith("{")) return null;
+  try {
+    const meta = JSON.parse(body) as ProposalMeta;
+    return typeof meta === "object" && meta !== null ? meta : null;
+  } catch {
+    return null;
+  }
+}
+
+function isRegressionGate(meta: ProposalMeta | null): boolean {
+  return meta?.kind === "regression_gate" || (!!meta?.skill_candidate_id && !!meta?.reason);
+}
+
+/* Fetches candidate + currently-active skill content and renders the diff. */
+function CandidateDiff({ candidateId }: { candidateId: string }) {
+  const [state, setState] = useState<
+    | { phase: "loading" }
+    | { phase: "error"; message: string }
+    | { phase: "ready"; oldContent: string; newContent: string; oldLabel: string; newLabel: string }
+  >({ phase: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const candidate = await apiFetch<{ agent_id: string; name: string; content_md: string; version: number }>(
+          `/api/v1/skills/${candidateId}`,
+        );
+        const history = await apiFetch<{ versions: Array<{ content_md: string; active: boolean; version: number }> }>(
+          `/api/v1/skills/history?agent_id=${candidate.agent_id}&name=${encodeURIComponent(candidate.name)}`,
+        );
+        const active = history.versions.find((v) => v.active);
+        if (cancelled) return;
+        setState({
+          phase: "ready",
+          oldContent: active?.content_md ?? "",
+          newContent: candidate.content_md,
+          oldLabel: active ? `v${active.version} (active)` : "(no active version)",
+          newLabel: `v${candidate.version} (candidate)`,
+        });
+      } catch (e) {
+        if (!cancelled) {
+          setState({ phase: "error", message: e instanceof ApiError ? `${e.status}: ${e.body}` : String(e) });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId]);
+
+  if (state.phase === "loading") {
+    return (
+      <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading skill diff…
+      </div>
+    );
+  }
+  if (state.phase === "error") {
+    return <p className="p-4 font-mono text-xs text-destructive">Could not load diff: {state.message}</p>;
+  }
+  return (
+    <div className="p-4">
+      <div className="mb-2 flex items-center gap-1.5">
+        <GitBranch className="h-3 w-3 text-flow-violet" />
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Candidate vs active skill
+        </span>
+      </div>
+      <SkillDiffView
+        oldContent={state.oldContent}
+        newContent={state.newContent}
+        oldLabel={state.oldLabel}
+        newLabel={state.newLabel}
+      />
+    </div>
+  );
+}
 
 type Props = { proposals: ProposalRow[] };
 
@@ -110,10 +204,12 @@ export default function ProposalsPage() {
       await apiFetch(`/api/v1/proposals/${id}/action`, { method: "POST", json: { status } });
       if (status === "approved") track("proposal_applied", { proposal_id: id });
       else track("proposal_discarded", { proposal_id: id });
+      toast.success(status === "approved" ? "Proposal approved" : "Proposal rejected");
       await load();
       setConfirm(null);
     } catch (e) {
       setLoadErr(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e));
+      toast.error("Action failed");
     } finally {
       setActionId(null);
     }
@@ -172,11 +268,40 @@ export default function ProposalsPage() {
               ) : null}
             </SheetDescription>
           </SheetHeader>
-          <ScrollArea className="max-h-[calc(100vh-9rem)] min-h-[12rem] px-1">
-            <pre className="whitespace-pre-wrap wrap-break-word p-4 font-mono text-xs leading-relaxed">
-              {detail?.body ?? ""}
-            </pre>
-          </ScrollArea>
+          <div className="min-h-[12rem] flex-1 overflow-y-auto px-1">
+            {(() => {
+              const meta = detail ? parseProposalMeta(detail.body) : null;
+              if (meta && isRegressionGate(meta)) {
+                return (
+                  <div>
+                    <div className="m-4 mb-0 rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+                        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-red-400">
+                          Regression gate
+                        </span>
+                        {meta.epoch != null && (
+                          <span className="font-mono text-[10px] text-muted-foreground">epoch {meta.epoch}</span>
+                        )}
+                      </div>
+                      {meta.reason && (
+                        <p className="font-mono text-xs leading-relaxed text-red-300/90">{meta.reason}</p>
+                      )}
+                      {meta.summary && (
+                        <p className="text-xs leading-relaxed text-muted-foreground">{meta.summary}</p>
+                      )}
+                    </div>
+                    {meta.skill_candidate_id && <CandidateDiff candidateId={meta.skill_candidate_id} />}
+                  </div>
+                );
+              }
+              return (
+                <pre className="whitespace-pre-wrap wrap-break-word p-4 font-mono text-xs leading-relaxed">
+                  {detail?.body ?? ""}
+                </pre>
+              );
+            })()}
+          </div>
           {detail?.status === "pending" ? (
             <div className="border-t border-flow-800 p-4 flex gap-2">
               <Button
@@ -330,6 +455,9 @@ function ProposalCard({
 }) {
   const cfg = statusConfig(p.status);
   const StatusIcon = cfg.icon;
+  const meta = parseProposalMeta(p.body);
+  const gate = isRegressionGate(meta);
+  const preview = meta ? (meta.summary ?? meta.reason ?? p.title) : p.body;
 
   return (
     <Card
@@ -349,6 +477,15 @@ function ProposalCard({
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
+            {gate && (
+              <Badge
+                variant="outline"
+                className="w-fit shrink-0 gap-1 text-xs font-medium border-red-500/40 bg-red-500/10 text-red-400"
+              >
+                <ShieldAlert className="h-3 w-3" aria-hidden />
+                Regression gate
+              </Badge>
+            )}
             {p.auto_approved && (
               <Badge
                 variant="outline"
@@ -369,7 +506,7 @@ function ProposalCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pb-4">
-        <p className="line-clamp-3 text-sm whitespace-pre-wrap text-muted-foreground">{p.body}</p>
+        <p className="line-clamp-3 text-sm whitespace-pre-wrap text-muted-foreground">{preview}</p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="secondary" onClick={() => onDetail(p)}>
             <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden />

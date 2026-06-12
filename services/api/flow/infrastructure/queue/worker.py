@@ -350,17 +350,30 @@ async def task_run_skill_training(
                         _workspace_id,
                     )
                     if owner:
+                        import json as _json
+
+                        # JSON body: the proposal approval route parses it and activates
+                        # skill_candidate_id — a plain-text body would make approval a no-op.
                         await pool.execute(
                             """INSERT INTO proposals (workspace_id, user_id, title, body, status)
                                VALUES ($1, $2, $3, $4, 'pending')""",
                             _workspace_id,
                             owner["user_id"],
                             f"[Regression gate] Skill candidate blocked — {reason}",
-                            (
-                                f"ReflACT epoch {epoch} produced a candidate skill "
-                                f"(id {candidate_id}) whose average improved but which "
-                                f"regressed an item beyond the floor: {reason}. "
-                                f"Review the per-item scores before activating."
+                            _json.dumps(
+                                {
+                                    "kind": "regression_gate",
+                                    "skill_candidate_id": str(candidate_id) if candidate_id else None,
+                                    "skill_id": skill_id,
+                                    "run_id": run_id,
+                                    "epoch": epoch,
+                                    "reason": reason,
+                                    "summary": (
+                                        f"ReflACT epoch {epoch} produced a candidate skill whose average "
+                                        f"improved but which regressed an item beyond the floor: {reason}. "
+                                        f"Review the per-item scores before activating."
+                                    ),
+                                }
                             ),
                         )
                         _train_log.info("training.blocked.proposal_created", run_id=run_id, reason=reason)
