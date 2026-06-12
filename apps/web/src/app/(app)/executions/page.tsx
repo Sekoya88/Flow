@@ -93,8 +93,48 @@ export default function ExecutionsPage() {
         <p className="text-sm text-muted-foreground">No executions yet. Run an agent to get started.</p>
       )}
 
+      {/* Mobile card list (< md) */}
       {executions.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-flow-800">
+        <ul className="space-y-2 md:hidden">
+          {executions.map((ex) => {
+            const dur = duration(ex.created_at, ex.completed_at)
+            const date = ex.created_at
+              ? new Date(ex.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : '—'
+            return (
+              <li key={ex.id}>
+                <Link
+                  href={`/executions/${ex.id}`}
+                  className="block space-y-2 rounded-xl border border-flow-800 bg-flow-950 p-3 transition-colors active:bg-flow-900"
+                >
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={ex.status} />
+                    <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-flow-500">
+                      {ex.agent_name}
+                    </span>
+                  </div>
+                  <p className="line-clamp-2 font-mono text-xs text-flow-300">
+                    {ex.user_message || '(no message)'}
+                  </p>
+                  <div className="flex items-center justify-between font-mono text-[10px] text-flow-500">
+                    <span>{date}</span>
+                    {dur && (
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5" />
+                        {dur}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {/* Desktop table (md+) */}
+      {executions.length > 0 && (
+        <div className="hidden overflow-hidden rounded-xl border border-flow-800 md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-flow-800 bg-flow-950">
