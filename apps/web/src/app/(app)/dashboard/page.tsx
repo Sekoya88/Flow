@@ -87,6 +87,21 @@ type Project = {
   last_run_at: string | null;
 };
 
+type UsageSummary = {
+  days: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  executions: number;
+  daily: Array<{ day: string; executions: number; tokens: number; cost_usd: number }>;
+  by_agent: Array<{ agent_id: string; agent_name: string; executions: number; tokens: number; cost_usd: number }>;
+};
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 const TILES = [
   { key: "agents",           label: "Agents",           href: "/agents",    color: "var(--color-flow-violet)" },
   { key: "executions",       label: "Runs",             href: "/run",       color: "var(--color-flow-streaming)" },
@@ -146,6 +161,7 @@ export default function DashboardPage() {
   const [obsStatus, setObsStatus] = useState<ObsStatus | null>(null);
   const [trainingRuns, setTrainingRuns] = useState<TrainingRunRow[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -161,13 +177,15 @@ export default function DashboardPage() {
       apiFetch<{ proposals: Proposal[] }>("/api/v1/proposals?status=pending").catch(() => ({ proposals: [] })),
       apiFetch<ObsStatus>("/api/v1/logs/status").catch(() => null),
       apiFetch<{ runs: TrainingRunRow[] }>("/api/v1/skills/training-runs?limit=5").catch(() => ({ runs: [] })),
+      apiFetch<UsageSummary>("/api/v1/logs/usage-summary?days=7").catch(() => null),
     ])
-      .then(([s, p, obs, tr]) => {
+      .then(([s, p, obs, tr, u]) => {
         setData(s);
         setProposals(p.proposals ?? []);
         setRecent(s.recent_executions ?? []);
         setObsStatus(obs);
         setTrainingRuns(tr.runs ?? []);
+        setUsage(u);
       })
       .catch((e) => {
         setErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load dashboard");
@@ -279,6 +297,80 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Usage & cost (7 days) */}
+      {usage && (usage.executions > 0 || usage.total_tokens > 0) && (
+        <div className="flow-card rounded-[6px] p-5 animate-slide-up [animation-delay:150ms]">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-4 w-4 text-flow-violet" />
+            <h3 className="text-sm font-semibold text-foreground">Usage — last {usage.days} days</h3>
+            <Link href="/logs" className="ml-auto font-mono text-[10px] text-flow-violet hover:underline">Details</Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Totals */}
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Est. cost</p>
+                <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
+                  ${usage.total_cost_usd.toFixed(usage.total_cost_usd < 1 ? 4 : 2)}
+                </p>
+              </div>
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tokens</p>
+                  <p className="font-mono text-sm font-semibold tabular-nums text-foreground">{fmtTokens(usage.total_tokens)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Runs</p>
+                  <p className="font-mono text-sm font-semibold tabular-nums text-foreground">{usage.executions}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily cost bars */}
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Daily cost</p>
+              {usage.daily.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No usage recorded.</p>
+              ) : (
+                <div className="flex h-16 items-end gap-1">
+                  {usage.daily.map((d) => {
+                    const max = Math.max(...usage.daily.map((x) => x.cost_usd), 0.000001);
+                    return (
+                      <div
+                        key={d.day}
+                        className="flex-1 rounded-t bg-flow-violet/60 transition-all hover:bg-flow-violet"
+                        style={{ height: `${Math.max((d.cost_usd / max) * 100, 4)}%` }}
+                        title={`${d.day}: $${d.cost_usd.toFixed(4)} · ${fmtTokens(d.tokens)} tokens · ${d.executions} runs`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Top agents by cost */}
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Top agents</p>
+              {usage.by_agent.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No agent usage.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {usage.by_agent.slice(0, 4).map((a) => (
+                    <li key={a.agent_id} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/80">{a.agent_name}</span>
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{fmtTokens(a.tokens)}</span>
+                      <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-flow-violet">
+                        ${a.cost_usd.toFixed(a.cost_usd < 1 ? 4 : 2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick links */}
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">

@@ -200,6 +200,91 @@ async def list_research_logs(
     }
 
 
+@router.get("/usage-summary")
+async def usage_summary(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    days: int = Query(7, ge=1, le=90),
+) -> dict:
+    """Aggregate token/cost usage over the last N days: totals, daily series, top agents."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    if not ws_rows:
+        return {"days": days, "total_tokens": 0, "total_cost_usd": 0.0, "executions": 0, "daily": [], "by_agent": []}
+    ws_id = ws_rows[0]["id"]
+
+    daily_rows = await repo._pool.fetch(
+        """
+        SELECT
+            date_trunc('day', e.created_at) AS day,
+            COUNT(DISTINCT e.id) AS executions,
+            SUM(CASE WHEN ee.payload->>'prompt_tokens' IS NOT NULL
+                THEN (ee.payload->>'prompt_tokens')::int + COALESCE((ee.payload->>'completion_tokens')::int, 0)
+                ELSE 0 END) AS tokens,
+            SUM(COALESCE((ee.payload->>'cost_usd')::float, 0)) AS cost
+        FROM execution_events ee
+        JOIN executions e ON e.id = ee.execution_id
+        WHERE e.workspace_id = $1
+          AND e.created_at >= now() - make_interval(days => $2)
+          AND (ee.payload->>'prompt_tokens' IS NOT NULL OR ee.payload->>'cost_usd' IS NOT NULL)
+        GROUP BY 1
+        ORDER BY 1
+        """,
+        ws_id,
+        days,
+    )
+
+    agent_rows = await repo._pool.fetch(
+        """
+        SELECT
+            a.id AS agent_id,
+            COALESCE(NULLIF(a.name, ''), a.template) AS agent_name,
+            COUNT(DISTINCT e.id) AS executions,
+            SUM(CASE WHEN ee.payload->>'prompt_tokens' IS NOT NULL
+                THEN (ee.payload->>'prompt_tokens')::int + COALESCE((ee.payload->>'completion_tokens')::int, 0)
+                ELSE 0 END) AS tokens,
+            SUM(COALESCE((ee.payload->>'cost_usd')::float, 0)) AS cost
+        FROM execution_events ee
+        JOIN executions e ON e.id = ee.execution_id
+        JOIN agents a ON a.id = e.agent_id
+        WHERE e.workspace_id = $1
+          AND e.created_at >= now() - make_interval(days => $2)
+          AND (ee.payload->>'prompt_tokens' IS NOT NULL OR ee.payload->>'cost_usd' IS NOT NULL)
+        GROUP BY a.id, agent_name
+        ORDER BY cost DESC NULLS LAST
+        LIMIT 5
+        """,
+        ws_id,
+        days,
+    )
+
+    daily = [
+        {
+            "day": r["day"].date().isoformat(),
+            "executions": int(r["executions"] or 0),
+            "tokens": int(r["tokens"] or 0),
+            "cost_usd": round(float(r["cost"] or 0), 6),
+        }
+        for r in daily_rows
+    ]
+    return {
+        "days": days,
+        "total_tokens": sum(d["tokens"] for d in daily),
+        "total_cost_usd": round(sum(d["cost_usd"] for d in daily), 6),
+        "executions": sum(d["executions"] for d in daily),
+        "daily": daily,
+        "by_agent": [
+            {
+                "agent_id": str(r["agent_id"]),
+                "agent_name": r["agent_name"],
+                "executions": int(r["executions"] or 0),
+                "tokens": int(r["tokens"] or 0),
+                "cost_usd": round(float(r["cost"] or 0), 6),
+            }
+            for r in agent_rows
+        ],
+    }
+
+
 @router.get("/{execution_id}")
 async def get_log_detail(
     execution_id: UUID,
