@@ -55,8 +55,41 @@ flow_llm_cost_usd_total = Counter(
     "Estimated LLM spend in USD",
 )
 
+flow_silent_errors_total = Counter(
+    "flow_silent_errors_total",
+    "Best-effort observability operations that failed and were swallowed",
+    ["where"],
+)
+
 # Per-execution timestamp of the last node_update — used to approximate node durations.
+# Bounded with a TTL sweep so executions that die without a terminal event
+# (final/error/done) cannot leak entries indefinitely.
 _last_node_event: dict[str, tuple[str, float]] = {}
+_NODE_EVENT_TTL_SECONDS = 3600.0
+_NODE_EVENT_MAX = 10_000
+
+
+def _sweep_stale_node_events(now: float) -> None:
+    """Drop tracking entries older than the TTL; hard-cap total size as a backstop."""
+    stale = [k for k, (_node, ts) in _last_node_event.items() if now - ts > _NODE_EVENT_TTL_SECONDS]
+    for k in stale:
+        _last_node_event.pop(k, None)
+    if len(_last_node_event) > _NODE_EVENT_MAX:
+        # Evict oldest entries first.
+        excess = len(_last_node_event) - _NODE_EVENT_MAX
+        for k, _ in sorted(_last_node_event.items(), key=lambda kv: kv[1][1])[:excess]:
+            _last_node_event.pop(k, None)
+
+
+def _note_silent_error(where: str) -> None:
+    """Count a swallowed best-effort failure so silent errors are observable.
+
+    Must never raise — it runs inside the except blocks it instruments.
+    """
+    try:
+        flow_silent_errors_total.labels(where=where).inc()
+    except Exception:
+        pass
 
 
 def record_event(execution_id: UUID | str, kind: str, payload: dict[str, Any]) -> None:
@@ -70,6 +103,7 @@ def record_event(execution_id: UUID | str, kind: str, payload: dict[str, Any]) -
                 prev_node, prev_ts = prev
                 flow_node_duration_seconds.labels(node=prev_node).observe(max(0.0, now - prev_ts))
             _last_node_event[key] = (str(payload.get("node", "unknown")), now)
+            _sweep_stale_node_events(now)
         elif kind == "tool_call":
             flow_tool_calls_total.labels(
                 tool=str(payload.get("tool", "unknown")),
@@ -88,14 +122,14 @@ def record_event(execution_id: UUID | str, kind: str, payload: dict[str, Any]) -
         elif kind in ("final", "error", "done"):
             _last_node_event.pop(str(execution_id), None)
     except Exception:
-        pass
+        _note_silent_error("record_event")
 
 
 def record_execution(template: str, status: str, duration_seconds: float) -> None:
     try:
         flow_execution_duration_seconds.labels(template=template, status=status).observe(duration_seconds)
     except Exception:
-        pass
+        _note_silent_error("record_execution")
 
 
 def start_metrics_server(port: int) -> bool:
