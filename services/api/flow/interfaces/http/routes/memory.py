@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from flow.config import Settings, get_settings
 from flow.infrastructure.llm import embeddings as emb_svc
@@ -74,6 +74,39 @@ async def get_tiered_memories(
             for r in semantic_rows
         ],
     }
+
+
+@router.get("/store-salience")
+async def get_store_salience(
+    workspace_id: UUID,
+    agent_id: UUID,
+    request: Request,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Transparency view of the agent's cross-run store memory.
+
+    Surfaces TIER 1 facts with their decay-adjusted salience (most salient
+    first) and the TIER 2 compressed summaries, so a UI can show what the agent
+    remembers and how strongly each memory is currently weighted.
+    """
+    await _assert_workspace(user_id, workspace_id, repo)
+    agent = await repo.get_agent(agent_id, workspace_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="agent not found")
+
+    store = getattr(request.app.state, "memory_store", None)
+    if store is None:
+        return {"facts": [], "summaries": []}
+
+    from flow.application.memory_compaction import store_memory_view
+
+    facts_ns = (str(workspace_id), str(agent_id), "facts")
+    summaries_ns = (str(workspace_id), str(agent_id), "summaries")
+    try:
+        return await store_memory_view(store, facts_ns, summaries_ns)
+    except Exception:
+        return {"facts": [], "summaries": []}
 
 
 @router.delete("/episodic/{memory_id}", response_model=DeletedOut)

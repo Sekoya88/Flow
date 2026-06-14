@@ -150,6 +150,27 @@ async def test_compact_namespace_summarizes_and_prunes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_store_memory_view_sorts_by_salience() -> None:
+    now = datetime.now(tz=UTC)
+    store = _FakeStore()
+    facts_ns = ("ws", "agent", "facts")
+    summaries_ns = ("ws", "agent", "summaries")
+
+    salient = mc.new_fact("salient")  # fresh, default score
+    faded = mc.new_fact("faded")
+    faded["last_used_at"] = _ts(90, now)  # 3 half-lives
+    store.data[facts_ns] = {"a": salient, "b": faded}
+    store.data[summaries_ns] = {"s": mc.new_summary("older memory", source_count=4, now=now)}
+
+    view = await mc.store_memory_view(store, facts_ns, summaries_ns, now=now)
+
+    assert [f["text"] for f in view["facts"]] == ["salient", "faded"]
+    assert view["facts"][0]["effective_score"] >= view["facts"][1]["effective_score"]
+    assert view["summaries"][0]["text"] == "older memory"
+    assert view["summaries"][0]["source_count"] == 4
+
+
+@pytest.mark.asyncio
 async def test_compact_namespace_noop_when_too_few_facts() -> None:
     now = datetime.now(tz=UTC)
     store = _FakeStore()

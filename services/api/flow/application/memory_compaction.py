@@ -153,6 +153,59 @@ def new_summary(text: str, *, source_count: int, now: datetime | None = None) ->
     return {"text": text, "tier": "semantic", "source_count": source_count, "created_at": ts}
 
 
+async def store_memory_view(
+    store: Any,
+    facts_ns: tuple[str, ...],
+    summaries_ns: tuple[str, ...],
+    *,
+    now: datetime | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
+    """Read-only transparency view of an agent's tiered store memory.
+
+    Returns facts (TIER 1) with their current decay-adjusted salience, sorted
+    most-salient first, plus the compressed summaries (TIER 2). Powers a
+    "what does this agent remember, and how strongly" UI.
+    """
+    now = now or _now()
+    facts_items = await store.asearch(facts_ns, query=None, limit=limit)
+    try:
+        summary_items = await store.asearch(summaries_ns, query=None, limit=50)
+    except Exception:
+        summary_items = []
+
+    facts = []
+    for it in facts_items:
+        v = getattr(it, "value", None)
+        if not v:
+            continue
+        facts.append(
+            {
+                "key": getattr(it, "key", None),
+                "text": v.get("text", ""),
+                "score": float(v.get("score", _INITIAL_SCORE)),
+                "effective_score": round(fact_effective_score(v, now=now), 4),
+                "pinned": bool(v.get("pinned", False)),
+                "created_at": v.get("created_at"),
+                "last_used_at": v.get("last_used_at"),
+            }
+        )
+    facts.sort(key=lambda f: f["effective_score"], reverse=True)
+
+    summaries = [
+        {
+            "key": getattr(it, "key", None),
+            "text": (getattr(it, "value", None) or {}).get("text", ""),
+            "source_count": (getattr(it, "value", None) or {}).get("source_count", 0),
+            "created_at": (getattr(it, "value", None) or {}).get("created_at"),
+        }
+        for it in summary_items
+        if getattr(it, "value", None)
+    ]
+
+    return {"facts": facts, "summaries": summaries}
+
+
 class _Store(Protocol):
     async def asearch(self, namespace: tuple[str, ...], *, query: str | None = ..., limit: int = ...) -> list[Any]: ...
     async def aput(self, namespace: tuple[str, ...], key: str, value: dict) -> Any: ...

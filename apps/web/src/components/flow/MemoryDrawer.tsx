@@ -15,6 +15,23 @@ interface MemoryEntry {
   execution_id?: string | null;
 }
 
+interface SalienceFact {
+  key: string | null;
+  text: string;
+  score: number;
+  effective_score: number;
+  pinned: boolean;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+interface SalienceSummary {
+  key: string | null;
+  text: string;
+  source_count: number;
+  created_at?: string | null;
+}
+
 interface MemoryDrawerProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -27,6 +44,8 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
   const workingText = tokens.join("");
   const [episodic, setEpisodic] = useState<MemoryEntry[]>([]);
   const [semantic, setSemantic] = useState<MemoryEntry[]>([]);
+  const [salienceFacts, setSalienceFacts] = useState<SalienceFact[]>([]);
+  const [salienceSummaries, setSalienceSummaries] = useState<SalienceSummary[]>([]);
 
   useEffect(() => {
     if (!open || !workspaceId || !agentId) return;
@@ -36,6 +55,14 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
       .then((r) => {
         setEpisodic(r.episodic ?? []);
         setSemantic(r.semantic ?? []);
+      })
+      .catch(() => {});
+    apiFetch<{ facts: SalienceFact[]; summaries: SalienceSummary[] }>(
+      `/api/v1/memory/store-salience?workspace_id=${workspaceId}&agent_id=${agentId}`,
+    )
+      .then((r) => {
+        setSalienceFacts(r.facts ?? []);
+        setSalienceSummaries(r.summaries ?? []);
       })
       .catch(() => {});
   }, [open, workspaceId, agentId]);
@@ -48,8 +75,9 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
         </SheetHeader>
 
         <Tabs defaultValue="working" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-5 mt-4 grid w-auto shrink-0 grid-cols-3 rounded-lg">
+          <TabsList className="mx-5 mt-4 grid w-auto shrink-0 grid-cols-4 rounded-lg">
             <TabsTrigger value="working" className="text-xs">Working</TabsTrigger>
+            <TabsTrigger value="salience" className="text-xs">Salience</TabsTrigger>
             <TabsTrigger value="episodic" className="text-xs">Episodic</TabsTrigger>
             <TabsTrigger value="semantic" className="text-xs">Semantic</TabsTrigger>
           </TabsList>
@@ -65,6 +93,44 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
                 <p className="text-sm text-muted-foreground">
                   Working memory holds the current run's output. Start a run to see live content here.
                 </p>
+              )}
+            </TabsContent>
+
+            {/* Salience — cross-run store facts weighted by time decay (TIER 1 + 2) */}
+            <TabsContent value="salience" className="mt-0 h-full overflow-y-auto px-5 pb-6 pt-4">
+              {salienceFacts.length === 0 && salienceSummaries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Salience shows what the agent remembers across runs and how strongly. Facts fade
+                  over time unless recalled; aging facts are compressed into summaries nightly.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {salienceFacts.length > 0 && (
+                    <ul className="space-y-2">
+                      {salienceFacts.map((f, i) => (
+                        <SalienceCard key={f.key ?? i} fact={f} />
+                      ))}
+                    </ul>
+                  )}
+                  {salienceSummaries.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                        Compressed summaries
+                      </p>
+                      {salienceSummaries.map((s, i) => (
+                        <div
+                          key={s.key ?? i}
+                          className="rounded-lg border border-flow-done/30 bg-flow-done/5 p-3 text-xs leading-relaxed text-foreground/80"
+                        >
+                          <p className="whitespace-pre-wrap">{s.text}</p>
+                          <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+                            folded {s.source_count} fact{s.source_count === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </TabsContent>
 
@@ -111,6 +177,34 @@ export function MemoryDrawer({ open, onOpenChange, workspaceId, agentId }: Memor
         </Tabs>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function SalienceCard({ fact }: { fact: SalienceFact }) {
+  const pct = Math.round(Math.max(0, Math.min(1, fact.effective_score)) * 100);
+  // Bold colour shift by salience: strong = green, mid = amber, faded = red.
+  const barColor =
+    pct >= 60 ? "bg-emerald-500" : pct >= 25 ? "bg-amber-500" : "bg-rose-500";
+
+  return (
+    <li className="rounded-lg border border-flow-800 bg-muted/20 p-3 text-xs leading-relaxed">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-foreground/80">{fact.text}</p>
+        {fact.pinned && (
+          <span className="shrink-0 rounded bg-flow-done/20 px-1.5 py-0.5 text-[10px] font-semibold text-flow-done">
+            PINNED
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-flow-800">
+          <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${pct}%` }} />
+        </div>
+        <span className="w-9 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+          {pct}%
+        </span>
+      </div>
+    </li>
   );
 }
 
