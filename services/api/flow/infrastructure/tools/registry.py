@@ -59,7 +59,7 @@ def names_for_agent(agent_config: dict[str, Any]) -> list[str]:
 
 register(
     ToolSpec(
-        name="knowledge_search",
+        name="retrieve",
         description="Semantic search over workspace knowledge sources. Returns relevant text chunks.",
         parameters_schema={
             "type": "object",
@@ -102,37 +102,6 @@ register(
             "required": ["query"],
         },
         required_capabilities=["long_term_memory"],
-    )
-)
-
-register(
-    ToolSpec(
-        name="http_get",
-        description="Perform an HTTP GET request and return the response body (truncated to 8KB).",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "URL to fetch"},
-                "headers": {"type": "object", "description": "Optional request headers"},
-            },
-            "required": ["url"],
-        },
-        required_capabilities=[],
-    )
-)
-
-register(
-    ToolSpec(
-        name="sql_query",
-        description="Run a read-only SQL query against the workspace database (SELECT only).",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "SQL SELECT query"},
-            },
-            "required": ["query"],
-        },
-        required_capabilities=[],
     )
 )
 
@@ -213,94 +182,6 @@ register(
         required_capabilities=[],
     )
 )
-
-register(
-    ToolSpec(
-        name="file_read",
-        description="Read a local file by path and return its text content (up to 32KB).",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Absolute or relative file path"},
-                "encoding": {"type": "string", "default": "utf-8", "description": "File encoding"},
-            },
-            "required": ["path"],
-        },
-        required_capabilities=[],
-    )
-)
-
-register(
-    ToolSpec(
-        name="pdf_extract",
-        description="Extract structured text, section headings, and page count from a PDF file.",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Path to the PDF file"},
-            },
-            "required": ["path"],
-        },
-        required_capabilities=[],
-    )
-)
-
-register(
-    ToolSpec(
-        name="http_post",
-        description="Perform an HTTP POST/PUT/PATCH/DELETE request and return status code and response body.",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "Request URL"},
-                "json_body": {"type": "object", "description": "JSON request body"},
-                "headers": {"type": "object", "description": "Optional request headers"},
-                "method": {"type": "string", "default": "POST", "description": "HTTP method: POST, PUT, PATCH, DELETE"},
-            },
-            "required": ["url"],
-        },
-        required_capabilities=[],
-    )
-)
-
-register(
-    ToolSpec(
-        name="csv_query",
-        description="Query a CSV string: select columns, filter rows by condition, and limit output.",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "csv_text": {"type": "string", "description": "Raw CSV content with header row"},
-                "select": {"type": "array", "items": {"type": "string"}, "description": "Columns to include (default: all)"},
-                "filter_col": {"type": "string", "description": "Column to filter on"},
-                "filter_op": {"type": "string", "description": "Operator: eq, ne, gt, lt, gte, lte, contains"},
-                "filter_val": {"type": "string", "description": "Value to compare against"},
-                "limit": {"type": "integer", "default": 100, "description": "Max rows returned"},
-            },
-            "required": ["csv_text"],
-        },
-        required_capabilities=[],
-    )
-)
-
-register(
-    ToolSpec(
-        name="date_lookup",
-        description="Parse, convert, and format date/time expressions. Supports timezone conversion and relative terms like 'now'.",
-        parameters_schema={
-            "type": "object",
-            "properties": {
-                "expression": {"type": "string", "default": "now", "description": "Date string or 'now'/'today'"},
-                "from_tz": {"type": "string", "default": "UTC", "description": "Source IANA timezone"},
-                "to_tz": {"type": "string", "default": "UTC", "description": "Target IANA timezone"},
-                "output_format": {"type": "string", "default": "%Y-%m-%d %H:%M:%S %Z", "description": "strftime format"},
-            },
-            "required": [],
-        },
-        required_capabilities=[],
-    )
-)
-
 
 # ---------------------------------------------------------------------------
 # Load external tools from entry-points (silently skip failures)
