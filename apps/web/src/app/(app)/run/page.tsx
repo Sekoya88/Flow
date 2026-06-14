@@ -74,6 +74,12 @@ type SseEvent = {
   status?: string;
   payload?: unknown;
   agent_name?: string;
+  /** Subagent namespace (e.g. "subagent:researcher") on namespaced child events */
+  ns?: string;
+  /** Correlates tool_call_start / tool_call and subagent_start / subagent_done */
+  call_id?: string;
+  /** Token provenance — "summarization" when emitted by context compaction */
+  source?: string;
 };
 
 const SUGGESTIONS = [
@@ -144,6 +150,7 @@ export default function RunPage() {
   const [bootDone, setBootDone] = useState(false);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [citations, setCitations] = useState<CitationSource[]>([]);
+  const [summarizing, setSummarizing] = useState(false);
   const [showInspector, setShowInspector] = useState(false);
   const [goldenSetId, setGoldenSetId] = useState<string | null>(null);
   const [markedItems, setMarkedItems] = useState<Set<string>>(new Set());
@@ -248,7 +255,10 @@ export default function RunPage() {
           es.onmessage = (ev) => {
             try {
               const data = JSON.parse(ev.data) as SseEvent;
-              if (data.kind === "token" && data.text) {
+              const isAggregate = data.kind === "message";
+              // Skip backfilled aggregates when we already have persisted text (avoids duplication)
+              const skipAggregate = isAggregate && Boolean(reconnPersisted);
+              if ((data.kind === "token" || isAggregate) && data.text && !data.ns && data.source !== "summarization" && !skipAggregate) {
                 fullAnswer += data.text;
                 setLiveAnswer(fullAnswer);
                 setPersistedLiveAnswer(fullAnswer);
@@ -276,6 +286,27 @@ export default function RunPage() {
         .catch(() => { setRunning(false); });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Patch the most recent matching running subagent invocation (by call_id, then namespace)
+  const patchSubagent = useCallback(
+    (data: SseEvent, fn: (inv: SubagentInvocation) => SubagentInvocation) => {
+      setSubagentInvocations((prev) => {
+        const idx = [...prev]
+          .map((inv, i) => ({ inv, i }))
+          .reverse()
+          .find(
+            (x) =>
+              x.inv.status === "running" &&
+              ((data.call_id && x.inv.key === data.call_id) || (data.ns && x.inv.ns === data.ns)),
+          )?.i;
+        if (idx === undefined) return prev;
+        const next = [...prev];
+        next[idx] = fn(next[idx]);
+        return next;
+      });
+    },
+    [],
+  );
 
   const startNewChat = useCallback(() => {
     setSelectedId(null);
@@ -310,6 +341,7 @@ export default function RunPage() {
     reset();
     setToolCalls([]);
     setCitations([]);
+    setSummarizing(false);
     setSubagentInvocations([]);
 
     // If we're continuing a selected thread, send parent_execution_id
@@ -386,32 +418,95 @@ export default function RunPage() {
       _activeEs = es;
       let fullAnswer = "";
       let cleanDone = false;
+      // True once live tokens flow — used to ignore the per-node `message`
+      // aggregates that would otherwise duplicate the streamed text.
+      let sawTokens = false;
 
       es.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data) as SseEvent;
+          const isChild = Boolean(data.ns);
           if (data.kind === "node_update" && data.node) {
-            const order = ["planner", "worker", "synthesizer", "reflector"];
-            const idx = order.indexOf(data.node);
-            if (idx > 0) setNode(order[idx - 1], { status: "done" });
-            setNode(data.node, { status: "streaming" });
+            if (isChild) {
+              patchSubagent(data, (inv) => ({ ...inv, currentNode: data.node ?? null }));
+            } else {
+              const order = ["planner", "worker", "synthesizer", "reflector"];
+              const idx = order.indexOf(data.node);
+              if (idx > 0) setNode(order[idx - 1], { status: "done" });
+              setNode(data.node, { status: "streaming" });
+            }
           } else if (data.kind === "token" && data.text) {
-            appendToken(data.text);
-            fullAnswer += data.text;
-            setLiveAnswer(fullAnswer);
-            setPersistedLiveAnswer(fullAnswer);
-          } else if (data.kind === "tool_call" && data.tool) {
+            if (isChild) {
+              const t = data.text;
+              patchSubagent(data, (inv) => ({ ...inv, liveText: (inv.liveText ?? "") + t }));
+            } else if (data.source === "summarization") {
+              // Context compaction tokens — surface as a badge, not as answer text
+              setSummarizing(true);
+            } else {
+              sawTokens = true;
+              appendToken(data.text);
+              fullAnswer += data.text;
+              setLiveAnswer(fullAnswer);
+              setPersistedLiveAnswer(fullAnswer);
+            }
+          } else if (data.kind === "message" && data.text && !isChild) {
+            // Persisted per-node aggregate (backfill after reconnect). Skip when
+            // we already streamed the same text token by token.
+            if (!sawTokens) {
+              fullAnswer += data.text;
+              setLiveAnswer(fullAnswer);
+              setPersistedLiveAnswer(fullAnswer);
+            }
+          } else if (data.kind === "tool_call_start" && data.tool) {
+            const callId = data.call_id ?? `tc-${Date.now()}`;
             setToolCalls((prev) => [
               ...prev,
               {
-                id: `tc-${prev.length}`,
+                id: callId,
                 tool: data.tool!,
                 input: data.input ?? {},
-                output: data.output ?? "",
-                duration_ms: data.duration_ms ?? 0,
-                status: (data.status as "success" | "error") ?? "success",
+                output: "",
+                duration_ms: 0,
+                status: "success",
+                pending: true,
+                ns: data.ns,
               },
             ]);
+            if (isChild) {
+              patchSubagent(data, (inv) => ({
+                ...inv,
+                toolCalls: [...(inv.toolCalls ?? []), { callId, tool: data.tool!, status: "running" as const }],
+              }));
+            }
+          } else if (data.kind === "tool_call" && data.tool) {
+            const resolved: ToolCall = {
+              id: data.call_id ?? `tc-${Date.now()}`,
+              tool: data.tool!,
+              input: data.input ?? {},
+              output: data.output ?? "",
+              duration_ms: data.duration_ms ?? 0,
+              status: (data.status as "success" | "error") ?? "success",
+              ns: data.ns,
+            };
+            setToolCalls((prev) => {
+              const idx = data.call_id ? prev.findIndex((c) => c.id === data.call_id) : -1;
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = resolved;
+                return next;
+              }
+              return [...prev, { ...resolved, id: data.call_id ?? `tc-${prev.length}` }];
+            });
+            if (isChild) {
+              patchSubagent(data, (inv) => ({
+                ...inv,
+                toolCalls: (inv.toolCalls ?? []).map((tc) =>
+                  tc.callId === data.call_id
+                    ? { ...tc, status: data.status === "error" ? ("error" as const) : ("success" as const), durationMs: data.duration_ms ?? null }
+                    : tc,
+                ),
+              }));
+            }
           } else if (data.kind === "citations" && data.payload) {
             setCitations(data.payload as CitationSource[]);
           } else if (data.kind === "subagent_start" && data.agent_name) {
@@ -419,27 +514,33 @@ export default function RunPage() {
             setSubagentInvocations((prev) => [
               ...prev,
               {
-                key: `${agentName}-${prev.length}-${Date.now()}`,
+                key: data.call_id ?? `${agentName}-${prev.length}-${Date.now()}`,
                 agentName,
                 message: data.message ?? "",
                 status: "running",
+                ns: data.ns,
               },
             ]);
           } else if (data.kind === "subagent_done" && data.agent_name) {
             const agentName = data.agent_name!;
             setSubagentInvocations((prev) => {
-              // Resolve the most recent matching "running" invocation
-              const idx = [...prev]
-                .map((inv, i) => ({ inv, i }))
-                .reverse()
-                .find((x) => x.inv.agentName === agentName && x.inv.status === "running")?.i;
-              if (idx === undefined) return prev;
+              // Resolve by call_id first, then most recent matching "running" invocation
+              let idx = data.call_id ? prev.findIndex((inv) => inv.key === data.call_id && inv.status === "running") : -1;
+              if (idx < 0) {
+                idx =
+                  [...prev]
+                    .map((inv, i) => ({ inv, i }))
+                    .reverse()
+                    .find((x) => x.inv.agentName === agentName && x.inv.status === "running")?.i ?? -1;
+              }
+              if (idx < 0) return prev;
               const next = [...prev];
               next[idx] = {
                 ...next[idx],
                 status: data.status === "error" ? "error" : "success",
                 answer: data.answer ?? null,
                 durationMs: data.duration_ms ?? null,
+                currentNode: null,
               };
               return next;
             });
@@ -450,6 +551,7 @@ export default function RunPage() {
             fullAnswer = ans;
             setLiveAnswer(ans);
             setPersistedLiveAnswer(ans);
+            setSummarizing(false);
             setNode("synthesizer", { status: "done" });
             setHistory((prev) =>
               prev.map((e) =>
@@ -498,7 +600,7 @@ export default function RunPage() {
       setHistory((prev) => prev.filter((e) => e.id !== optimisticId));
       track("run_failed", { agent_id: agentId });
     }
-  }, [agentId, agents, message, running, reset, setNode, appendToken, setActiveExecution, refreshHistory, history, selectedId, setActiveTask, setPersistedLiveAnswer]);
+  }, [agentId, agents, message, running, reset, setNode, appendToken, setActiveExecution, refreshHistory, history, selectedId, setActiveTask, setPersistedLiveAnswer, patchSubagent]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -801,6 +903,7 @@ export default function RunPage() {
             <RunInspector
               toolCalls={toolCalls}
               citations={citations}
+              summarizing={summarizing}
               className="h-full w-full shadow-none border-0 lg:flow-card lg:rounded-[6px] lg:shadow-xl"
             />
           </div>

@@ -12,13 +12,28 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+export interface SubagentToolCall {
+  callId: string
+  tool: string
+  durationMs?: number | null
+  status: 'running' | 'success' | 'error'
+}
+
 export interface SubagentInvocation {
-  key: string  // stable id
+  key: string  // stable id (server call_id when available)
   agentName: string
   message: string
   status: 'running' | 'success' | 'error'
   answer?: string | null
   durationMs?: number | null
+  /** Stream namespace, e.g. "subagent:researcher" */
+  ns?: string
+  /** Node currently executing inside the child graph */
+  currentNode?: string | null
+  /** Live token tail streamed by the child (truncated client-side) */
+  liveText?: string
+  /** Tool calls made by the child graph */
+  toolCalls?: SubagentToolCall[]
 }
 
 interface SubagentCardProps {
@@ -85,6 +100,16 @@ export function SubagentCard({ invocation }: SubagentCardProps) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {isRunning && invocation.currentNode && (
+            <span className="rounded-full border border-flow-streaming/30 bg-flow-streaming/10 px-2 py-0.5 font-mono text-[9px] text-flow-violet">
+              {invocation.currentNode}
+            </span>
+          )}
+          {isRunning && (invocation.toolCalls?.length ?? 0) > 0 && (
+            <span className="font-mono text-[10px] text-muted-foreground/60">
+              {invocation.toolCalls!.length} tool{invocation.toolCalls!.length > 1 ? 's' : ''}
+            </span>
+          )}
           {invocation.durationMs != null && (
             <span className="font-mono text-[10px] text-muted-foreground/60">
               {(invocation.durationMs / 1000).toFixed(1)}s
@@ -104,6 +129,45 @@ export function SubagentCard({ invocation }: SubagentCardProps) {
               {invocation.message}
             </p>
           </div>
+          {(invocation.toolCalls?.length ?? 0) > 0 && (
+            <div className="space-y-1">
+              <p className="px-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                Tool calls
+              </p>
+              {invocation.toolCalls!.map((tc) => (
+                <div
+                  key={tc.callId}
+                  className="flex items-center gap-2 rounded-lg border border-flow-800 bg-muted/20 px-2.5 py-1.5"
+                >
+                  {tc.status === 'running' ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-flow-violet" />
+                  ) : tc.status === 'error' ? (
+                    <AlertCircle className="h-3 w-3 text-destructive" />
+                  ) : (
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500/80" />
+                  )}
+                  <span className="font-mono text-[11px] text-foreground/80">{tc.tool}</span>
+                  {tc.durationMs != null && (
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground/60">
+                      {tc.durationMs}ms
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {isRunning && invocation.liveText ? (
+            <div className="rounded-lg border border-flow-streaming/20 bg-flow-streaming/[0.04] px-3 py-2">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                Live output
+              </p>
+              <p className="max-h-32 overflow-hidden font-mono text-[11px] leading-relaxed text-foreground/80 whitespace-pre-wrap">
+                {invocation.liveText.length > 600
+                  ? `…${invocation.liveText.slice(-600)}`
+                  : invocation.liveText}
+              </p>
+            </div>
+          ) : null}
           {invocation.answer ? (
             <div
               className={cn(

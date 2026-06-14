@@ -25,6 +25,18 @@ async def close_arq_pool() -> None:
         _pool = None
 
 
+def _trace_carrier() -> dict[str, str]:
+    """Serialize the current OTel context (traceparent) for cross-process propagation."""
+    try:
+        from opentelemetry.propagate import inject
+
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        return carrier
+    except Exception:
+        return {}
+
+
 async def enqueue_execution(
     *,
     execution_id: UUID,
@@ -43,4 +55,5 @@ async def enqueue_execution(
         str(user_id),
         user_message,
         agent_config or {},
+        trace_carrier=_trace_carrier(),
     )

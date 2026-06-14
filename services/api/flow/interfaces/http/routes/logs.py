@@ -65,10 +65,13 @@ async def list_logs(
             EXTRACT(EPOCH FROM (e.completed_at - e.created_at)) * 1000 AS duration_ms,
             (SELECT COUNT(*) FROM execution_events ee WHERE ee.execution_id = e.id AND ee.kind = 'node_update') AS node_count,
             (SELECT COUNT(*) FROM execution_events ee WHERE ee.execution_id = e.id AND ee.kind = 'tool_call') AS tool_count,
-            (SELECT COUNT(*) FROM execution_events ee WHERE ee.execution_id = e.id AND ee.kind IN ('llm.start','llm_start')) AS llm_count,
+            (SELECT COUNT(*) FROM execution_events ee WHERE ee.execution_id = e.id AND ee.kind IN ('llm.start','llm_start','usage')) AS llm_count,
             (SELECT SUM((ee.payload->>'prompt_tokens')::int + (ee.payload->>'completion_tokens')::int)
              FROM execution_events ee
              WHERE ee.execution_id = e.id AND ee.payload->>'prompt_tokens' IS NOT NULL) AS total_tokens,
+            (SELECT SUM((ee.payload->>'cost_usd')::float)
+             FROM execution_events ee
+             WHERE ee.execution_id = e.id AND ee.payload->>'cost_usd' IS NOT NULL) AS total_cost_usd,
             (SELECT ee.payload->>'answer'
              FROM execution_events ee
              WHERE ee.execution_id = e.id AND ee.kind = 'final'
@@ -102,6 +105,7 @@ async def list_logs(
                 "tool_count": int(r["tool_count"] or 0),
                 "llm_count": int(r["llm_count"] or 0),
                 "total_tokens": int(r["total_tokens"]) if r["total_tokens"] is not None else None,
+                "total_cost_usd": round(float(r["total_cost_usd"]), 6) if r["total_cost_usd"] is not None else None,
             }
             for r in rows
         ]
@@ -340,10 +344,12 @@ async def get_log_detail(
             entry["status"] = payload.get("status", "success")
         elif ev["kind"] in ("llm.start", "llm_start"):
             entry["model"] = payload.get("model", "unknown")
-        elif ev["kind"] in ("llm.end", "llm_end"):
+        elif ev["kind"] in ("llm.end", "llm_end", "usage"):
+            entry["model"] = payload.get("model")
             entry["latency_ms"] = payload.get("latency_ms")
             entry["prompt_tokens"] = payload.get("prompt_tokens")
             entry["completion_tokens"] = payload.get("completion_tokens")
+            entry["cost_usd"] = payload.get("cost_usd")
         elif ev["kind"] == "final":
             entry["answer"] = (payload.get("answer") or "")[:500]
             entry["confidence"] = payload.get("confidence")
@@ -354,6 +360,30 @@ async def get_log_detail(
     duration_ms = None
     if row["created_at"] and row["completed_at"]:
         duration_ms = int((row["completed_at"] - row["created_at"]).total_seconds() * 1000)
+
+    # Per-node durations approximated from deltas between consecutive node_update events
+    node_durations: list[dict] = []
+    prev_ts = row["created_at"]
+    for ev in events:
+        if ev["kind"] != "node_update":
+            continue
+        payload = dict(ev["payload"]) if isinstance(ev["payload"], dict) else {}
+        node_name = payload.get("node", "unknown")
+        if payload.get("ns"):
+            node_name = f"{payload['ns']}:{node_name}"
+        d_ms = int((ev["created_at"] - prev_ts).total_seconds() * 1000) if prev_ts and ev["created_at"] else None
+        node_durations.append({"node": node_name, "duration_ms": d_ms})
+        prev_ts = ev["created_at"]
+
+    # Aggregate tokens / cost from usage events
+    total_tokens = 0
+    total_cost = 0.0
+    for ev in events:
+        payload = dict(ev["payload"]) if isinstance(ev["payload"], dict) else {}
+        if payload.get("prompt_tokens") is not None:
+            total_tokens += int(payload.get("prompt_tokens") or 0) + int(payload.get("completion_tokens") or 0)
+        if payload.get("cost_usd"):
+            total_cost += float(payload["cost_usd"])
 
     return {
         "id": str(row["id"]),
@@ -367,4 +397,7 @@ async def get_log_detail(
         "duration_ms": duration_ms,
         "timeline": timeline,
         "skills_used": skills_used,
+        "node_durations": node_durations,
+        "total_tokens": total_tokens or None,
+        "total_cost_usd": round(total_cost, 6) if total_cost else None,
     }

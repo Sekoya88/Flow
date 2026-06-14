@@ -282,11 +282,12 @@ class FlowRepository:
             error,
         )
 
-    async def insert_event(self, execution_id: UUID, kind: str, payload: dict) -> None:
-        await self._pool.execute(
+    async def insert_event(self, execution_id: UUID, kind: str, payload: dict) -> int:
+        return await self._pool.fetchval(
             """
             INSERT INTO execution_events (execution_id, kind, payload)
             VALUES ($1, $2, $3::jsonb)
+            RETURNING id
             """,
             execution_id,
             kind,

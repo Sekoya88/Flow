@@ -29,6 +29,8 @@ interface RunInspectorProps {
     chunk_index: number;
     preview: string;
   }>;
+  /** True while context-compaction (summarization) tokens are streaming */
+  summarizing?: boolean;
   className?: string;
 }
 
@@ -36,7 +38,7 @@ interface RunInspectorProps {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function RunInspector({ toolCalls, citations, className }: RunInspectorProps) {
+export function RunInspector({ toolCalls, citations, summarizing, className }: RunInspectorProps) {
   const [tab, setTab] = useState<"pipeline" | "tools" | "sources">("pipeline");
   const [collapsed, setCollapsed] = useState(false);
   const isRunning = useStore((s) => s.activeExecutionId !== null);
@@ -75,6 +77,16 @@ export function RunInspector({ toolCalls, citations, className }: RunInspectorPr
         <span className="flex-1 text-xs font-semibold text-foreground/80">
           Inspector
         </span>
+        {summarizing && (
+          <Badge
+            variant="outline"
+            className="h-5 rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0 text-[10px] text-amber-400"
+            title="The agent is compacting its context (summarization tokens are streaming)"
+          >
+            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+            summarizing
+          </Badge>
+        )}
         {isRunning && activeNodeName && (
           <Badge
             variant="outline"

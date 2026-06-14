@@ -29,6 +29,10 @@ class GraphContext:
     settings: Settings | None = None
     stream_hub: Any | None = None  # ExecutionStreamHub — avoids circular import
     store: Any | None = None  # AsyncPostgresStore for cross-thread memory
+    # Stream namespace for child runs (e.g. "subagent:researcher"). When set, events
+    # emitted by this context are tagged with `ns` so the parent run UI can scope them
+    # — mirrors deepagents' stream.subagents namespacing.
+    stream_namespace: str | None = None
 
 
 def build_deer_flow_graph(ctx: GraphContext, checkpointer: Any | None = None) -> Any:

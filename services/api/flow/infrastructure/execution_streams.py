@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
+
+from flow.infrastructure.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ExecutionStreamHub:
@@ -60,3 +65,63 @@ class ExecutionStreamHub:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+
+class ExecutionEventEmitter:
+    """Single emission path for execution events: DB persist + Redis publish + structured log.
+
+    Persisted events carry their `execution_events.id` so the SSE layer can send
+    `id:` on live frames too, making `Last-Event-ID` resume reliable mid-stream.
+    High-frequency deltas (tokens, tool output chunks) can opt out of persistence
+    with `persist=False` — they remain live-only on Redis.
+    """
+
+    def __init__(self, hub: ExecutionStreamHub, pool: Any) -> None:
+        self._hub = hub
+        self._pool = pool
+
+    async def emit(
+        self,
+        execution_id: UUID,
+        kind: str,
+        payload: dict[str, Any],
+        *,
+        persist: bool = True,
+    ) -> int | None:
+        event_id: int | None = None
+        if persist and self._pool is not None:
+            try:
+                event_id = await self._pool.fetchval(
+                    """
+                    INSERT INTO execution_events (execution_id, kind, payload)
+                    VALUES ($1, $2, $3::jsonb)
+                    RETURNING id
+                    """,
+                    execution_id,
+                    kind,
+                    json.dumps(payload),
+                )
+            except Exception as exc:
+                logger.warning("event.persist_failed", kind=kind, error=str(exc))
+        event: dict[str, Any] = {"kind": kind, **payload}
+        if event_id is not None:
+            event["id"] = event_id
+        self._hub.publish(execution_id, event)
+        try:
+            from flow.infrastructure.observability.metrics import record_event
+
+            record_event(execution_id, kind, payload)
+        except Exception:
+            pass
+        return event_id
+
+    def emit_nowait(
+        self,
+        execution_id: UUID,
+        kind: str,
+        payload: dict[str, Any],
+        *,
+        persist: bool = True,
+    ) -> None:
+        """Fire-and-forget variant for sync call sites (tool wrappers, callbacks)."""
+        asyncio.ensure_future(self.emit(execution_id, kind, payload, persist=persist))

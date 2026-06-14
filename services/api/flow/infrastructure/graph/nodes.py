@@ -45,21 +45,26 @@ def _emit_tool_call(
     output: Any,
     duration_ms: int,
     status: str = "success",
+    call_id: str | None = None,
 ) -> None:
-    """Publish a tool_call SSE event and write a KG node. No-op when stream_hub is unavailable."""
+    """Persist + publish a tool_call event and write a KG node. No-op when stream_hub is unavailable."""
     if ctx.stream_hub is None or ctx.execution_id is None:
         return
-    ctx.stream_hub.publish(
-        ctx.execution_id,
-        {
-            "kind": "tool_call",
-            "tool": tool,
-            "input": input_data,
-            "output": str(output)[:2000],
-            "duration_ms": duration_ms,
-            "status": status,
-        },
-    )
+    from flow.infrastructure.execution_streams import ExecutionEventEmitter
+
+    payload = {
+        "tool": tool,
+        "input": input_data,
+        "output": str(output)[:2000],
+        "duration_ms": duration_ms,
+        "status": status,
+    }
+    if call_id:
+        payload["call_id"] = call_id
+    if getattr(ctx, "stream_namespace", None):
+        payload["ns"] = ctx.stream_namespace
+    # Persist to execution_events (so replay/trace/logs see it) + publish to Redis.
+    ExecutionEventEmitter(ctx.stream_hub, ctx.pool).emit_nowait(ctx.execution_id, "tool_call", payload)
 
     # Write tool_call node to KG (fire-and-forget)
     import asyncio
@@ -78,6 +83,39 @@ def _emit_tool_call(
         )
     except Exception:
         pass
+
+
+def _emit_tool_call_start(ctx: GraphContext, tool: str, input_data: dict, call_id: str) -> None:
+    """Live-only `tool_call_start` event so the UI can render an in-flight tool call."""
+    if ctx.stream_hub is None or ctx.execution_id is None:
+        return
+    from flow.infrastructure.execution_streams import ExecutionEventEmitter
+
+    payload: dict[str, Any] = {"tool": tool, "input": input_data, "call_id": call_id}
+    if getattr(ctx, "stream_namespace", None):
+        payload["ns"] = ctx.stream_namespace
+    ExecutionEventEmitter(ctx.stream_hub, ctx.pool).emit_nowait(ctx.execution_id, "tool_call_start", payload, persist=False)
+
+
+def _publish_agent_and_exec(ctx: GraphContext, event: dict, *, persist: bool = True) -> None:
+    """Publish an agent observability event AND mirror it onto the execution SSE.
+
+    Keeps the legacy `agent_events:{agent_id}` channel intact (FlowIsland / WS
+    consumers) while making the same signal visible on the run stream — the web
+    `/run` page no longer needs a second socket.
+    """
+    if ctx.stream_hub is None:
+        return
+    if ctx.agent_id is not None:
+        ctx.stream_hub.publish_agent_event(ctx.agent_id, event)
+    if ctx.execution_id is not None:
+        from flow.infrastructure.execution_streams import ExecutionEventEmitter
+
+        payload = {k: v for k, v in event.items() if k != "type"}
+        if getattr(ctx, "stream_namespace", None):
+            payload["ns"] = ctx.stream_namespace
+        kind = str(event.get("type") or "agent_event")
+        ExecutionEventEmitter(ctx.stream_hub, ctx.pool).emit_nowait(ctx.execution_id, kind, payload, persist=persist)
 
 
 DEFAULT_TOOLS = {
@@ -240,8 +278,8 @@ def make_planner(ctx: GraphContext):
                     skills_block = loader.format_xml(matched)
                     matched_skill_dicts = loader.to_state_dicts(matched)
                     if ctx.stream_hub:
-                        ctx.stream_hub.publish_agent_event(
-                            ctx.agent_id, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]}
+                        _publish_agent_and_exec(
+                            ctx, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]}
                         )
             except Exception:
                 pass
@@ -297,8 +335,8 @@ def make_planner(ctx: GraphContext):
                 todo_lines = [re.sub(r"^(\d+[\.\)]\s*|\*\s*|-\s*)", "", ln).strip() for ln in plan.split("\n") if ln.strip()]
                 todos = [{"status": "pending", "content": t} for t in todo_lines if t]
                 if todos:
-                    ctx.stream_hub.publish_agent_event(
-                        ctx.agent_id,
+                    _publish_agent_and_exec(
+                        ctx,
                         {
                             "type": "todo_update",
                             "todos": todos,
@@ -667,8 +705,8 @@ Output ONLY valid JSON:
                         "mutations_count": len(mutations),
                     }
                     if ctx.stream_hub:
-                        ctx.stream_hub.publish_agent_event(
-                            ctx.agent_id,
+                        _publish_agent_and_exec(
+                            ctx,
                             {
                                 "type": "metacog_evaluated",
                                 "grade": grade,
@@ -692,13 +730,14 @@ Output ONLY valid JSON:
                         if sid:
                             await bandit.update(ctx.agent_id, _UUID(sid), reward)
                             if ctx.stream_hub:
-                                ctx.stream_hub.publish_agent_event(
-                                    ctx.agent_id,
+                                _publish_agent_and_exec(
+                                    ctx,
                                     {
                                         "type": "skill_arm_updated",
                                         "skill_id": sid,
                                         "reward": reward,
                                     },
+                                    persist=False,
                                 )
                 except Exception:
                     pass  # bandit updates are best-effort
@@ -873,6 +912,42 @@ def _check_tool_prereqs(tool_name: str, ctx: GraphContext) -> str | None:
     return None
 
 
+# Context offloading thresholds (deepagents context-engineering pattern): tool
+# outputs above _OFFLOAD_THRESHOLD chars are persisted as an `artifact` event and
+# replaced in the LLM context by a preview + reference.
+_OFFLOAD_THRESHOLD = 6000
+_OFFLOAD_STORE_CAP = 60000
+
+
+async def _offload_large_output(ctx: GraphContext, tool_name: str, text: str, call_id: str) -> str:
+    """Persist oversized tool output out-of-band; return a context-friendly preview."""
+    if len(text) <= _OFFLOAD_THRESHOLD:
+        return text
+    parent_exec_id = getattr(ctx, "execution_id", None)
+    artifact_id = None
+    if parent_exec_id is not None and ctx.pool is not None:
+        try:
+            repo = FlowRepository(ctx.pool)
+            payload: dict = {
+                "tool": tool_name,
+                "call_id": call_id,
+                "content": text[:_OFFLOAD_STORE_CAP],
+                "chars": len(text),
+            }
+            ns = getattr(ctx, "stream_namespace", None)
+            if ns:
+                payload["ns"] = ns
+            artifact_id = await repo.insert_event(parent_exec_id, "artifact", payload)
+        except Exception:
+            _node_logger.warning("offload.persist_failed", tool=tool_name)
+    ref = f"artifact event #{artifact_id}" if artifact_id else "the execution event store"
+    return (
+        text[:_OFFLOAD_THRESHOLD]
+        + f"\n\n[... output truncated — {len(text)} chars total. Full output offloaded to {ref}. "
+        "Work from this preview; do not re-run the tool just to see the rest.]"
+    )
+
+
 async def _build_context_tools(ctx: GraphContext) -> list:
     """Return LangChain StructuredTool list enabled in agent config."""
     from langchain_core.tools import StructuredTool
@@ -887,13 +962,17 @@ async def _build_context_tools(ctx: GraphContext) -> list:
         prereq_err = _check_tool_prereqs(tool_name, ctx)
         if prereq_err:
             return f"[tool_monitor] {prereq_err}"
+        call_id = str(uuid.uuid4())
+        _emit_tool_call_start(ctx, tool_name, input_data, call_id)
         t0 = time.time()
         try:
             result = await coro
-            _emit_tool_call(ctx, tool_name, input_data, result, int((time.time() - t0) * 1000))
+            _emit_tool_call(ctx, tool_name, input_data, result, int((time.time() - t0) * 1000), call_id=call_id)
+            if isinstance(result, str):
+                result = await _offload_large_output(ctx, tool_name, result, call_id)
             return result
         except Exception as exc:
-            _emit_tool_call(ctx, tool_name, input_data, str(exc), int((time.time() - t0) * 1000), "error")
+            _emit_tool_call(ctx, tool_name, input_data, str(exc), int((time.time() - t0) * 1000), "error", call_id=call_id)
             raise
 
     if enabled.get("tavily_search"):
@@ -982,10 +1061,12 @@ async def _build_context_tools(ctx: GraphContext) -> list:
 
         async def _sandbox(code: str) -> str:
             t0 = time.time()
+            call_id = str(uuid.uuid4())
+            _emit_tool_call_start(ctx, "sandbox", {"code": code[:300]}, call_id)
             sandbox = get_sandbox()
             result = await sandbox.run(code)
-            _emit_tool_call(ctx, "sandbox", {"code": code[:300]}, result[:1000], int((time.time() - t0) * 1000))
-            return result
+            _emit_tool_call(ctx, "sandbox", {"code": code[:300]}, result[:1000], int((time.time() - t0) * 1000), call_id=call_id)
+            return await _offload_large_output(ctx, "sandbox", result, call_id)
 
         lc_tools.append(
             StructuredTool.from_function(
@@ -1003,10 +1084,12 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             if not ctx.openai_api_key:
                 return "(knowledge search requires OpenAI API key)"
             t0 = time.time()
+            call_id = str(uuid.uuid4())
+            _emit_tool_call_start(ctx, "knowledge_search", {"query": query}, call_id)
             q_emb = (await emb_svc.embed_texts(api_key=ctx.openai_api_key, texts=[query]))[0]
             rows = await repo.search_knowledge(ctx.workspace_id, q_emb, limit=6)
             chunks = [r["content"] for r in rows]
-            _emit_tool_call(ctx, "knowledge_search", {"query": query}, f"{len(chunks)} chunks", int((time.time() - t0) * 1000))
+            _emit_tool_call(ctx, "knowledge_search", {"query": query}, f"{len(chunks)} chunks", int((time.time() - t0) * 1000), call_id=call_id)
             return "\n\n---\n\n".join(chunks) or "(no results)"
 
         lc_tools.append(
@@ -1026,6 +1109,11 @@ async def _build_context_tools(ctx: GraphContext) -> list:
     async def _subagent_call(agent_name: str, message: str) -> str:
         t0 = time.time()
         call_id = str(uuid.uuid4())
+        # Depth cap — namespaces compose as "subagent:a/subagent:b"; refuse deeper nesting.
+        _parent_ns = getattr(ctx, "stream_namespace", None) or ""
+        if _parent_ns.count("subagent:") >= 2:
+            return "[subagent_call] Max subagent depth (2) reached — answer directly instead."
+        _child_ns = f"{_parent_ns}/subagent:{agent_name}" if _parent_ns else f"subagent:{agent_name}"
         # Emit start event so the parent run UI can render the inline card immediately
         hub = getattr(ctx, "stream_hub", None)
         parent_exec_id = getattr(ctx, "execution_id", None)
@@ -1037,6 +1125,8 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                         "kind": "subagent_start",
                         "agent_name": agent_name,
                         "message": message[:500],
+                        "ns": _child_ns,
+                        "call_id": call_id,
                     },
                 )
             except Exception:
@@ -1067,6 +1157,8 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                     {
                         "agent_name": agent_name,
                         "message": message[:500],
+                        "ns": _child_ns,
+                        "call_id": call_id,
                     },
                 )
             except Exception:
@@ -1092,10 +1184,15 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                             "answer": err,
                             "duration_ms": int((time.time() - t0) * 1000),
                             "status": "error",
+                            "ns": _child_ns,
+                            "call_id": call_id,
                         },
                     )
                 return err
             sub_config = target["config"] if isinstance(target["config"], dict) else {}
+            # Child shares the parent stream hub + execution id with a namespace so
+            # its node updates / tokens / tool calls surface on the parent run SSE
+            # (deepagents-style stream.subagents). Persisted child events carry `ns`.
             sub_ctx = _GCtx(
                 pool=ctx.pool,
                 workspace_id=ctx.workspace_id,
@@ -1104,20 +1201,60 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 openai_api_key=ctx.openai_api_key,
                 agent_config=sub_config,
                 anthropic_api_key=ctx.anthropic_api_key,
-                execution_id=None,
+                execution_id=parent_exec_id,
                 settings=ctx.settings,
-                stream_hub=None,  # sub-runs don't stream to parent SSE
+                stream_hub=hub,
+                stream_namespace=_child_ns,
             )
             graph = build_deer_flow_graph(sub_ctx)
             from langchain_core.messages import HumanMessage as _HM
 
-            result_state = await graph.ainvoke({"messages": [_HM(content=message)]})
+            from flow.infrastructure.execution_streams import ExecutionEventEmitter as _Emitter
+
+            _emitter = _Emitter(hub, ctx.pool) if (hub is not None and parent_exec_id is not None) else None
+            result_state: dict = {}
+            # Context isolation budget (deepagents pattern): the child returns a dense
+            # summary instead of dumping its full working context into the parent.
+            _budgeted_message = (
+                f"{message}\n\n"
+                "[You are running as a subagent. Reply with a final summary under 500 words "
+                "containing only the information the calling agent needs.]"
+            )
+            async for _mode, _chunk in graph.astream(
+                {"messages": [_HM(content=_budgeted_message)]},
+                stream_mode=["updates", "messages", "values"],
+            ):
+                if _mode == "values":
+                    result_state = _chunk if isinstance(_chunk, dict) else result_state
+                elif _mode == "updates" and _emitter is not None:
+                    for _node_name, _partial in (_chunk or {}).items():
+                        await _emitter.emit(
+                            parent_exec_id,
+                            "node_update",
+                            {
+                                "node": _node_name,
+                                "ns": _child_ns,
+                                "call_id": call_id,
+                                "summary": f"{_child_ns} · {_node_name}",
+                            },
+                        )
+                elif _mode == "messages" and _emitter is not None:
+                    _msg_chunk, _meta = _chunk
+                    _content = getattr(_msg_chunk, "content", None)
+                    if isinstance(_content, str) and _content:
+                        _node_name = _meta.get("langgraph_node", "") if isinstance(_meta, dict) else ""
+                        await _emitter.emit(
+                            parent_exec_id,
+                            "token",
+                            {"text": _content, "node": _node_name, "ns": _child_ns, "call_id": call_id},
+                            persist=False,
+                        )
             answer = result_state.get("answer") or result_state.get("worker_output") or ""
             if not answer:
                 msgs = result_state.get("messages") or []
                 answer = str(msgs[-1].content) if msgs else "(no answer)"
             duration_ms = int((time.time() - t0) * 1000)
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms)
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms, call_id=call_id)
             # Stream done event + persist
             if hub is not None and parent_exec_id is not None:
                 try:
@@ -1130,6 +1267,8 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                             "answer": str(answer)[:4000],
                             "duration_ms": duration_ms,
                             "status": "success",
+                            "ns": _child_ns,
+                            "call_id": call_id,
                         },
                     )
                 except Exception:
@@ -1162,6 +1301,8 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                             "answer": str(answer)[:4000],
                             "duration_ms": duration_ms,
                             "status": "success",
+                            "ns": _child_ns,
+                            "call_id": call_id,
                         },
                     )
                 except Exception:
@@ -1169,7 +1310,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             return str(answer)[:4000]
         except Exception as exc:
             duration_ms = int((time.time() - t0) * 1000)
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error")
+            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error", call_id=call_id)
             if hub is not None and parent_exec_id is not None:
                 try:
                     hub.publish(
@@ -1180,6 +1321,8 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                             "answer": str(exc),
                             "duration_ms": duration_ms,
                             "status": "error",
+                            "ns": _child_ns,
+                            "call_id": call_id,
                         },
                     )
                 except Exception:

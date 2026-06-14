@@ -104,3 +104,89 @@ def test_on_llm_end_includes_token_usage(handler):
 
 def test_on_chain_error_does_not_raise(handler):
     handler.on_chain_error(Exception("boom"), run_id=uuid4())
+
+
+# ── Cost estimation ────────────────────────────────────────────────────────
+
+
+def test_estimate_cost_usd_known_model():
+    from flow.infrastructure.observability.callbacks import _estimate_cost_usd
+
+    # gpt-4o-mini: (0.15, 0.60) per 1M tokens → 1000 in + 500 out
+    cost = _estimate_cost_usd("gpt-4o-mini", 1000, 500)
+    assert cost == round((1000 * 0.15 + 500 * 0.60) / 1_000_000, 6)
+
+
+def test_estimate_cost_usd_matches_by_prefix():
+    from flow.infrastructure.observability.callbacks import _estimate_cost_usd
+
+    # Provider often suffixes a date/version — prefix match must still resolve.
+    assert _estimate_cost_usd("gpt-4o-mini-2024-07-18", 1000, 0) is not None
+
+
+def test_estimate_cost_usd_unknown_model_returns_none():
+    from flow.infrastructure.observability.callbacks import _estimate_cost_usd
+
+    assert _estimate_cost_usd("some-unknown-model", 1000, 500) is None
+
+
+# ── Usage event emission ───────────────────────────────────────────────────
+
+
+class _SpyEmitter:
+    def __init__(self):
+        self.events: list[tuple] = []
+
+    def emit_nowait(self, execution_id, kind, payload):
+        self.events.append((execution_id, kind, payload))
+
+
+def test_on_llm_end_emits_usage_event_with_cost():
+    from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+
+    emitter = _SpyEmitter()
+    exec_uuid = uuid4()
+    h = FlowCallbackHandler(execution_id=str(exec_uuid), emitter=emitter)
+    run_id = uuid4()
+    h.on_llm_start({"kwargs": {"model_name": "gpt-4o-mini"}}, ["hi"], run_id=run_id)
+    response = LLMResult(
+        generations=[[]],
+        llm_output={"token_usage": {"prompt_tokens": 1000, "completion_tokens": 500}},
+    )
+    h.on_llm_end(response, run_id=run_id)
+
+    assert len(emitter.events) == 1
+    eid, kind, payload = emitter.events[0]
+    assert eid == exec_uuid
+    assert kind == "usage"
+    assert payload["model"] == "gpt-4o-mini"
+    assert payload["prompt_tokens"] == 1000
+    assert payload["completion_tokens"] == 500
+    assert "cost_usd" in payload
+
+
+def test_no_usage_event_without_token_usage():
+    from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+
+    emitter = _SpyEmitter()
+    h = FlowCallbackHandler(execution_id=str(uuid4()), emitter=emitter)
+    run_id = uuid4()
+    h._llm_start_times[run_id] = time.monotonic()
+    h.on_llm_end(LLMResult(generations=[[]]), run_id=run_id)
+    assert emitter.events == []
+
+
+def test_invalid_execution_id_disables_emission():
+    from flow.infrastructure.observability.callbacks import FlowCallbackHandler
+
+    emitter = _SpyEmitter()
+    h = FlowCallbackHandler(execution_id="not-a-uuid", emitter=emitter)
+    assert h._execution_id is None
+    run_id = uuid4()
+    h._llm_start_times[run_id] = time.monotonic()
+    response = LLMResult(
+        generations=[[]],
+        llm_output={"token_usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+    )
+    h.on_llm_end(response, run_id=run_id)
+    assert emitter.events == []

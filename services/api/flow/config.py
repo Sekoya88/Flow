@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     otel_endpoint: str | None = None
     sentry_dsn: str | None = None
     prometheus_enabled: bool = True
+    # Prometheus /metrics port for the ARQ worker process (0 = disabled).
+    worker_metrics_port: int = 9100
     redis_url: str = "redis://localhost:6379/0"
     sandbox_driver: str = "unsafe"  # FLOW_SANDBOX_DRIVER — "e2b" | "docker" | "unsafe"
     e2b_api_key: str | None = None  # FLOW_E2B_API_KEY

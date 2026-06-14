@@ -117,6 +117,10 @@ async def get_execution_replay(
     for ev in node_updates:
         payload = dict(ev["payload"])
         node_name = payload.get("node", "unknown")
+        # Namespace subagent child nodes so they don't merge with parent nodes in the DAG.
+        ns = payload.get("ns")
+        if ns:
+            node_name = f"{ns}:{node_name}"
         if node_name not in node_first_visit:
             node_first_visit[node_name] = len(node_first_visit)
         node_visit_count[node_name] = node_visit_count.get(node_name, 0) + 1
@@ -193,7 +197,13 @@ async def stream_execution(
                 return
 
         async for event in request.app.state.stream_hub.subscribe(execution_id):
-            yield f"data: {json.dumps(event)}\n\n"
+            # Persisted events carry their execution_events.id — forward it as the SSE
+            # event id so Last-Event-ID resume works mid-stream, not only on backfill.
+            ev_id = event.get("id")
+            if isinstance(ev_id, int):
+                yield f"id: {ev_id}\ndata: {json.dumps(event)}\n\n"
+            else:
+                yield f"data: {json.dumps(event)}\n\n"
             if event.get("kind") == "done":
                 break
 
@@ -228,17 +238,25 @@ async def approve_execution(
     # Patch state: set approved=True so human_gate condition passes
     await checkpointer.aput(config, {"approved": True}, {}, {})
 
-    # Re-enqueue so the worker picks up and resumes from the interrupt point
+    # Re-enqueue so the worker picks up and resumes from the interrupt point.
+    # NB: ARQ task is registered as "run_deer_execution" and requires agent_config.
     from flow.infrastructure.queue.client import get_arq_pool
+
+    agent_row = await repo.get_agent(row["agent_id"], row["workspace_id"])
+    raw_cfg = agent_row["config"] if agent_row else {}
+    if isinstance(raw_cfg, str):
+        raw_cfg = json.loads(raw_cfg or "{}")
+    agent_config = dict(raw_cfg) if isinstance(raw_cfg, dict) else {}
 
     arq = await get_arq_pool()
     await arq.enqueue_job(
-        "task_run_deer_execution",
+        "run_deer_execution",
         str(execution_id),
         str(row["workspace_id"]),
         str(row["agent_id"]),
         str(user_id),
         "",  # user_message empty — state already has messages
+        agent_config,
     )
 
     return {"ok": True, "execution_id": str(execution_id)}

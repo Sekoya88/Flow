@@ -29,6 +29,15 @@ async def startup(ctx: dict) -> None:
         service="flow-worker",
         force_colors=settings.log_force_colors,
     )
+    # OTel: continuous traces enqueue (API) → run (worker) via traceparent in job payloads.
+    from flow.infrastructure.observability.tracing import setup_tracing
+
+    setup_tracing(service_name="flow-worker", otlp_endpoint=settings.otel_endpoint)
+    if settings.worker_metrics_port:
+        from flow.infrastructure.observability.metrics import start_metrics_server
+
+        if start_metrics_server(settings.worker_metrics_port):
+            logger.info("worker.metrics", port=settings.worker_metrics_port)
     pool = await create_pool(settings)
     checkpoint_pool = build_checkpoint_pool(settings.database_url)
     await checkpoint_pool.open()
@@ -68,6 +77,7 @@ async def task_run_deer_execution(
     user_message: str,
     agent_config: dict,
     schedule_id: str | None = None,
+    trace_carrier: dict | None = None,
 ) -> None:
     import structlog
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -79,22 +89,38 @@ async def task_run_deer_execution(
         workspace_id=workspace_id,
         template=template,
     )
+    # Resume the API-side trace (traceparent injected at enqueue) so OTel shows
+    # one continuous trace: HTTP request → queue → worker run → nodes → tools.
+    from opentelemetry import trace as _otel_trace
+    from opentelemetry.propagate import extract as _otel_extract
+
+    _parent_ctx = _otel_extract(trace_carrier or {})
+    _tracer = _otel_trace.get_tracer("flow.worker")
     try:
-        checkpointer = AsyncPostgresSaver(ctx["checkpoint_pool"])
-        await run_deer_execution(
-            pool=ctx["pool"],
-            settings=ctx["settings"],
-            stream_hub=ctx["stream_hub"],
-            checkpointer=checkpointer,
-            execution_id=UUID(execution_id),
-            workspace_id=UUID(workspace_id),
-            agent_id=UUID(agent_id),
-            user_id=UUID(user_id),
-            user_message=user_message,
-            agent_config=agent_config,
-            schedule_id=schedule_id,
-            store=ctx.get("memory_store"),
-        )
+        with _tracer.start_as_current_span(
+            "execution.run",
+            context=_parent_ctx,
+            attributes={
+                "flow.execution_id": execution_id,
+                "flow.agent_id": agent_id,
+                "flow.template": template,
+            },
+        ):
+            checkpointer = AsyncPostgresSaver(ctx["checkpoint_pool"])
+            await run_deer_execution(
+                pool=ctx["pool"],
+                settings=ctx["settings"],
+                stream_hub=ctx["stream_hub"],
+                checkpointer=checkpointer,
+                execution_id=UUID(execution_id),
+                workspace_id=UUID(workspace_id),
+                agent_id=UUID(agent_id),
+                user_id=UUID(user_id),
+                user_message=user_message,
+                agent_config=agent_config,
+                schedule_id=schedule_id,
+                store=ctx.get("memory_store"),
+            )
     finally:
         structlog.contextvars.unbind_contextvars("execution_id", "agent_id", "workspace_id", "template")
 

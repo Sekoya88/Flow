@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, Clock, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Loader2, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,10 @@ export interface ToolCall {
   output: string;
   duration_ms: number;
   status: "success" | "error";
+  /** True while the tool is in flight (tool_call_start received, no result yet) */
+  pending?: boolean;
+  /** Subagent namespace, e.g. "subagent:researcher" */
+  ns?: string;
 }
 
 const TOOL_COLORS: Record<string, string> = {
@@ -46,12 +50,23 @@ function ToolCallRow({ call }: { call: ToolCall }) {
         <Badge variant="outline" className={cn("h-5 rounded px-1.5 py-0 font-mono text-[10px]", color)}>
           {call.tool}
         </Badge>
+        {call.ns && (
+          <Badge variant="outline" className="h-5 rounded px-1.5 py-0 font-mono text-[9px] border-flow-violet/30 bg-flow-violet/10 text-flow-violet">
+            {call.ns.split("/").pop()?.replace("subagent:", "→ ")}
+          </Badge>
+        )}
         {call.status === "error" && (
           <span className="text-[10px] text-destructive">error</span>
         )}
         <span className="ml-auto flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
-          <Clock className="h-2.5 w-2.5" aria-hidden />
-          {call.duration_ms}ms
+          {call.pending ? (
+            <Loader2 className="h-2.5 w-2.5 animate-spin text-flow-violet" aria-hidden />
+          ) : (
+            <>
+              <Clock className="h-2.5 w-2.5" aria-hidden />
+              {call.duration_ms}ms
+            </>
+          )}
         </span>
       </button>
 

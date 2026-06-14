@@ -58,6 +58,7 @@ type ExecutionRow = {
   tool_count: number;
   llm_count: number;
   total_tokens: number | null;
+  total_cost_usd: number | null;
 };
 
 type TimelineEvent = {
@@ -73,6 +74,7 @@ type TimelineEvent = {
   latency_ms?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
+  cost_usd?: number;
   answer?: string;
   confidence?: number;
   message?: string;
@@ -96,6 +98,9 @@ type LogDetail = {
   duration_ms: number | null;
   timeline: TimelineEvent[];
   skills_used: SkillUsed[];
+  node_durations?: { node: string; duration_ms: number | null }[];
+  total_tokens?: number | null;
+  total_cost_usd?: number | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -137,6 +142,10 @@ const EVENT_KINDS: Record<string, { icon: React.FC<{ className?: string }>; colo
   token:          { icon: Terminal,       color: "text-muted-foreground", label: "Token" },
   citations:      { icon: MessageSquare,  color: "text-sky-400",      label: "Citations" },
   skill_invoked:  { icon: Sparkles,       color: "text-flow-violet",  label: "Skill" },
+  usage:          { icon: Radio,          color: "text-violet-300",   label: "Usage" },
+  message:        { icon: MessageSquare,  color: "text-muted-foreground", label: "Message" },
+  subagent_start: { icon: Sparkles,       color: "text-flow-violet",  label: "Subagent" },
+  subagent_done:  { icon: Sparkles,       color: "text-flow-violet",  label: "Subagent" },
 };
 
 // ── Status badge ──────────────────────────────────────────────────────
@@ -166,7 +175,7 @@ function EventRow({ ev }: { ev: TimelineEvent }) {
   let detail = "";
   if (ev.node) detail = ev.node;
   else if (ev.tool) detail = `${ev.tool}${ev.duration_ms ? ` · ${ev.duration_ms}ms` : ""}`;
-  else if (ev.model) detail = ev.model;
+  else if (ev.model) detail = `${ev.model}${ev.cost_usd ? ` · $${ev.cost_usd.toFixed(4)}` : ""}`;
   else if (ev.latency_ms) detail = `${ev.latency_ms}ms`;
   else if (ev.answer) detail = ev.answer.slice(0, 120);
   else if (ev.message) detail = ev.message;
@@ -241,6 +250,26 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
           </div>
         </div>
       )}
+      {/* Usage summary */}
+      {(detail.total_tokens || detail.node_durations?.length) ? (
+        <div className="px-3 py-2 border-b border-border/20 flex items-center gap-3 flex-wrap">
+          {detail.total_tokens ? (
+            <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+              <Terminal className="h-3 w-3" />{fmtTokens(detail.total_tokens)}
+            </span>
+          ) : null}
+          {detail.total_cost_usd ? (
+            <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+              <Gauge className="h-3 w-3" />${detail.total_cost_usd.toFixed(4)}
+            </span>
+          ) : null}
+          {detail.node_durations?.filter((n) => n.duration_ms !== null).map((n, i) => (
+            <span key={`${n.node}-${i}`} className="text-[10px] text-muted-foreground/60 font-mono">
+              {n.node} {fmtDuration(n.duration_ms)}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {/* Answer preview */}
       {detail.timeline.find(e => e.kind === "final")?.answer && (
         <div className="px-3 py-2 border-b border-border/20">
@@ -334,6 +363,11 @@ function ExecutionLogRow({ exec }: { exec: ExecutionRow }) {
             {exec.total_tokens !== null && (
               <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                 <Terminal className="h-3 w-3" />{fmtTokens(exec.total_tokens)}
+              </span>
+            )}
+            {exec.total_cost_usd !== null && exec.total_cost_usd !== undefined && (
+              <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                <Gauge className="h-3 w-3" />${exec.total_cost_usd.toFixed(4)}
               </span>
             )}
           </div>
