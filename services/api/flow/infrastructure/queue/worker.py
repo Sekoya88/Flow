@@ -456,6 +456,46 @@ async def task_run_skill_training(
     return {"run_id": run_id, "accepted": final_accepted, "best_score": best_score}
 
 
+def _build_compaction_llm(settings) -> object | None:
+    """Cheap judge model for memory summarization. None if no key configured."""
+    api_key = getattr(settings, "openai_api_key", None)
+    if not api_key:
+        return None
+    try:
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0)
+    except Exception:
+        return None
+
+
+async def memory_compaction_tick(ctx: dict) -> None:
+    """Nightly (02:00 UTC): fold aging agent memory into TIER 2 summaries and prune.
+
+    Walks every agent's fact namespace in the LangGraph memory store and runs one
+    compaction pass. Best-effort per agent so one failure can't abort the sweep.
+    """
+    pool = ctx.get("pool")
+    store = ctx.get("memory_store")
+    if pool is None or store is None:
+        return
+    llm = _build_compaction_llm(ctx.get("settings"))
+    rows = await pool.fetch("SELECT id, workspace_id FROM agents")
+    from flow.application.memory_compaction import compact_namespace
+
+    totals = {"pruned": 0, "compressed": 0, "summaries": 0}
+    for row in rows:
+        facts_ns = (str(row["workspace_id"]), str(row["id"]), "facts")
+        summaries_ns = (str(row["workspace_id"]), str(row["id"]), "summaries")
+        try:
+            res = await compact_namespace(store, facts_ns, summaries_ns, llm=llm)
+            for k in totals:
+                totals[k] += res.get(k, 0)
+        except Exception as exc:
+            logger.warning("memory.compaction.agent_failed", agent_id=str(row["id"]), error=str(exc))
+    logger.info("memory.compaction.done", **totals)
+
+
 async def skill_training_tick(ctx: dict) -> None:
     """Daily cron (05:00 UTC): enqueue training for skills with training_mode='react'.
 
@@ -523,6 +563,7 @@ class WorkerSettings:
         arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
         arq.cron(research_digest_tick, hour=8, minute=0, run_at_startup=False),
         arq.cron(skill_training_tick, hour=5, minute=0, run_at_startup=False),
+        arq.cron(memory_compaction_tick, hour=2, minute=0, run_at_startup=False),
     ]
     on_startup = startup
     on_shutdown = shutdown

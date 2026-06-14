@@ -6,6 +6,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
 
+from flow.application.memory_compaction import new_fact, reinforce
 from flow.application.memory_judge import extract_facts_from_answer, extract_pattern_summary
 from flow.application.preference_service import (
     auto_graduate,
@@ -24,8 +25,12 @@ def _stable_key(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:32]
 
 
-def _format_memory_block(facts: list, patterns: list) -> str:
+def _format_memory_block(facts: list, patterns: list, summaries: list | None = None) -> str:
     lines = ["[Memory from previous runs]"]
+    if summaries:
+        lines.append("Summaries (older memory, compressed):")
+        for s in summaries:
+            lines.append(f"  • {s.value.get('text', '')}")
     if facts:
         lines.append("Facts:")
         for f in facts:
@@ -122,18 +127,38 @@ class FlowMemoryMiddleware(AgentMiddleware):
         # (nodes.py uses (str(ws), str(agent), ...)). UUID tuples read a different namespace.
         ns_facts = (str(runtime.workspace_id), str(runtime.agent_id), "facts")
         ns_patterns = (str(runtime.workspace_id), str(runtime.agent_id), "patterns")
+        ns_summaries = (str(runtime.workspace_id), str(runtime.agent_id), "summaries")
 
         try:
             facts = await self._store.asearch(ns_facts, query=query, limit=self._max_facts)
             patterns = await self._store.asearch(ns_patterns, query=query, limit=3)
-            if facts or patterns:
-                prepend.append(SystemMessage(content=_format_memory_block(facts, patterns)))
+            try:
+                summaries = await self._store.asearch(ns_summaries, query=query, limit=2)
+            except Exception:
+                summaries = []
+            if facts or patterns or summaries:
+                prepend.append(SystemMessage(content=_format_memory_block(facts, patterns, summaries)))
+            # Reinforce the facts we actually surfaced: recall bumps salience and
+            # recency so frequently-used memory resists decay/pruning.
+            await self._reinforce_facts(ns_facts, facts)
         except Exception as exc:
             logger.warning("memory.before_agent.search_failed", error=str(exc))
 
         if not prepend:
             return state
         return {**state, "messages": prepend + messages}
+
+    async def _reinforce_facts(self, ns_facts: tuple, items: list) -> None:
+        """Bump score + recency on the facts we surfaced this run. Best-effort."""
+        for it in items:
+            value = getattr(it, "value", None)
+            key = getattr(it, "key", None)
+            if not value or not key:
+                continue
+            try:
+                await self._store.aput(ns_facts, key, reinforce(value))
+            except Exception:
+                pass
 
     async def after_agent(self, state: dict, runtime: HarnessRuntime) -> None:
         if not self._llm:
@@ -155,7 +180,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
             for fact in facts:
                 key = _stable_key(fact)
                 emb = await self._embed(fact) if self._embed else None
-                await self._store.aput(ns_facts, key, {"text": fact, "emb": emb})
+                await self._store.aput(ns_facts, key, new_fact(fact, emb))
         except Exception as exc:
             logger.warning("memory.after_agent.extract_failed", error=str(exc))
 
