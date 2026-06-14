@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from flow.application.cv_import_service import (
     extract_cv_text_from_bytes,
     run_cv_preference_extraction,
+    run_cv_preference_extraction_streamed,
 )
 from flow.application.preference_service import (
     auto_graduate,
@@ -108,9 +109,10 @@ async def submit_onboarding(
 async def import_cv(
     workspace_id: UUID = Form(...),  # noqa: B008
     file: UploadFile = File(...),  # noqa: B008
+    stream: bool = Query(False, description="Stream progress as SSE (cv.start / cv.shard / cv.done)"),
     user_id: Annotated[UUID, Depends(get_current_user_id)] = ...,
     repo: Annotated[FlowRepository, Depends(get_repo)] = ...,
-) -> dict:
+):
     await _assert_workspace_access(repo, user_id, workspace_id)
 
     is_pdf = (file.content_type or "") == "application/pdf" or (file.filename or "").endswith(".pdf")
@@ -125,19 +127,41 @@ async def import_cv(
         raise HTTPException(status_code=413, detail="file exceeds 5 MB limit")
 
     text = extract_cv_text_from_bytes(raw, is_pdf=is_pdf)
-
     settings = get_settings()
-    prefs, _meta = await run_cv_preference_extraction(settings, text)
 
-    for item in prefs:
-        await repo.upsert_typed_preference(
-            workspace_id,
-            user_id,
-            item["class"],
-            item["value"],
-            initial_status="candidate",
+    async def _persist(prefs: list[dict]) -> None:
+        for item in prefs:
+            await repo.upsert_typed_preference(
+                workspace_id,
+                user_id,
+                item["class"],
+                item["value"],
+                initial_status="candidate",
+            )
+
+    if stream:
+        import json as _json
+
+        from fastapi.responses import StreamingResponse
+
+        async def _event_gen():
+            async for ev in run_cv_preference_extraction_streamed(settings, text):
+                if ev.get("kind") == "cv.done":
+                    prefs = ev.pop("rows", [])
+                    await _persist(prefs)
+                    ev["extracted"] = len(prefs)
+                    ev["preview"] = prefs
+                    ev["staged"] = True
+                yield f"data: {_json.dumps(ev)}\n\n"
+
+        return StreamingResponse(
+            _event_gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    prefs, _meta = await run_cv_preference_extraction(settings, text)
+    await _persist(prefs)
     return {"extracted": len(prefs), "preview": prefs, "staged": True}
 
 

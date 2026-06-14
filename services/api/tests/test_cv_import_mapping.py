@@ -60,3 +60,22 @@ def test_parse_subagent_tool_payloads_reads_task_json() -> None:
 def test_parse_ignores_non_task_messages() -> None:
     msgs = [AIMessage(content="ok"), ToolMessage(content="not-json", tool_call_id="1", name="other")]
     assert parse_subagent_tool_payloads(msgs) == (None, None, None)
+
+
+def test_streamed_extraction_falls_back_to_regex_without_model() -> None:
+    """No API key → no Deep Agent → single regex-only cv.done event."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from flow.application.cv_import_service import run_cv_preference_extraction_streamed
+
+    settings = SimpleNamespace(anthropic_api_key="", openai_api_key="")
+
+    async def _collect() -> list[dict]:
+        return [ev async for ev in run_cv_preference_extraction_streamed(settings, "I code in Python.")]
+
+    events = asyncio.run(_collect())
+    assert len(events) == 1
+    assert events[0]["kind"] == "cv.done"
+    assert events[0]["meta"]["deep_agent"] is False
+    assert isinstance(events[0]["rows"], list)
