@@ -55,9 +55,15 @@ async def get_stream_sse_user(
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     stream_jwt: Annotated[str | None, Query(description="From POST /executions/{id}/stream-token")] = None,
-    access_token: Annotated[str | None, Query()] = None,
 ) -> UUID:
-    """Prefer `stream_jwt` (scoped to this execution). Fallback: Bearer or legacy `access_token` query."""
+    """Authorize an SSE stream.
+
+    Browsers cannot set headers on EventSource, so the supported path is a
+    short-lived, execution-scoped `stream_jwt` (minted by POST .../stream-token).
+    Non-browser clients may instead send a full Bearer token in the header. The
+    legacy full-scope `access_token` query param was removed: it leaked a
+    long-lived JWT into URLs, access logs, and browser history.
+    """
     if stream_jwt:
         try:
             uid, eid = decode_stream_token(settings.jwt_secret, stream_jwt)
@@ -66,14 +72,9 @@ async def get_stream_sse_user(
         if eid != execution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="stream token execution mismatch")
         return uid
-    token: str | None = None
     if creds and creds.scheme.lower() == "bearer":
-        token = creds.credentials
-    elif access_token:
-        token = access_token
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
-    try:
-        return decode_token(settings.jwt_secret, token)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+        try:
+            return decode_token(settings.jwt_secret, creds.credentials)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
