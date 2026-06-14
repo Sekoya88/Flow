@@ -33,6 +33,10 @@ class GraphContext:
     # emitted by this context are tagged with `ns` so the parent run UI can scope them
     # — mirrors deepagents' stream.subagents namespacing.
     stream_namespace: str | None = None
+    # Least-privilege tool ceiling inherited from a parent agent. None = unrestricted.
+    # A subagent's effective tools are its own enabled set ∩ this ceiling, so a child
+    # can never call a tool the parent could not.
+    parent_tool_scope: list[str] | None = None
 
 
 def build_deer_flow_graph(ctx: GraphContext, checkpointer: Any | None = None) -> Any:

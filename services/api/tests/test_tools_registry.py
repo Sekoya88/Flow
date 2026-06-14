@@ -62,3 +62,42 @@ def test_knowledge_tool_uses_executor_key() -> None:
     names = _registry_names()
     assert "retrieve" in names
     assert "knowledge_search" not in names  # old name read a key the executor ignored
+
+
+# ── tool_scope least-privilege ──────────────────────────────────────────────
+
+
+def test_no_scope_anywhere_is_unrestricted() -> None:
+    from flow.infrastructure.tools.registry import resolve_tool_scope
+
+    assert resolve_tool_scope({}, None) is None
+    assert resolve_tool_scope({"tool_scope": "*"}, None) is None
+
+
+def test_own_scope_limits_tools() -> None:
+    from flow.infrastructure.tools.registry import resolve_tool_scope
+
+    assert resolve_tool_scope({"tool_scope": ["retrieve", "sandbox"]}, None) == {"retrieve", "sandbox"}
+
+
+def test_child_cannot_widen_parent_scope() -> None:
+    from flow.infrastructure.tools.registry import resolve_tool_scope
+
+    parent = ["retrieve", "tavily_search"]
+    # Child asks for more than the parent allows → intersection only.
+    child_cfg = {"tool_scope": ["retrieve", "sandbox", "subagent_call"]}
+    assert resolve_tool_scope(child_cfg, parent) == {"retrieve"}
+
+
+def test_child_inherits_parent_ceiling_when_child_unrestricted() -> None:
+    from flow.infrastructure.tools.registry import resolve_tool_scope
+
+    assert resolve_tool_scope({}, ["retrieve"]) == {"retrieve"}
+
+
+def test_is_tool_allowed() -> None:
+    from flow.infrastructure.tools.registry import is_tool_allowed
+
+    assert is_tool_allowed("retrieve", None) is True  # unrestricted
+    assert is_tool_allowed("retrieve", {"retrieve"}) is True
+    assert is_tool_allowed("sandbox", {"retrieve"}) is False

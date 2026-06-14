@@ -53,6 +53,42 @@ def names_for_agent(agent_config: dict[str, Any]) -> list[str]:
     return enabled
 
 
+def resolve_tool_scope(
+    agent_config: dict[str, Any],
+    parent_scope: list[str] | None = None,
+) -> set[str] | None:
+    """Compute the least-privilege ceiling of tool names this agent may use.
+
+    - ``tool_scope`` in the config is an allowlist; ``"*"`` (or missing) = no
+      ceiling of its own.
+    - ``parent_scope`` is the ceiling inherited from a calling agent. A subagent
+      can never widen its parent's scope, so the two are intersected.
+
+    Returns a set of allowed names, or ``None`` meaning "unrestricted" (no
+    allowlist anywhere in the chain). Callers still apply the per-tool on/off
+    toggles separately — this only caps what *can* be enabled.
+    """
+    own = agent_config.get("tool_scope")
+    own_set: set[str] | None
+    if own in (None, "*") or not isinstance(own, list):
+        own_set = None
+    else:
+        own_set = {str(n) for n in own}
+
+    parent_set = set(parent_scope) if parent_scope is not None else None
+
+    if own_set is None:
+        return parent_set
+    if parent_set is None:
+        return own_set
+    return own_set & parent_set
+
+
+def is_tool_allowed(name: str, scope: set[str] | None) -> bool:
+    """True if *name* is permitted under *scope* (None = unrestricted)."""
+    return scope is None or name in scope
+
+
 # ---------------------------------------------------------------------------
 # Built-in tool registrations
 # ---------------------------------------------------------------------------

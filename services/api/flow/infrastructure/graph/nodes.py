@@ -953,9 +953,19 @@ async def _build_context_tools(ctx: GraphContext) -> list:
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, Field
 
+    from flow.infrastructure.tools.registry import is_tool_allowed, resolve_tool_scope
+
     enabled: dict = ctx.agent_config.get("tools") or {}
     settings = ctx.settings
     lc_tools: list = []
+
+    # Least-privilege ceiling: a tool must be both toggled on AND within scope.
+    # Subagents inherit the parent ceiling (ctx.parent_tool_scope) so a child can
+    # never call a tool the parent could not.
+    _scope = resolve_tool_scope(ctx.agent_config, getattr(ctx, "parent_tool_scope", None))
+
+    def _tool_enabled(name: str) -> bool:
+        return bool(enabled.get(name)) and is_tool_allowed(name, _scope)
 
     async def _emit_wrap(tool_name: str, coro, input_data: dict):
         # Tool monitor: check prerequisites before invoking
@@ -975,7 +985,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             _emit_tool_call(ctx, tool_name, input_data, str(exc), int((time.time() - t0) * 1000), "error", call_id=call_id)
             raise
 
-    if enabled.get("tavily_search"):
+    if _tool_enabled("tavily_search"):
         from flow.infrastructure.tools.web import run_tavily_search
 
         class TavilyArgs(BaseModel):
@@ -999,7 +1009,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             )
         )
 
-    if enabled.get("fetch_webpage"):
+    if _tool_enabled("fetch_webpage"):
         from flow.infrastructure.tools.web import run_fetch_webpage
 
         class FetchArgs(BaseModel):
@@ -1015,7 +1025,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             )
         )
 
-    if enabled.get("arxiv_search"):
+    if _tool_enabled("arxiv_search"):
         from flow.infrastructure.tools.web import run_arxiv_search
 
         class ArxivArgs(BaseModel):
@@ -1035,7 +1045,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             )
         )
 
-    if enabled.get("hf_papers"):
+    if _tool_enabled("hf_papers"):
         from flow.infrastructure.tools.web import run_hf_papers
 
         class HFPapersArgs(BaseModel):
@@ -1054,7 +1064,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             )
         )
 
-    if enabled.get("sandbox"):
+    if _tool_enabled("sandbox"):
 
         class SandboxArgs(BaseModel):
             code: str = Field(description="Python code to execute")
@@ -1074,7 +1084,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             )
         )
 
-    if enabled.get("retrieve"):
+    if _tool_enabled("retrieve"):
         repo = FlowRepository(ctx.pool)
 
         class KnowledgeArgs(BaseModel):
@@ -1190,6 +1200,11 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                     )
                 return err
             sub_config = target["config"] if isinstance(target["config"], dict) else {}
+            # Least-privilege: the child inherits the parent's resolved tool ceiling
+            # so it can never call a tool the parent could not.
+            from flow.infrastructure.tools.registry import resolve_tool_scope as _resolve_scope
+
+            _parent_scope = _resolve_scope(ctx.agent_config, getattr(ctx, "parent_tool_scope", None))
             # Child shares the parent stream hub + execution id with a namespace so
             # its node updates / tokens / tool calls surface on the parent run SSE
             # (deepagents-style stream.subagents). Persisted child events carry `ns`.
@@ -1205,6 +1220,7 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 settings=ctx.settings,
                 stream_hub=hub,
                 stream_namespace=_child_ns,
+                parent_tool_scope=sorted(_parent_scope) if _parent_scope is not None else None,
             )
             graph = build_deer_flow_graph(sub_ctx)
             from langchain_core.messages import HumanMessage as _HM
@@ -1343,16 +1359,17 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 )
             return f"[subagent_call] Error: {exc}"
 
-    lc_tools.append(
-        StructuredTool.from_function(
-            coroutine=_subagent_call,
-            name="subagent_call",
-            description="Invoke another agent in this workspace as a subagent. Returns the subagent's answer. Use when you need to delegate a subtask to a specialized agent.",
-            args_schema=SubagentArgs,
+    if is_tool_allowed("subagent_call", _scope):
+        lc_tools.append(
+            StructuredTool.from_function(
+                coroutine=_subagent_call,
+                name="subagent_call",
+                description="Invoke another agent in this workspace as a subagent. Returns the subagent's answer. Use when you need to delegate a subtask to a specialized agent.",
+                args_schema=SubagentArgs,
+            )
         )
-    )
 
-    if enabled.get("use_mcp") and ctx.pool:
+    if _tool_enabled("use_mcp") and ctx.pool:
         from flow.infrastructure.llm.mcp_client import get_mcp_tools_for_agent
 
         try:
