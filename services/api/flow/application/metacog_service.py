@@ -185,6 +185,92 @@ Return ONLY valid JSON array:
             logger.debug("metacog.propose_mutations failed: %s", exc)
             return []
 
+    async def file_mutation_proposal(
+        self,
+        agent_id: UUID,
+        workspace_id: UUID,
+        mutations: list[Mutation],
+        *,
+        grade: int,
+        execution_id: UUID | None = None,
+        min_confidence: float = 0.6,
+        rate_limit_hours: int = 24,
+    ) -> UUID | None:
+        """Surface high-confidence metacog mutations as a reviewable proposal.
+
+        Closes the metacog → proposal loop: mutations used to die in the journal,
+        invisible. Now the strong ones become a pending proposal a human can
+        review (and, on approval, the existing proposals flow can act on).
+
+        Rate-limited: skips if a metacog proposal for this agent is already
+        pending or was filed within ``rate_limit_hours``. Returns the proposal id,
+        or None if nothing was filed.
+        """
+        strong = [m for m in mutations if m.confidence >= min_confidence]
+        if not strong:
+            return None
+
+        title_marker = f"[Metacog] Agent {str(agent_id)[:8]} — "
+        try:
+            recent = await self._pool.fetchval(
+                """
+                SELECT count(*) FROM proposals
+                WHERE workspace_id = $1
+                  AND title LIKE $2
+                  AND (status = 'pending' OR created_at > now() - ($3 || ' hours')::interval)
+                """,
+                workspace_id,
+                title_marker + "%",
+                str(rate_limit_hours),
+            )
+            if recent and int(recent) > 0:
+                return None
+
+            owner = await self._pool.fetchrow(
+                """SELECT user_id FROM workspace_members
+                   WHERE workspace_id = $1
+                   ORDER BY (role = 'owner') DESC LIMIT 1""",
+                workspace_id,
+            )
+            if not owner:
+                return None
+
+            body = json.dumps(
+                {
+                    "kind": "metacog_mutation",
+                    "agent_id": str(agent_id),
+                    "execution_id": str(execution_id) if execution_id else None,
+                    "grade": grade,
+                    "mutations": [
+                        {
+                            "mutation_type": m.mutation_type,
+                            "target": m.target,
+                            "description": m.description,
+                            "confidence": m.confidence,
+                        }
+                        for m in strong
+                    ],
+                    "summary": (
+                        f"Metacognition graded a run {grade}/5 and proposed "
+                        f"{len(strong)} high-confidence improvement(s). Review before applying."
+                    ),
+                }
+            )
+            proposal_id = uuid4()
+            await self._pool.execute(
+                """INSERT INTO proposals (id, workspace_id, user_id, title, body, status)
+                   VALUES ($1, $2, $3, $4, $5, 'pending')""",
+                proposal_id,
+                workspace_id,
+                owner["user_id"],
+                title_marker + strong[0].description[:60],
+                body,
+            )
+            return proposal_id
+        except Exception as exc:
+            logger.debug("metacog.file_mutation_proposal failed: %s", exc)
+            return None
+
     async def update_journal(
         self,
         agent_id: UUID,

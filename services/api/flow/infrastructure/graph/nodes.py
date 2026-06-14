@@ -698,6 +698,17 @@ Output ONLY valid JSON:
                     )
                     await metacog.update_journal(ctx.agent_id, ctx.workspace_id, entry)
 
+                    # Close the loop: surface strong mutations as a reviewable
+                    # proposal instead of leaving them to die in the journal.
+                    if mutations:
+                        await metacog.file_mutation_proposal(
+                            ctx.agent_id,
+                            ctx.workspace_id,
+                            mutations,
+                            grade=grade,
+                            execution_id=ctx.execution_id,
+                        )
+
                     metacog_state = {
                         "grade": grade,
                         "calibration_error": cal_error,
