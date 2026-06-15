@@ -66,7 +66,7 @@ export function HeroCanvas({ className }: { className?: string }) {
     lineGeo.setAttribute("position", new THREE.BufferAttribute(linePositions, 3));
     lineGeo.setAttribute("color", new THREE.BufferAttribute(lineColors, 3));
 
-    const lineMat = new THREE.LineSegmentsMaterial({
+    const lineMat = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
       opacity: 1,
