@@ -143,12 +143,7 @@ async def _apply_rubric_loop(
                             '{"satisfied": <bool>, "feedback": "<what to fix, empty if satisfied>"}'
                         )
                     ),
-                    HumanMessage(
-                        content=(
-                            f"Criteria:\n{crit_block}\n\nUser request:\n{user_message[:1500]}\n\n"
-                            f"Answer:\n{str(answer)[:6000]}"
-                        )
-                    ),
+                    HumanMessage(content=(f"Criteria:\n{crit_block}\n\nUser request:\n{user_message[:1500]}\n\nAnswer:\n{str(answer)[:6000]}")),
                 ]
             )
             raw = str(out.content).strip()

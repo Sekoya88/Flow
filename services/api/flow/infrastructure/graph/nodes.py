@@ -278,9 +278,7 @@ def make_planner(ctx: GraphContext):
                     skills_block = loader.format_xml(matched)
                     matched_skill_dicts = loader.to_state_dicts(matched)
                     if ctx.stream_hub:
-                        _publish_agent_and_exec(
-                            ctx, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]}
-                        )
+                        _publish_agent_and_exec(ctx, {"type": "skills_matched", "skills": [{"name": s.name, "version": s.version} for s in matched]})
             except Exception:
                 pass
 
@@ -953,8 +951,7 @@ async def _offload_large_output(ctx: GraphContext, tool_name: str, text: str, ca
             _node_logger.warning("offload.persist_failed", tool=tool_name)
     ref = f"artifact event #{artifact_id}" if artifact_id else "the execution event store"
     return (
-        text[:_OFFLOAD_THRESHOLD]
-        + f"\n\n[... output truncated — {len(text)} chars total. Full output offloaded to {ref}. "
+        text[:_OFFLOAD_THRESHOLD] + f"\n\n[... output truncated — {len(text)} chars total. Full output offloaded to {ref}. "
         "Work from this preview; do not re-run the tool just to see the rest.]"
     )
 
@@ -1281,7 +1278,9 @@ async def _build_context_tools(ctx: GraphContext) -> list:
                 msgs = result_state.get("messages") or []
                 answer = str(msgs[-1].content) if msgs else "(no answer)"
             duration_ms = int((time.time() - t0) * 1000)
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms, call_id=call_id)
+            _emit_tool_call(
+                ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(answer)[:500], duration_ms, call_id=call_id
+            )
             # Stream done event + persist
             if hub is not None and parent_exec_id is not None:
                 try:
@@ -1337,7 +1336,9 @@ async def _build_context_tools(ctx: GraphContext) -> list:
             return str(answer)[:4000]
         except Exception as exc:
             duration_ms = int((time.time() - t0) * 1000)
-            _emit_tool_call(ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error", call_id=call_id)
+            _emit_tool_call(
+                ctx, "subagent_call", {"agent_name": agent_name, "message": message[:200]}, str(exc), duration_ms, "error", call_id=call_id
+            )
             if hub is not None and parent_exec_id is not None:
                 try:
                     hub.publish(

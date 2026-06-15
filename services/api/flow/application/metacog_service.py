@@ -251,8 +251,7 @@ Return ONLY valid JSON array:
                         for m in strong
                     ],
                     "summary": (
-                        f"Metacognition graded a run {grade}/5 and proposed "
-                        f"{len(strong)} high-confidence improvement(s). Review before applying."
+                        f"Metacognition graded a run {grade}/5 and proposed {len(strong)} high-confidence improvement(s). Review before applying."
                     ),
                 }
             )
