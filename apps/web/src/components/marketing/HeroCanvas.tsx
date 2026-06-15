@@ -3,12 +3,12 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-const NODE_COUNT = 90;
-const MAX_LINK_DIST = 140;
-const SPEED = 0.18;
-const GLOW_SIZE = 5.5;
-const MOUSE_PULL = 0.0012;
-const MOUSE_RANGE = 220;
+const NODE_COUNT = 110;
+const MAX_LINK_DIST = 160;
+const SPEED = 0.2;
+const GLOW_SIZE = 7;
+const MOUSE_PULL = 0.0016;
+const MOUSE_RANGE = 260;
 
 export function HeroCanvas({ className }: { className?: string }) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -47,11 +47,11 @@ export function HeroCanvas({ className }: { className?: string }) {
     pointGeo.setAttribute("position", new THREE.BufferAttribute(ptPositions, 3));
 
     const pointMat = new THREE.PointsMaterial({
-      color: 0xc4b5fd,
+      color: 0xd8b4fe,
       size: GLOW_SIZE,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.95,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -78,11 +78,11 @@ export function HeroCanvas({ className }: { className?: string }) {
 
     /* ── secondary faint halo layer ── */
     const haloMat = new THREE.PointsMaterial({
-      color: 0xa78bfa,
-      size: GLOW_SIZE * 2.8,
+      color: 0xc084fc,
+      size: GLOW_SIZE * 3.5,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.35,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
