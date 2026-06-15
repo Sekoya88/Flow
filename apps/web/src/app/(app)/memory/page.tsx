@@ -229,7 +229,12 @@ export default function MemoryPage() {
           </Label>
           <Select value={agentId ?? undefined} onValueChange={(v) => v != null && setAgentId(v)}>
             <SelectTrigger className="w-full bg-card sm:w-[280px]">
-              <SelectValue />
+              <SelectValue placeholder="Agent">
+                {() => {
+                  const a = agents.find((x) => x.id === agentId);
+                  return a ? agentDisplayName(a) : "Agent";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {agents.map((a) => (

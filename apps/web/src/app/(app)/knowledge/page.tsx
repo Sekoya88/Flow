@@ -78,7 +78,7 @@ function SourceDetailDrawer({
 
   return (
     <Sheet open={source !== null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="flex w-[min(100vw-1rem,32rem)] flex-col gap-0 sm:max-w-lg">
+      <SheetContent side="right" className="flex h-dvh w-[min(100vw-1rem,32rem)] flex-col gap-0 overflow-hidden sm:max-w-lg">
         <SheetHeader className="border-b border-flow-800 pb-4 text-left">
           <SheetTitle className="pr-8 line-clamp-2">{source?.title ?? "Source"}</SheetTitle>
           <SheetDescription>
