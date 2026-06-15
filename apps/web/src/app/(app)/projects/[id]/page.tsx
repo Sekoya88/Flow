@@ -71,6 +71,21 @@ type ProjectRun = {
   digest_run_id: string | null;
 };
 
+type Paper = {
+  id: string;
+  title: string;
+  abstract: string | null;
+  source_url: string | null;
+  arxiv_id: string | null;
+  authors: string[];
+  categories: string[];
+  relevance_score: number | null;
+  tldr: string | null;
+  status: string | null;
+  obsidian_path: string | null;
+  published_at: string | null;
+};
+
 // ── Inline SVG sparkline ──────────────────────────────────────────────────────
 function RunSparkline({ runs }: { runs: ProjectRun[] }) {
   const data = [...runs].reverse().map((r) => r.papers_processed);
@@ -107,6 +122,8 @@ export default function ProjectDetailPage() {
   const [saving, setSaving] = useState(false);
   const [runs, setRuns] = useState<ProjectRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [papers, setPapers] = useState<Paper[]>([]);
+  const [expandedPaper, setExpandedPaper] = useState<string | null>(null);
   const [liveEvents, setLiveEvents] = useState<{ kind: string; payload: Record<string, unknown>; ts: number }[]>([]);
   const liveAbortRef = useRef<AbortController | null>(null);
   const [exportingRunId, setExportingRunId] = useState<string | null>(null);
@@ -117,12 +134,14 @@ export default function ProjectDetailPage() {
     setLoading(true);
     setRunsLoading(true);
     try {
-      const [p, runsData] = await Promise.all([
+      const [p, runsData, papersData] = await Promise.all([
         apiFetch<Project>(`/api/v1/projects/${id}`),
         apiFetch<{ runs: ProjectRun[] }>(`/api/v1/projects/${id}/runs`).catch(() => ({ runs: [] })),
+        apiFetch<{ papers: Paper[] }>(`/api/v1/projects/${id}/papers`).catch(() => ({ papers: [] })),
       ]);
       setProject(p);
       setRuns(runsData.runs);
+      setPapers(papersData.papers);
       setForm({
         name: p.name,
         goal: p.goal,
@@ -458,6 +477,85 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Research papers — full transparency into what was ingested */}
+      <div className="space-y-3">
+        <h2 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+          <BookOpen className="h-3 w-3" />
+          Research Papers
+          {papers.length > 0 && (
+            <span className="rounded-full bg-flow-violet/15 px-1.5 text-flow-violet">{papers.length}</span>
+          )}
+        </h2>
+
+        {papers.length === 0 ? (
+          <p className="rounded-[6px] border border-flow-800 p-4 text-center font-mono text-[11px] text-muted-foreground/40">
+            No papers yet. Run the digest to fetch and ingest research.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {papers.map((paper) => {
+              const score = paper.relevance_score ?? 0;
+              const scoreColor =
+                score >= 0.7 ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
+                : score >= 0.4 ? "text-amber-400 border-amber-500/30 bg-amber-500/5"
+                : "text-flow-500 border-flow-700 bg-flow-900";
+              const open = expandedPaper === paper.id;
+              const link = paper.source_url || (paper.arxiv_id ? `https://arxiv.org/abs/${paper.arxiv_id}` : null);
+              return (
+                <div key={paper.id} className="rounded-[6px] border border-flow-800 bg-flow-900/30 p-3 space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <span className={cn("shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums", scoreColor)}>
+                      {(score * 100).toFixed(0)}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      {link ? (
+                        <a href={link} target="_blank" rel="noreferrer" className="block text-sm font-medium text-foreground hover:text-flow-violet transition-colors">
+                          {paper.title}
+                        </a>
+                      ) : (
+                        <p className="text-sm font-medium text-foreground">{paper.title}</p>
+                      )}
+                      {paper.tldr && <p className="text-[12px] leading-relaxed text-muted-foreground">{paper.tldr}</p>}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {paper.status && (
+                          <span className="rounded bg-flow-800/60 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-flow-400">
+                            {paper.status}
+                          </span>
+                        )}
+                        {paper.categories.slice(0, 4).map((c) => (
+                          <span key={c} className="rounded border border-flow-700/50 px-1.5 py-0.5 font-mono text-[9px] text-flow-300">
+                            {c}
+                          </span>
+                        ))}
+                        {paper.abstract && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedPaper(open ? null : paper.id)}
+                            className="font-mono text-[9px] text-flow-violet hover:underline"
+                          >
+                            {open ? "hide abstract" : "abstract"}
+                          </button>
+                        )}
+                        {paper.obsidian_path && (
+                          <span className="font-mono text-[9px] text-emerald-400/70" title="Exported to Obsidian">
+                            ✓ obsidian
+                          </span>
+                        )}
+                      </div>
+                      {open && paper.abstract && (
+                        <p className="mt-1 rounded bg-flow-950/50 p-2 text-[11px] leading-relaxed text-muted-foreground/80">
+                          {paper.abstract}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

@@ -189,9 +189,16 @@ async def trigger_project(
 
         stream_hub = getattr(request.app.state, "stream_hub", None)
         result = await run_research_digest(workspace_id=workspace_id_str, config=config, stream_hub=stream_hub)
-        persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
         digest_run_id_str: str | None = result.get("digest_run_id") if isinstance(result, dict) else None
         digest_run_uuid: UUID | None = UUID(digest_run_id_str) if digest_run_id_str else None
+
+        # Authoritative count: rows actually written for this run. persisted_ids
+        # from the graph state can be stale/empty even when papers were ingested
+        # (papers move between runs on ON CONFLICT), so count the table directly.
+        if digest_run_uuid is not None:
+            persisted = await repo.count_digest_run_papers(digest_run_uuid)
+        else:
+            persisted = len(result.get("persisted_ids", [])) if isinstance(result, dict) else 0
 
         # KG node count after run
         nodes_after_row = await repo._pool.fetchrow(
@@ -263,5 +270,40 @@ async def list_project_runs(
                 "created_at": r["created_at"].isoformat(),
             }
             for r in runs
+        ]
+    }
+
+
+@router.get("/projects/{project_id}/papers")
+async def list_project_papers(
+    project_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Full transparency: every research paper this project has ingested."""
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM research_projects WHERE id = $1", project_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="project not found")
+    await _assert_workspace_access(user_id, row["workspace_id"], repo)
+
+    papers = await repo.get_project_papers(project_id)
+    return {
+        "papers": [
+            {
+                "id": str(p["id"]),
+                "title": p["title"],
+                "abstract": p["abstract"],
+                "source_url": p["source_url"],
+                "arxiv_id": p["arxiv_id"],
+                "authors": list(p["authors"] or []),
+                "categories": list(p["categories"] or []),
+                "relevance_score": float(p["relevance_score"]) if p["relevance_score"] is not None else None,
+                "tldr": p["tldr"],
+                "status": p["status"],
+                "obsidian_path": p["obsidian_path"],
+                "published_at": p["published_at"].isoformat() if p["published_at"] else None,
+                "digest_run_id": str(p["digest_run_id"]) if p["digest_run_id"] else None,
+            }
+            for p in papers
         ]
     }

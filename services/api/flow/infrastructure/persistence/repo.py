@@ -2005,6 +2005,33 @@ class FlowRepository:
             run_id,
         )
 
+    async def count_digest_run_papers(self, run_id: UUID) -> int:
+        """Authoritative count of papers actually persisted for a digest run."""
+        return int(await self._pool.fetchval("SELECT count(*) FROM digest_papers WHERE digest_run_id = $1", run_id) or 0)
+
+    async def get_project_papers(self, project_id: UUID, limit: int = 200) -> list:
+        """Return every paper ingested across this project's digest runs.
+
+        Papers are linked to digest runs; a project owns digest runs via
+        project_runs.digest_run_id. Most relevant first — full transparency into
+        what the project has actually ingested.
+        """
+        return await self._pool.fetch(
+            """
+            SELECT dp.id, dp.title, dp.abstract, dp.source_url, dp.arxiv_id,
+                   dp.authors, dp.categories, dp.relevance_score, dp.tldr,
+                   dp.key_insights, dp.obsidian_path, dp.status, dp.published_at,
+                   dp.digest_run_id
+            FROM digest_papers dp
+            JOIN project_runs pr ON pr.digest_run_id = dp.digest_run_id
+            WHERE pr.project_id = $1
+            ORDER BY dp.relevance_score DESC NULLS LAST
+            LIMIT $2
+            """,
+            project_id,
+            limit,
+        )
+
     async def get_workspace_vault_path(
         self,
         workspace_id: UUID,
