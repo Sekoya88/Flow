@@ -72,6 +72,11 @@ services:
       FLOW_QDRANT_COLLECTION: flow_knowledge
       FLOW_AGENTIC_RAG_ENABLED: "true"
       FLOW_TAVILY_API_KEY: ${FLOW_TAVILY_API_KEY:-}
+      # Obsidian vault is bind-mounted at /vault below. The app MUST read the
+      # in-container path, not the host path from .env — otherwise digest export
+      # 400s with "vault path does not exist". Mirrors the mcp service.
+      FLOW_OBSIDIAN_MODE: filesystem
+      FLOW_OBSIDIAN_VAULT_PATH: /vault
       FLOW_LANGSMITH_TRACING: ${FLOW_LANGSMITH_TRACING:-true}
       FLOW_LANGSMITH_API_KEY: ${FLOW_LANGSMITH_API_KEY:-}
       FLOW_LANGSMITH_PROJECT: ${FLOW_LANGSMITH_PROJECT:-flow-docker}
@@ -116,6 +121,10 @@ services:
       FLOW_QDRANT_COLLECTION: flow_knowledge
       FLOW_AGENTIC_RAG_ENABLED: "true"
       FLOW_TAVILY_API_KEY: ${FLOW_TAVILY_API_KEY:-}
+      # See api service: the worker also runs digest export, so it must read the
+      # in-container vault path, not the host path from .env.
+      FLOW_OBSIDIAN_MODE: filesystem
+      FLOW_OBSIDIAN_VAULT_PATH: /vault
       FLOW_LANGSMITH_TRACING: ${FLOW_LANGSMITH_TRACING:-true}
       FLOW_LANGSMITH_API_KEY: ${FLOW_LANGSMITH_API_KEY:-}
       FLOW_LANGSMITH_PROJECT: ${FLOW_LANGSMITH_PROJECT:-flow-docker}

@@ -670,7 +670,9 @@ async def export_digest_to_obsidian(
         raise HTTPException(status_code=404, detail="digest run not found")
 
     ws_id = run_row["workspace_id"]
-    vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get("FLOW_OBSIDIAN_VAULT_PATH")
+    # Default to the in-container mount (/vault), matching the papers export, so a
+    # workspace with no explicit path still resolves to the bind-mounted vault.
+    vault_str = await repo.get_workspace_vault_path(ws_id) or os.environ.get("FLOW_OBSIDIAN_VAULT_PATH") or "/vault"
     if not vault_str:
         raise HTTPException(
             status_code=400,
