@@ -124,6 +124,41 @@ export default function ProjectDetailPage() {
   const [runsLoading, setRunsLoading] = useState(false);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [expandedPaper, setExpandedPaper] = useState<string | null>(null);
+  const [references, setReferences] = useState<{ name: string; title: string }[]>([]);
+  const [refsFolder, setRefsFolder] = useState<string | null>(null);
+  const [exportingRefs, setExportingRefs] = useState(false);
+  const [exportRefsResult, setExportRefsResult] = useState<string | null>(null);
+
+  async function loadReferences() {
+    if (!id) return;
+    try {
+      const r = await apiFetch<{ folder: string; files: { name: string; title: string }[] }>(
+        `/api/v1/projects/${id}/references`,
+      );
+      setReferences(r.files);
+      setRefsFolder(r.folder);
+    } catch {
+      setReferences([]);
+    }
+  }
+
+  async function exportReferences() {
+    if (!id) return;
+    setExportingRefs(true);
+    setExportRefsResult(null);
+    try {
+      const r = await apiFetch<{ exported: number; skipped: number; folder: string }>(
+        `/api/v1/projects/${id}/export-references`,
+        { method: "POST", json: {} },
+      );
+      setExportRefsResult(`Exported ${r.exported} references${r.skipped ? ` (${r.skipped} skipped)` : ""}`);
+      await loadReferences();
+    } catch (e) {
+      setExportRefsResult(`Error: ${String(e)}`);
+    } finally {
+      setExportingRefs(false);
+    }
+  }
   const [liveEvents, setLiveEvents] = useState<{ kind: string; payload: Record<string, unknown>; ts: number }[]>([]);
   const liveAbortRef = useRef<AbortController | null>(null);
   const [exportingRunId, setExportingRunId] = useState<string | null>(null);
@@ -142,6 +177,7 @@ export default function ProjectDetailPage() {
       setProject(p);
       setRuns(runsData.runs);
       setPapers(papersData.papers);
+      void loadReferences();
       setForm({
         name: p.name,
         goal: p.goal,
@@ -496,7 +532,7 @@ export default function ProjectDetailPage() {
             No papers yet. Run the digest to fetch and ingest research.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {papers.map((paper) => {
               const score = paper.relevance_score ?? 0;
               const scoreColor =
@@ -506,56 +542,104 @@ export default function ProjectDetailPage() {
               const open = expandedPaper === paper.id;
               const link = paper.source_url || (paper.arxiv_id ? `https://arxiv.org/abs/${paper.arxiv_id}` : null);
               return (
-                <div key={paper.id} className="rounded-[6px] border border-flow-800 bg-flow-900/30 p-3 space-y-2">
-                  <div className="flex items-start gap-2.5">
+                <div
+                  key={paper.id}
+                  className="flex flex-col gap-2 rounded-[8px] border border-flow-800 bg-flow-900/30 p-3.5 transition-colors hover:border-flow-violet/40"
+                >
+                  <div className="flex items-start justify-between gap-2">
                     <span className={cn("shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums", scoreColor)}>
                       {(score * 100).toFixed(0)}
                     </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      {link ? (
-                        <a href={link} target="_blank" rel="noreferrer" className="block text-sm font-medium text-foreground hover:text-flow-violet transition-colors">
-                          {paper.title}
-                        </a>
-                      ) : (
-                        <p className="text-sm font-medium text-foreground">{paper.title}</p>
-                      )}
-                      {paper.tldr && <p className="text-[12px] leading-relaxed text-muted-foreground">{paper.tldr}</p>}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        {paper.status && (
-                          <span className="rounded bg-flow-800/60 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-flow-400">
-                            {paper.status}
-                          </span>
-                        )}
-                        {paper.categories.slice(0, 4).map((c) => (
-                          <span key={c} className="rounded border border-flow-700/50 px-1.5 py-0.5 font-mono text-[9px] text-flow-300">
-                            {c}
-                          </span>
-                        ))}
-                        {paper.abstract && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedPaper(open ? null : paper.id)}
-                            className="font-mono text-[9px] text-flow-violet hover:underline"
-                          >
-                            {open ? "hide abstract" : "abstract"}
-                          </button>
-                        )}
-                        {paper.obsidian_path && (
-                          <span className="font-mono text-[9px] text-emerald-400/70" title="Exported to Obsidian">
-                            ✓ obsidian
-                          </span>
-                        )}
-                      </div>
-                      {open && paper.abstract && (
-                        <p className="mt-1 rounded bg-flow-950/50 p-2 text-[11px] leading-relaxed text-muted-foreground/80">
-                          {paper.abstract}
-                        </p>
-                      )}
-                    </div>
+                    {paper.obsidian_path && (
+                      <span className="font-mono text-[9px] text-emerald-400/70" title="Exported to Obsidian">
+                        ✓ obsidian
+                      </span>
+                    )}
                   </div>
+                  {link ? (
+                    <a href={link} target="_blank" rel="noreferrer" className="text-sm font-medium leading-snug text-foreground hover:text-flow-violet transition-colors line-clamp-3">
+                      {paper.title}
+                    </a>
+                  ) : (
+                    <p className="text-sm font-medium leading-snug text-foreground line-clamp-3">{paper.title}</p>
+                  )}
+                  {paper.tldr && (
+                    <p className={cn("text-[12px] leading-relaxed text-muted-foreground", !open && "line-clamp-4")}>
+                      {paper.tldr}
+                    </p>
+                  )}
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                    {paper.categories.slice(0, 3).map((c) => (
+                      <span key={c} className="rounded border border-flow-700/50 px-1.5 py-0.5 font-mono text-[9px] text-flow-300">
+                        {c}
+                      </span>
+                    ))}
+                    {paper.abstract && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPaper(open ? null : paper.id)}
+                        className="font-mono text-[9px] text-flow-violet hover:underline"
+                      >
+                        {open ? "less" : "abstract"}
+                      </button>
+                    )}
+                  </div>
+                  {open && paper.abstract && (
+                    <p className="rounded bg-flow-950/50 p-2 text-[11px] leading-relaxed text-muted-foreground/80">
+                      {paper.abstract}
+                    </p>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Obsidian references — export + existing notes in the thesis library */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            <BookOpen className="h-3 w-3" />
+            Obsidian References
+            {references.length > 0 && (
+              <span className="rounded-full bg-emerald-500/15 px-1.5 text-emerald-400">{references.length}</span>
+            )}
+          </h2>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exportingRefs || papers.length === 0}
+            onClick={() => void exportReferences()}
+            className="gap-1.5 font-mono text-[10px]"
+            title="Write all papers as reference notes into your Obsidian thesis folder"
+          >
+            {exportingRefs ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+            Export {papers.length} to Obsidian
+          </Button>
+        </div>
+
+        {refsFolder && (
+          <p className="font-mono text-[10px] text-muted-foreground/40">vault/{refsFolder}</p>
+        )}
+        {exportRefsResult && (
+          <p className={cn("font-mono text-[11px]", exportRefsResult.startsWith("Error") ? "text-destructive" : "text-emerald-400")}>
+            {exportRefsResult}
+          </p>
+        )}
+
+        {references.length === 0 ? (
+          <p className="rounded-[6px] border border-flow-800 p-4 text-center font-mono text-[11px] text-muted-foreground/40">
+            No reference notes yet in this folder. Export papers above to populate it.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {references.map((ref) => (
+              <div key={ref.name} className="flex items-center gap-2 rounded-[6px] border border-flow-800 bg-flow-900/20 p-2.5">
+                <BookOpen className="h-3 w-3 shrink-0 text-emerald-400/60" />
+                <span className="truncate text-[12px] text-foreground/80" title={ref.title}>{ref.title}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>

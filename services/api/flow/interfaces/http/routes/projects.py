@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
@@ -11,10 +13,67 @@ from pydantic import BaseModel
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
+from flow.interfaces.http.routes.digest import _safe_write
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["projects"])
+
+# Default Obsidian subfolder for a project's curated references (thesis library).
+_DEFAULT_REFERENCES_SUBFOLDER = "06-Thèse Pro/14-References"
+
+
+async def _resolve_vault_root(repo: FlowRepository, workspace_id: UUID) -> Path:
+    vault = await repo.get_workspace_vault_path(workspace_id) or os.environ.get("FLOW_OBSIDIAN_VAULT_PATH") or "/vault"
+    return Path(vault).expanduser().resolve()
+
+
+def _slugify(text: str) -> str:
+    keep = "".join(ch if ch.isalnum() or ch in " -_" else "" for ch in (text or "paper"))
+    return ("-".join(keep.split()))[:80] or "paper"
+
+
+def _paper_reference_md(paper: dict) -> str:
+    """Build a self-contained Obsidian note for a single reference paper."""
+    title = paper.get("title") or "Untitled"
+    arxiv_id = paper.get("arxiv_id") or ""
+    authors = paper.get("authors") or []
+    categories = paper.get("categories") or []
+    tldr = paper.get("tldr") or "_No summary._"
+    abstract = (paper.get("abstract") or "")[:3000]
+    ki = paper.get("key_insights")
+    if isinstance(ki, list):
+        ki = "\n".join(f"- {x}" for x in ki)
+    ki = ki or "_N/A_"
+    authors_yaml = "\n".join(f"  - {a}" for a in authors) or "  - Unknown"
+    cats_yaml = "\n".join(f"  - {c}" for c in categories) or "  - unknown"
+    link = paper.get("source_url") or (f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "")
+    return f"""---
+title: "{title.replace('"', "'")}"
+arxiv_id: {arxiv_id}
+relevance_score: {float(paper.get("relevance_score") or 0):.2f}
+authors:
+{authors_yaml}
+categories:
+{cats_yaml}
+type: reference
+status: unread
+---
+
+# {title}
+
+> [!abstract] TL;DR
+> {tldr}
+
+## Key Insights
+{ki}
+
+## Abstract
+{abstract}
+
+## Link
+{link or "N/A"}
+"""
 
 
 class ProjectCreateIn(BaseModel):
@@ -307,3 +366,82 @@ async def list_project_papers(
             for p in papers
         ]
     }
+
+
+class ExportReferencesIn(BaseModel):
+    subfolder: str | None = None
+    paper_ids: list[UUID] | None = None  # None = export all project papers
+
+
+@router.post("/projects/{project_id}/export-references")
+async def export_project_references(
+    project_id: UUID,
+    body: ExportReferencesIn,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Write the project's papers as reference notes into an Obsidian subfolder."""
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM research_projects WHERE id = $1", project_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="project not found")
+    await _assert_workspace_access(user_id, row["workspace_id"], repo)
+
+    subfolder = (body.subfolder or _DEFAULT_REFERENCES_SUBFOLDER).strip().strip("/")
+    vault_root = await _resolve_vault_root(repo, row["workspace_id"])
+    if not vault_root.exists():
+        raise HTTPException(status_code=400, detail="Vault path does not exist on this server.")
+
+    papers = [dict(p) for p in await repo.get_project_papers(project_id)]
+    if body.paper_ids:
+        wanted = {str(pid) for pid in body.paper_ids}
+        papers = [p for p in papers if str(p["id"]) in wanted]
+
+    written = 0
+    skipped = 0
+    for paper in papers:
+        note_path = f"{subfolder}/{_slugify(paper.get('title') or paper.get('arxiv_id') or 'paper')}.md"
+        try:
+            _safe_write(vault_root, note_path, _paper_reference_md(paper))
+            written += 1
+        except ValueError:
+            skipped += 1
+        except Exception:
+            logger.warning("project.export_references.write_failed", project_id=str(project_id))
+            skipped += 1
+
+    return {"exported": written, "skipped": skipped, "folder": subfolder}
+
+
+@router.get("/projects/{project_id}/references")
+async def list_project_references(
+    project_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+    subfolder: str | None = None,
+) -> dict:
+    """List the .md reference notes already present in the project's Obsidian subfolder."""
+    row = await repo._pool.fetchrow("SELECT workspace_id FROM research_projects WHERE id = $1", project_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="project not found")
+    await _assert_workspace_access(user_id, row["workspace_id"], repo)
+
+    sub = (subfolder or _DEFAULT_REFERENCES_SUBFOLDER).strip().strip("/")
+    vault_root = await _resolve_vault_root(repo, row["workspace_id"])
+    folder = (vault_root / sub).resolve()
+    # Guard against traversal and a missing/unmounted vault.
+    if not folder.is_relative_to(vault_root) or not folder.is_dir():
+        return {"folder": sub, "exists": folder.is_dir(), "files": []}
+
+    files = []
+    for fp in sorted(folder.glob("*.md")):
+        title = fp.stem
+        try:
+            with fp.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if line.startswith("# "):
+                        title = line[2:].strip()
+                        break
+        except Exception:
+            pass
+        files.append({"name": fp.name, "title": title})
+    return {"folder": sub, "exists": True, "files": files}
