@@ -104,6 +104,84 @@ async def list_agents(
     }
 
 
+@router.get("/workspaces/{workspace_id}/cockpit")
+async def cockpit(
+    workspace_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    """Return all agents with per-agent stats in one query for the Cockpit view."""
+    ws_rows = await repo.list_workspaces_for_user(user_id)
+    allowed = {r["id"] for r in ws_rows}
+    if workspace_id not in allowed:
+        raise HTTPException(status_code=403, detail="workspace not allowed")
+
+    agents = await repo.list_agents(workspace_id)
+    if not agents:
+        return {"agents": []}
+
+    agent_ids = [r["id"] for r in agents]
+
+    # Last run + total runs per agent (one query)
+    run_rows = await repo._pool.fetch(
+        """
+        SELECT
+            agent_id,
+            COUNT(*) AS total_runs,
+            MAX(created_at) AS last_run_at,
+            (array_agg(status ORDER BY created_at DESC))[1] AS last_status
+        FROM executions
+        WHERE agent_id = ANY($1::uuid[]) AND workspace_id = $2
+        GROUP BY agent_id
+        """,
+        agent_ids,
+        workspace_id,
+    )
+    run_map = {r["agent_id"]: r for r in run_rows}
+
+    # Episodic memory count per agent
+    mem_rows = await repo._pool.fetch(
+        "SELECT agent_id, COUNT(*) AS cnt FROM episodic_memories WHERE workspace_id = $1 AND agent_id = ANY($2::uuid[]) GROUP BY agent_id",
+        workspace_id,
+        agent_ids,
+    )
+    mem_map = {r["agent_id"]: int(r["cnt"]) for r in mem_rows}
+
+    # Skills count per agent
+    skill_rows = await repo._pool.fetch(
+        "SELECT agent_id, COUNT(*) AS cnt FROM agent_skills WHERE agent_id = ANY($1::uuid[]) AND active = true GROUP BY agent_id",
+        agent_ids,
+    )
+    skill_map = {r["agent_id"]: int(r["cnt"]) for r in skill_rows}
+
+    def _display_name(name: object, template: object) -> str:
+        n = (str(name).strip() if name is not None else "") or ""
+        if n:
+            return n
+        t = (str(template).strip() if template is not None else "") or ""
+        return t.replace("_", " ") if t else "Agent"
+
+    result = []
+    for a in agents:
+        aid = a["id"]
+        run = run_map.get(aid)
+        tools_cfg = (a["config"] or {}).get("tools") or {}
+        enabled_tools = [k for k, v in tools_cfg.items() if v] if isinstance(tools_cfg, dict) else []
+        result.append({
+            "id": str(aid),
+            "name": _display_name(a["name"], a["template"]),
+            "template": a["template"],
+            "config": a["config"],
+            "total_runs": int(run["total_runs"]) if run else 0,
+            "last_run_at": run["last_run_at"].isoformat() if run and run["last_run_at"] else None,
+            "last_status": run["last_status"] if run else None,
+            "episodic_memory_count": mem_map.get(aid, 0),
+            "skills_count": skill_map.get(aid, 0),
+            "enabled_tools": enabled_tools,
+        })
+    return {"agents": result}
+
+
 @router.post("/agents/{agent_id}/execute")
 async def execute_agent(
     agent_id: UUID,

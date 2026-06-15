@@ -366,6 +366,18 @@ async def run_deer_execution(
 
         await repo.complete_execution(execution_id, "completed", None)
 
+        # Bridge → episodic_memories: write a searchable Q+A summary after each run
+        try:
+            summary = f"Q: {user_message[:400]}\n\nA: {str(answer)[:800]}"
+            _ep_emb = None
+            if settings.openai_api_key:
+                from flow.infrastructure.llm import embeddings as _emb_svc
+
+                _ep_emb = (await _emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[summary]))[0]
+            await repo.insert_episodic_memory(workspace_id, agent_id, user_id, execution_id, summary, _ep_emb)
+        except Exception:
+            pass
+
         # Auto-trigger curator on low-confidence runs (skip scheduled deliveries)
         if confidence < 0.7 and not schedule_id:
             try:

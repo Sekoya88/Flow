@@ -160,8 +160,12 @@ TEMPLATES: dict[str, GraphSpec] = {
     ),
     "react-agent": GraphSpec(
         template="react-agent",
-        nodes=["planner"],
-        edges=[("planner", "END")],
+        nodes=["planner", "tool_agent", "synthesizer"],
+        edges=[
+            ("planner", "tool_agent"),
+            ("tool_agent", "synthesizer"),
+            ("synthesizer", "END"),
+        ],
         entry="planner",
     ),
 }

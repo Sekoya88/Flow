@@ -181,6 +181,16 @@ class FlowMemoryMiddleware(AgentMiddleware):
                 key = _stable_key(fact)
                 emb = await self._embed(fact) if self._embed else None
                 await self._store.aput(ns_facts, key, new_fact(fact, emb))
+                # Mirror to agent_memories so _rag_and_memory can retrieve via pgvector
+                if self._pool:
+                    try:
+                        from flow.infrastructure.persistence.repo import FlowRepository as _Repo
+
+                        await _Repo(self._pool).insert_memory(
+                            runtime.workspace_id, runtime.agent_id, runtime.user_id, fact, emb
+                        )
+                    except Exception:
+                        pass
         except Exception as exc:
             logger.warning("memory.after_agent.extract_failed", error=str(exc))
 

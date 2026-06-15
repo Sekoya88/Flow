@@ -7,13 +7,21 @@ import {
   AlertCircle,
   BarChart2,
   Bot,
+  Brain,
+  CheckCircle2,
+  Clock,
+  Database,
   GitCompare,
+  LayoutGrid,
   Loader2,
   Plus,
   Search,
   Sparkles,
+  Table2,
   Target,
   Workflow,
+  XCircle,
+  Zap,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +34,94 @@ import { FlowPageHeader } from "@/components/layout/FlowPageHeader";
 import { ApiError, apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { logger } from "@/lib/logger";
-import { cn } from "@/lib/utils";
+import { agentDisplayName, cn } from "@/lib/utils";
 
 type Me = { workspaces: { id: string; name: string }[] };
+
+type CockpitAgent = AgentRow & {
+  total_runs: number;
+  last_run_at: string | null;
+  last_status: string | null;
+  episodic_memory_count: number;
+  skills_count: number;
+  enabled_tools: string[];
+};
+
+const TOOL_ICONS: Record<string, React.ReactNode> = {
+  retrieve: <Database className="h-3 w-3" />,
+  long_term_memory: <Brain className="h-3 w-3" />,
+  tavily_search: <Zap className="h-3 w-3" />,
+  sandbox: <Target className="h-3 w-3" />,
+};
+
+function StatusDot({ status }: { status: string | null }) {
+  if (status === "completed") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+  if (status === "failed") return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+  if (status === "running") return <Loader2 className="h-3.5 w-3.5 animate-spin text-flow-violet" />;
+  return <div className="h-2 w-2 rounded-full bg-flow-700" />;
+}
+
+function CockpitRow({ a, onClick }: { a: CockpitAgent; onClick: () => void }) {
+  const timeAgo = a.last_run_at
+    ? (() => {
+        const diff = Date.now() - new Date(a.last_run_at).getTime();
+        const m = Math.floor(diff / 60000);
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h ago`;
+        return `${Math.floor(h / 24)}d ago`;
+      })()
+    : "—";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid w-full grid-cols-[1fr_80px_80px_80px_100px_120px] items-center gap-4 rounded-lg border border-flow-800 bg-card px-4 py-3 text-left text-xs transition-all hover:border-flow-violet/40 hover:bg-flow-violet/[0.04]"
+    >
+      {/* Name + template */}
+      <div className="min-w-0">
+        <p className="truncate font-medium text-foreground">{agentDisplayName(a)}</p>
+        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{a.template}</p>
+      </div>
+      {/* Status */}
+      <div className="flex items-center gap-1.5">
+        <StatusDot status={a.last_status} />
+        <span className="text-muted-foreground capitalize">{a.last_status ?? "—"}</span>
+      </div>
+      {/* Last run */}
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Clock className="h-3 w-3 shrink-0" />
+        {timeAgo}
+      </div>
+      {/* Runs */}
+      <div className="tabular-nums text-foreground/70">{a.total_runs}</div>
+      {/* Memory */}
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <Brain className="h-3 w-3 shrink-0" />
+        <span>{a.episodic_memory_count} episodic</span>
+      </div>
+      {/* Tools */}
+      <div className="flex items-center gap-1">
+        {a.enabled_tools.slice(0, 4).map((t) => (
+          <span
+            key={t}
+            title={t}
+            className="flex h-5 w-5 items-center justify-center rounded border border-flow-800 bg-flow-900 text-muted-foreground"
+          >
+            {TOOL_ICONS[t] ?? <Zap className="h-3 w-3" />}
+          </span>
+        ))}
+        {a.skills_count > 0 && (
+          <Badge variant="outline" className="h-5 gap-0.5 rounded px-1.5 py-0 font-mono text-[9px] border-flow-violet/30 text-flow-violet">
+            <Sparkles className="h-2.5 w-2.5" />
+            {a.skills_count}
+          </Badge>
+        )}
+      </div>
+    </button>
+  );
+}
 
 export default function AgentsPage() {
   const router = useRouter();
@@ -40,6 +133,9 @@ export default function AgentsPage() {
   const [search, setSearch] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<AgentRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [view, setView] = useState<"grid" | "cockpit">("grid");
+  const [cockpitAgents, setCockpitAgents] = useState<CockpitAgent[]>([]);
+  const [cockpitLoading, setCockpitLoading] = useState(false);
 
   useEffect(() => {
     routerRef.current = router;
@@ -109,6 +205,24 @@ export default function AgentsPage() {
     [wsId],
   );
 
+  const loadCockpit = useCallback(async (id: string) => {
+    setCockpitLoading(true);
+    try {
+      const r = await apiFetch<{ agents: CockpitAgent[] }>(`/api/v1/workspaces/${id}/cockpit`);
+      setCockpitAgents(r.agents ?? []);
+    } catch {
+      setCockpitAgents([]);
+    } finally {
+      setCockpitLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === "cockpit" && wsId) {
+      void loadCockpit(wsId);
+    }
+  }, [view, wsId, loadCockpit]);
+
   const openAgent = useCallback((agent: AgentRow) => {
     setSelectedAgent(agent);
     setDrawerOpen(true);
@@ -171,7 +285,7 @@ export default function AgentsPage() {
         }
       />
 
-      {/* Search + stats bar */}
+      {/* Search + stats + view toggle */}
       {!loading && agents.length > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm flex-1">
@@ -183,9 +297,27 @@ export default function AgentsPage() {
               className="pl-9 h-9 text-sm"
             />
           </div>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {filtered.length} of {agents.length} agent{agents.length !== 1 ? "s" : ""}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {filtered.length} of {agents.length} agent{agents.length !== 1 ? "s" : ""}
+            </p>
+            <div className="flex rounded-lg border border-flow-800 bg-card p-0.5">
+              <button
+                type="button"
+                onClick={() => setView("grid")}
+                className={cn("flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors", view === "grid" ? "bg-flow-violet/20 text-flow-violet" : "text-muted-foreground hover:text-foreground")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("cockpit")}
+                className={cn("flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors", view === "cockpit" ? "bg-flow-violet/20 text-flow-violet" : "text-muted-foreground hover:text-foreground")}
+              >
+                <Table2 className="h-3.5 w-3.5" /> Cockpit
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -233,6 +365,28 @@ export default function AgentsPage() {
           <Button variant="ghost" size="sm" onClick={() => setSearch("")}>
             Clear search
           </Button>
+        </div>
+      ) : view === "cockpit" ? (
+        /* Cockpit table view */
+        <div className="space-y-1.5">
+          {/* Column headers */}
+          <div className="grid grid-cols-[1fr_80px_80px_80px_100px_120px] items-center gap-4 px-4 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            <span>Agent</span>
+            <span>Status</span>
+            <span>Last run</span>
+            <span>Runs</span>
+            <span>Memory</span>
+            <span>Tools</span>
+          </div>
+          {cockpitLoading ? (
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[52px] rounded-lg" />)
+          ) : cockpitAgents.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No cockpit data — run an agent first.</p>
+          ) : (
+            cockpitAgents.map((a) => (
+              <CockpitRow key={a.id} a={a} onClick={() => openAgent(a)} />
+            ))
+          )}
         </div>
       ) : (
         /* Agent card grid */
