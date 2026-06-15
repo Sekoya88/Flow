@@ -94,6 +94,7 @@ export function HeroCanvas({ className }: { className?: string }) {
     let H = 0;
 
     function resize() {
+      if (!el) return;
       W = el.clientWidth;
       H = el.clientHeight;
       renderer.setSize(W, H);
