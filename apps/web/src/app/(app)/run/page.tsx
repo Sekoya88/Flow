@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowUp,
   BarChart2,
   Bot,
   BrainCircuit,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
   Layers,
   Loader2,
   MessageSquarePlus,
@@ -27,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { RunInspector } from "@/components/flow/RunInspector";
 import { TokenStream } from "@/components/flow/TokenStream";
+import { Markdown } from "@/components/flow/Markdown";
 import { FlowMark } from "@/components/brand/FlowLogo";
 import { ApiError, apiFetch, getApiBase } from "@/lib/api";
 import { track } from "@/lib/analytics";
@@ -57,6 +61,8 @@ type ThreadTurn = {
   user_message: string;
   answer: string | null;
   created_at: string | null;
+  total_tokens?: number | null;
+  total_cost_usd?: number | null;
 };
 
 type SseEvent = {
@@ -155,6 +161,17 @@ export default function RunPage() {
   const [goldenSetId, setGoldenSetId] = useState<string | null>(null);
   const [markedItems, setMarkedItems] = useState<Set<string>>(new Set());
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyAnswer = useCallback(async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, []);
 
   // History
   const [history, setHistory] = useState<ExecutionRow[]>([]);
@@ -802,6 +819,9 @@ export default function RunPage() {
                   const isLastTurn = idx === arr.length - 1;
                   const isStreamingTurn = isLastTurn && running && turn.id === selectedId;
                   const displayAnswer = isStreamingTurn ? (liveAnswer ?? turn.answer) : turn.answer;
+                  const isError =
+                    turn.status === "failed" ||
+                    (typeof displayAnswer === "string" && displayAnswer.startsWith("Error:"));
                   return (
                     <div key={turn.id} className="space-y-4">
                       {/* User message */}
@@ -838,44 +858,80 @@ export default function RunPage() {
                         <div className="flex gap-3 animate-slide-up">
                           <div className={cn(
                             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-flow-800 bg-card",
-                            isStreamingTurn && "border-flow-streaming/30 shadow-[0_0_12px_rgba(var(--color-flow-streaming),0.25)]",
+                            isError && "border-red-500/40",
+                            isStreamingTurn && !isError && "border-flow-streaming/30 shadow-[0_0_12px_rgba(var(--color-flow-streaming),0.25)]",
                           )}>
-                            <Bot className={cn(
-                              "h-4 w-4",
-                              isStreamingTurn ? "text-flow-violet animate-pulse" : "text-flow-violet",
-                            )} />
+                            {isError ? (
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Bot className={cn(
+                                "h-4 w-4",
+                                isStreamingTurn ? "text-flow-violet animate-pulse" : "text-flow-violet",
+                              )} />
+                            )}
                           </div>
-                          <div className="flex flex-col gap-1.5 max-w-[80%]">
-                            <div className="flow-card rounded-[6px] rounded-bl-md px-5 py-3.5 text-sm leading-relaxed text-foreground">
+                          <div className="group/answer flex flex-col gap-1.5 max-w-[80%]">
+                            <div className={cn(
+                              "rounded-[6px] rounded-bl-md px-5 py-3.5 text-sm leading-relaxed",
+                              isError
+                                ? "border border-red-500/30 bg-red-500/5 text-red-200"
+                                : "flow-card text-foreground",
+                            )}>
                               {isStreamingTurn && !displayAnswer ? (
                                 <TokenStream placeholder="Thinking…" />
-                              ) : (
+                              ) : isError ? (
                                 <p className="whitespace-pre-wrap">{displayAnswer}</p>
+                              ) : (
+                                <Markdown content={displayAnswer ?? ""} />
                               )}
                             </div>
-                            {turn.answer && goldenSetId && (
-                              <div className="flex justify-start pl-1">
+                            {turn.answer && !isError && (
+                              <div className="flex justify-start gap-1 pl-1 opacity-0 transition-opacity group-hover/answer:opacity-100">
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className={cn(
-                                    "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
-                                    markedItems.has(turn.id)
-                                      ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
-                                      : "text-muted-foreground/50 hover:text-flow-violet hover:bg-flow-violet/10",
-                                  )}
-                                  disabled={markedItems.has(turn.id) || markingId === turn.id}
-                                  onClick={() => void handleMarkAsGolden(turn.id, turn.user_message, turn.answer!)}
+                                  className="h-6 gap-1 px-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/50 transition-colors hover:text-flow-violet hover:bg-flow-violet/10"
+                                  onClick={() => void copyAnswer(turn.id, turn.answer!)}
                                 >
-                                  {markingId === turn.id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : markedItems.has(turn.id) ? (
-                                    <CheckCircle2 className="h-3 w-3" />
-                                  ) : (
-                                    <Target className="h-3 w-3" />
-                                  )}
-                                  {markedItems.has(turn.id) ? "Added to Golden" : "Mark as Golden"}
+                                  {copiedId === turn.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                  {copiedId === turn.id ? "Copied" : "Copy"}
                                 </Button>
+                                {goldenSetId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                      "h-6 px-2 text-[10px] uppercase tracking-wider font-semibold transition-colors gap-1",
+                                      markedItems.has(turn.id)
+                                        ? "text-green-500 hover:text-green-600 bg-green-500/10 hover:bg-green-500/20"
+                                        : "text-muted-foreground/50 hover:text-flow-violet hover:bg-flow-violet/10",
+                                    )}
+                                    disabled={markedItems.has(turn.id) || markingId === turn.id}
+                                    onClick={() => void handleMarkAsGolden(turn.id, turn.user_message, turn.answer!)}
+                                  >
+                                    {markingId === turn.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : markedItems.has(turn.id) ? (
+                                      <CheckCircle2 className="h-3 w-3" />
+                                    ) : (
+                                      <Target className="h-3 w-3" />
+                                    )}
+                                    {markedItems.has(turn.id) ? "Added to Golden" : "Mark as Golden"}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            {!isError && (turn.total_tokens != null || turn.total_cost_usd != null) && (
+                              <div className="flex items-center gap-2 pl-1 text-[10px] text-muted-foreground/50">
+                                {turn.total_tokens != null && (
+                                  <span className="flex items-center gap-1">
+                                    <Zap className="h-2.5 w-2.5" />
+                                    {turn.total_tokens.toLocaleString()} tok
+                                  </span>
+                                )}
+                                {turn.total_cost_usd != null && (
+                                  <span>${turn.total_cost_usd.toFixed(4)}</span>
+                                )}
                               </div>
                             )}
                           </div>

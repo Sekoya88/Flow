@@ -240,7 +240,13 @@ class FlowRepository:
                    (SELECT ee.payload->>'answer'
                     FROM execution_events ee
                     WHERE ee.execution_id = e.id AND ee.kind = 'final'
-                    LIMIT 1) AS answer
+                    LIMIT 1) AS answer,
+                   (SELECT SUM((ee.payload->>'prompt_tokens')::int + COALESCE((ee.payload->>'completion_tokens')::int, 0))
+                    FROM execution_events ee
+                    WHERE ee.execution_id = e.id AND ee.payload->>'prompt_tokens' IS NOT NULL) AS total_tokens,
+                   (SELECT SUM((ee.payload->>'cost_usd')::float)
+                    FROM execution_events ee
+                    WHERE ee.execution_id = e.id AND ee.payload->>'cost_usd' IS NOT NULL) AS total_cost_usd
             FROM executions e
             JOIN agents a ON a.id = e.agent_id
             JOIN workspace_members m ON m.workspace_id = e.workspace_id

@@ -65,6 +65,8 @@ async def get_thread(
                 "agent_name": r["agent_name"] or r["agent_template"],
                 "user_message": r["user_message"],
                 "answer": r["answer"],
+                "total_tokens": int(r["total_tokens"]) if r["total_tokens"] is not None else None,
+                "total_cost_usd": float(r["total_cost_usd"]) if r["total_cost_usd"] is not None else None,
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
             }
