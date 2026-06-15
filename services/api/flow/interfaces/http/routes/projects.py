@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -13,7 +14,6 @@ from pydantic import BaseModel
 from flow.infrastructure.observability.logging import get_logger
 from flow.infrastructure.persistence.repo import FlowRepository
 from flow.interfaces.http.deps import get_current_user_id, get_repo
-from flow.interfaces.http.routes.digest import _safe_write
 
 logger = get_logger(__name__)
 
@@ -26,6 +26,28 @@ _DEFAULT_REFERENCES_SUBFOLDER = "06-Thèse Pro/14-References"
 async def _resolve_vault_root(repo: FlowRepository, workspace_id: UUID) -> Path:
     vault = await repo.get_workspace_vault_path(workspace_id) or os.environ.get("FLOW_OBSIDIAN_VAULT_PATH") or "/vault"
     return Path(vault).expanduser().resolve()
+
+
+def _resolve_subfolder(vault_root: Path, subfolder: str) -> Path:
+    """Resolve a subfolder under the vault, matching existing dirs by Unicode
+    normalization (so an accented thesis folder like "06-Thèse Pro" maps to its
+    real on-disk name whether stored NFC or NFD) and rejecting traversal."""
+    cur = vault_root
+    for seg in subfolder.split("/"):
+        if not seg or seg in (".", ".."):
+            continue
+        target = unicodedata.normalize("NFC", seg)
+        match: Path | None = None
+        if cur.is_dir():
+            for entry in cur.iterdir():
+                if entry.is_dir() and unicodedata.normalize("NFC", entry.name) == target:
+                    match = entry
+                    break
+        cur = match or (cur / seg)
+    resolved = cur.resolve()
+    if not resolved.is_relative_to(vault_root.resolve()):
+        raise ValueError("subfolder escapes vault root")
+    return resolved
 
 
 def _slugify(text: str) -> str:
@@ -390,6 +412,8 @@ async def export_project_references(
     vault_root = await _resolve_vault_root(repo, row["workspace_id"])
     if not vault_root.exists():
         raise HTTPException(status_code=400, detail="Vault path does not exist on this server.")
+    folder = _resolve_subfolder(vault_root, subfolder)
+    folder.mkdir(parents=True, exist_ok=True)
 
     papers = [dict(p) for p in await repo.get_project_papers(project_id)]
     if body.paper_ids:
@@ -399,12 +423,10 @@ async def export_project_references(
     written = 0
     skipped = 0
     for paper in papers:
-        note_path = f"{subfolder}/{_slugify(paper.get('title') or paper.get('arxiv_id') or 'paper')}.md"
+        slug = _slugify(paper.get("title") or paper.get("arxiv_id") or "paper")
         try:
-            _safe_write(vault_root, note_path, _paper_reference_md(paper))
+            (folder / f"{slug}.md").write_text(_paper_reference_md(paper), encoding="utf-8")
             written += 1
-        except ValueError:
-            skipped += 1
         except Exception:
             logger.warning("project.export_references.write_failed", project_id=str(project_id))
             skipped += 1
@@ -427,10 +449,12 @@ async def list_project_references(
 
     sub = (subfolder or _DEFAULT_REFERENCES_SUBFOLDER).strip().strip("/")
     vault_root = await _resolve_vault_root(repo, row["workspace_id"])
-    folder = (vault_root / sub).resolve()
-    # Guard against traversal and a missing/unmounted vault.
-    if not folder.is_relative_to(vault_root) or not folder.is_dir():
-        return {"folder": sub, "exists": folder.is_dir(), "files": []}
+    try:
+        folder = _resolve_subfolder(vault_root, sub)
+    except ValueError:
+        return {"folder": sub, "exists": False, "files": []}
+    if not folder.is_dir():
+        return {"folder": sub, "exists": False, "files": []}
 
     files = []
     for fp in sorted(folder.glob("*.md")):
