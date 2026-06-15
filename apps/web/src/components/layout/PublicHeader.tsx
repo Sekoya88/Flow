@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FlowLogo } from "@/components/brand/FlowLogo";
+import { PublicHeaderActions } from "@/components/layout/PublicHeaderActions";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -33,14 +34,7 @@ export function PublicHeader({ auth }: PublicHeaderProps) {
               </Link>
             </>
           ) : (
-            <>
-              <Link href="/login" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
-                Sign in
-              </Link>
-              <Link href="/register" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
-                Register
-              </Link>
-            </>
+            <PublicHeaderActions />
           )}
         </div>
       </div>
