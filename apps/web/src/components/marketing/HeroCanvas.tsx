@@ -14,7 +14,7 @@ export function HeroCanvas({ className }: { className?: string }) {
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = mountRef.current;
+    const el = mountRef.current as HTMLDivElement;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
