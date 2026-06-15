@@ -324,6 +324,68 @@ async def seed_demo_graph(
     return {"seeded": len(_DEMO_NODES), "edges": len(_DEMO_EDGES)}
 
 
+async def _upsert_entity_node(
+    pool,
+    *,
+    nid: UUID,
+    workspace_id: UUID,
+    label: str,
+    node_type: str,
+    summary: str,
+    metadata: str,
+    ref_id: str,
+) -> UUID:
+    """Upsert an entity-backed kg_node, tolerant of BOTH unique constraints.
+
+    kg_nodes has two unique keys: (workspace_id, ref_type, ref_id) and
+    (workspace_id, label, node_type). The ref-based ON CONFLICT cannot catch a
+    collision on the label key — e.g. two skills sharing a name from different
+    sources — which previously raised UniqueViolationError and 500'd the entire
+    sync. On that collision we merge content into the existing same-labelled node
+    instead. Returns the effective node id so edges always point at a real row.
+    """
+    import asyncpg
+
+    try:
+        row = await pool.fetchrow(
+            """
+            INSERT INTO kg_nodes
+              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $4)
+            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
+            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
+                          metadata = EXCLUDED.metadata
+            RETURNING id
+            """,
+            nid,
+            workspace_id,
+            label,
+            node_type,
+            summary,
+            metadata,
+            ref_id,
+        )
+        return row["id"]
+    except asyncpg.exceptions.UniqueViolationError:
+        # Same (label, node_type) already exists from another source. Merge
+        # content into it; leave its ref linkage untouched to avoid colliding
+        # with the ref unique index.
+        row = await pool.fetchrow(
+            """
+            UPDATE kg_nodes
+               SET summary = $4, metadata = $5::jsonb, updated_at = now()
+             WHERE workspace_id = $1 AND label = $2 AND node_type = $3
+            RETURNING id
+            """,
+            workspace_id,
+            label,
+            node_type,
+            summary,
+            metadata,
+        )
+        return row["id"] if row else nid
+
+
 @router.post("/sync-entities", status_code=201)
 async def sync_entities(
     request: Request,
@@ -352,24 +414,18 @@ async def sync_entities(
 
     for ag in agents:
         nid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"entity-agent-{workspace_id}-{ag['id']}")
-        agent_kg_ids[str(ag["id"])] = nid
         meta = _json.dumps({"template": ag.get("template") or ""})
-        await pool.execute(
-            """
-            INSERT INTO kg_nodes
-              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
-            VALUES ($1, $2, $3, 'agent', $4, $5::jsonb, $6, 'agent')
-            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
-            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
-                          metadata = EXCLUDED.metadata
-            """,
-            nid,
-            workspace_id,
-            ag["name"],
-            f"Agent: {ag['name']}",
-            meta,
-            str(ag["id"]),
+        effective_id = await _upsert_entity_node(
+            pool,
+            nid=nid,
+            workspace_id=workspace_id,
+            label=ag["name"],
+            node_type="agent",
+            summary=f"Agent: {ag['name']}",
+            metadata=meta,
+            ref_id=str(ag["id"]),
         )
+        agent_kg_ids[str(ag["id"])] = effective_id
         upserted_agents += 1
 
     for sk in skills:
@@ -386,21 +442,15 @@ async def sync_entities(
                 "version": int(sk.get("version") or 1),
             }
         )
-        await pool.execute(
-            """
-            INSERT INTO kg_nodes
-              (id, workspace_id, label, node_type, summary, metadata, ref_id, ref_type)
-            VALUES ($1, $2, $3, 'skill', $4, $5::jsonb, $6, 'skill')
-            ON CONFLICT (workspace_id, ref_type, ref_id) WHERE ref_id IS NOT NULL
-            DO UPDATE SET label = EXCLUDED.label, summary = EXCLUDED.summary,
-                          metadata = EXCLUDED.metadata
-            """,
-            nid,
-            workspace_id,
-            sk["name"],
-            desc or sk["name"],
-            meta,
-            str(sk["id"]),
+        skill_nid = await _upsert_entity_node(
+            pool,
+            nid=nid,
+            workspace_id=workspace_id,
+            label=sk["name"],
+            node_type="skill",
+            summary=desc or sk["name"],
+            metadata=meta,
+            ref_id=str(sk["id"]),
         )
         upserted_skills += 1
 
@@ -420,7 +470,7 @@ async def sync_entities(
                 eid,
                 workspace_id,
                 agent_nid,
-                nid,
+                skill_nid,
             )
 
     engine = KGGraphEngine(request.app.state.pool)
