@@ -643,4 +643,11 @@ async def run_research_digest(workspace_id: str, config: dict, stream_hub=None) 
                 },
             )
 
-    return {"persisted": persisted}
+    # Surface digest_run_id + persisted_ids so callers (project trigger) can link
+    # the run to its papers. Returning only {"persisted": …} left
+    # project_runs.digest_run_id NULL, breaking the papers JOIN and paper counts.
+    return {
+        "persisted": persisted,
+        "persisted_ids": result.get("persisted_ids", []),
+        "digest_run_id": str(run_id) if run_id else None,
+    }
