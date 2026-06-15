@@ -976,7 +976,14 @@ export default function RunPage() {
               >
                 <SelectTrigger className="h-9 w-auto min-w-[160px] max-w-[200px] shrink-0 gap-1.5 rounded-xl border-flow-800 bg-muted/40 text-xs">
                   <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue placeholder="Agent" />
+                  {/* Base UI SelectValue renders the raw value (agent id/uuid); show the
+                      clean display name for the selected agent instead. */}
+                  <SelectValue placeholder="Agent">
+                    {() => {
+                      const a = agents.find((x) => x.id === agentId);
+                      return a ? agentDisplayName(a) : "Agent";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((a) => (

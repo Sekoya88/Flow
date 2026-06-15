@@ -1,9 +1,8 @@
-import Link from "next/link";
-import { ArrowRight, Brain, Layers, Zap } from "lucide-react";
+import { Brain, Layers, Zap } from "lucide-react";
 import { FlowMark } from "@/components/brand/FlowLogo";
 import { PublicHeader } from "@/components/layout/PublicHeader";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { HeroCanvas } from "@/components/marketing/HeroCanvas";
+import { EnterAppCta } from "@/components/marketing/EnterAppCta";
 
 const pillars = [
   {
@@ -25,34 +24,38 @@ const pillars = [
 
 export function HomeLanding() {
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-flow-950">
-      <PublicHeader />
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-flow-950">
+      {/* Animated knowledge-graph backdrop */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[680px] overflow-hidden">
+        <HeroCanvas className="h-full w-full opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-flow-950/30 via-flow-950/60 to-flow-950" />
+        <div className="absolute left-1/2 top-[-10%] h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-flow-violet/20 blur-[120px]" />
+      </div>
+
+      <div className="relative z-10 flex flex-1 flex-col">
+        <PublicHeader />
 
       <main className="flex-1 pb-20">
         {/* HERO */}
         <section className="mx-auto grid max-w-[1200px] grid-cols-1 gap-8 px-4 pt-16 md:grid-cols-[1.1fr_0.9fr] lg:gap-12 lg:pt-24">
           <div className="flex flex-col justify-center">
-            <p className="mb-4 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-flow-violet">
+            <p className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-flow-violet/30 bg-flow-violet/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-flow-violet">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-flow-violet" />
               Flow Workspace
             </p>
-            <h1 className="font-mono text-3xl font-bold tracking-tighter text-flow-50 lg:text-4xl">
+            <h1 className="font-mono text-4xl font-bold tracking-tighter text-flow-50 lg:text-6xl">
               The cognitive layer<br />
-              for your agents.
+              for your{" "}
+              <span className="bg-gradient-to-r from-flow-violet via-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                agents.
+              </span>
             </h1>
-            <p className="mt-5 max-w-xl font-mono text-sm leading-relaxed text-flow-400">
+            <p className="mt-5 max-w-xl font-mono text-sm leading-relaxed text-flow-300">
               Open-source, highly observable agent platform. Build with FastAPI, LangGraph, and Next.js.
               Long-term memory, continuous evaluation, and deterministic streaming.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link href="/register" className={cn(buttonVariants({ size: "lg" }), "gap-2")}>
-                Start building
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-              <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
-                Sign in
-              </Link>
-            </div>
+            <EnterAppCta />
 
             <div className="mt-10 grid grid-cols-3 gap-3">
               {[
@@ -125,6 +128,7 @@ await agent.reflect(state);`}
           Agent Workspace · FastAPI · Next.js · pgvector
         </p>
       </footer>
+      </div>
     </div>
   );
 }
