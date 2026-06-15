@@ -283,15 +283,18 @@ class FlowRepository:
         )
 
     async def insert_event(self, execution_id: UUID, kind: str, payload: dict) -> int:
+        # The pool registers a jsonb codec (encoder=json.dumps); pass the dict
+        # directly. json.dumps here too would double-encode payload into a JSON
+        # string and break payload->>'...' reads.
         return await self._pool.fetchval(
             """
             INSERT INTO execution_events (execution_id, kind, payload)
-            VALUES ($1, $2, $3::jsonb)
+            VALUES ($1, $2, $3)
             RETURNING id
             """,
             execution_id,
             kind,
-            json.dumps(payload),
+            payload,
         )
 
     async def get_execution_events(self, execution_id: UUID, after_id: int = 0) -> list[dict]:

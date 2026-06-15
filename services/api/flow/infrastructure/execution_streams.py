@@ -91,15 +91,19 @@ class ExecutionEventEmitter:
         event_id: int | None = None
         if persist and self._pool is not None:
             try:
+                # The asyncpg pool registers a jsonb codec (encoder=json.dumps), so
+                # pass the dict directly — calling json.dumps here too double-encodes
+                # the payload into a JSON *string*, which breaks every reader
+                # (payload->>'answer', payload->>'cost_usd', payload.get(...)).
                 event_id = await self._pool.fetchval(
                     """
                     INSERT INTO execution_events (execution_id, kind, payload)
-                    VALUES ($1, $2, $3::jsonb)
+                    VALUES ($1, $2, $3)
                     RETURNING id
                     """,
                     execution_id,
                     kind,
-                    json.dumps(payload),
+                    payload,
                 )
             except Exception as exc:
                 logger.warning("event.persist_failed", kind=kind, error=str(exc))
