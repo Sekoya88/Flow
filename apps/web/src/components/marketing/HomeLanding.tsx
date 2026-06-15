@@ -25,11 +25,17 @@ const pillars = [
 export function HomeLanding() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-flow-950">
-      {/* Animated knowledge-graph backdrop */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[680px] overflow-hidden">
-        <HeroCanvas className="h-full w-full opacity-70" />
-        <div className="absolute inset-0 bg-gradient-to-b from-flow-950/30 via-flow-950/60 to-flow-950" />
-        <div className="absolute left-1/2 top-[-10%] h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-flow-violet/20 blur-[120px]" />
+      {/* WebGL backdrop */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[820px] overflow-hidden">
+        <HeroCanvas className="h-full w-full" />
+        {/* radial glow blooms */}
+        <div className="absolute left-1/2 top-[-8%] h-[560px] w-[900px] -translate-x-1/2 rounded-full bg-flow-violet/25 blur-[140px]" />
+        <div className="absolute left-[20%] top-[30%] h-[300px] w-[400px] rounded-full bg-fuchsia-600/12 blur-[100px]" />
+        <div className="absolute right-[10%] top-[20%] h-[260px] w-[360px] rounded-full bg-indigo-500/10 blur-[90px]" />
+        {/* scanline noise */}
+        <div className="scanlines absolute inset-0 opacity-[0.025]" />
+        {/* fade to page */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-flow-950/40 to-flow-950" />
       </div>
 
       <div className="relative z-10 flex flex-1 flex-col">
@@ -83,7 +89,7 @@ export function HomeLanding() {
               <span className="font-mono text-[10px] text-flow-500">deer-flow / trace</span>
             </div>
 
-            <div className="grid flex-1 grid-cols-2 gap-2">
+            <dl className="grid flex-1 grid-cols-2 gap-2">
               {[
                 { lbl: "Routing", val: "Semantic Match" },
                 { lbl: "Tool Calls", val: "pgvector_search" },
@@ -95,15 +101,17 @@ export function HomeLanding() {
               ))}
               <div className="col-span-2 rounded-[6px] border border-flow-800 bg-flow-950 p-3">
                 <dt className="mb-2 font-mono text-[10px] uppercase tracking-[0.1em] text-flow-500">Streaming Output</dt>
-                <pre className="font-mono text-[11px] leading-relaxed text-flow-300">
-                  <code>
+                <dd>
+                  <pre className="font-mono text-[11px] leading-relaxed text-flow-300">
+                    <code>
 {`import { Memory } from "flow-core";
 // Autonomous context resolution
 await agent.reflect(state);`}
-                  </code>
-                </pre>
+                    </code>
+                  </pre>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
         </section>
 

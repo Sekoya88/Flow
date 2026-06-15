@@ -223,3 +223,13 @@
     background: transparent;
   }
 }
+
+.scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.06) 2px,
+    rgba(255, 255, 255, 0.06) 4px
+  );
+}

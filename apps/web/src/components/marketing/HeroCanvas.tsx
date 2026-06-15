@@ -1,143 +1,219 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import * as THREE from "three";
 
-/**
- * Animated knowledge-graph background — drifting nodes linked by fading edges,
- * with a soft cursor-reactive pull. Pure canvas 2D (no WebGL deps), capped node
- * count, pauses when off-screen, and honours prefers-reduced-motion.
- */
+const NODE_COUNT = 90;
+const MAX_LINK_DIST = 140;
+const SPEED = 0.18;
+const GLOW_SIZE = 5.5;
+const MOUSE_PULL = 0.0012;
+const MOUSE_RANGE = 220;
+
 export function HeroCanvas({ className }: { className?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
-    const cv = ref.current;
-    const rawCtx = cv.getContext("2d");
-    if (!rawCtx) return;
-    // Non-null binding for use inside the animation closures (TS does not carry
-    // the null-guard narrowing into nested functions).
-    const c: CanvasRenderingContext2D = rawCtx;
+    const el = mountRef.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    /* ── renderer ── */
+    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    el.appendChild(renderer.domElement);
 
-    let width = 0;
-    let height = 0;
-    type Node = { x: number; y: number; vx: number; vy: number; r: number };
+    const camera = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
+    const scene = new THREE.Scene();
+
+    /* ── node positions / velocities ── */
+    type Node = { x: number; y: number; vx: number; vy: number };
     let nodes: Node[] = [];
-    const mouse = { x: -9999, y: -9999 };
 
-    function resize() {
-      const parent = cv.parentElement;
-      width = parent?.clientWidth ?? window.innerWidth;
-      height = parent?.clientHeight ?? 420;
-      cv.width = width * dpr;
-      cv.height = height * dpr;
-      cv.style.width = `${width}px`;
-      cv.style.height = `${height}px`;
-      c.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      const count = Math.min(70, Math.floor((width * height) / 16000));
+    function buildNodes(w: number, h: number) {
+      const count = Math.min(NODE_COUNT, Math.floor((w * h) / 10000));
       nodes = Array.from({ length: count }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: (Math.random() - 0.5) * 0.25,
-        r: 1.2 + Math.random() * 1.8,
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * SPEED,
+        vy: (Math.random() - 0.5) * SPEED,
       }));
     }
 
-    const LINK_DIST = 130;
+    /* ── point cloud (glow sprites) ── */
+    const pointGeo = new THREE.BufferGeometry();
+    const ptPositions = new Float32Array(NODE_COUNT * 3);
+    pointGeo.setAttribute("position", new THREE.BufferAttribute(ptPositions, 3));
 
-    function frame() {
-      c.clearRect(0, 0, width, height);
-
-      for (const n of nodes) {
-        n.x += n.vx;
-        n.y += n.vy;
-        if (n.x < 0 || n.x > width) n.vx *= -1;
-        if (n.y < 0 || n.y > height) n.vy *= -1;
-
-        // gentle cursor attraction
-        const dx = mouse.x - n.x;
-        const dy = mouse.y - n.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < 24000) {
-          n.x += dx * 0.0009;
-          n.y += dy * 0.0009;
-        }
-      }
-
-      // edges
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i];
-          const b = nodes[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < LINK_DIST) {
-            const alpha = (1 - dist / LINK_DIST) * 0.32;
-            c.strokeStyle = `rgba(167, 139, 250, ${alpha})`;
-            c.lineWidth = 1;
-            c.beginPath();
-            c.moveTo(a.x, a.y);
-            c.lineTo(b.x, b.y);
-            c.stroke();
-          }
-        }
-      }
-
-      // nodes
-      for (const n of nodes) {
-        c.beginPath();
-        c.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        c.fillStyle = "rgba(196, 181, 253, 0.9)";
-        c.fill();
-      }
-    }
-
-    let raf = 0;
-    let running = true;
-    function loop() {
-      if (running) frame();
-      raf = requestAnimationFrame(loop);
-    }
-
-    function onMove(e: MouseEvent) {
-      const rect = cv.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left;
-      mouse.y = e.clientY - rect.top;
-    }
-    function onLeave() {
-      mouse.x = -9999;
-      mouse.y = -9999;
-    }
-
-    const io = new IntersectionObserver(([entry]) => {
-      running = entry.isIntersecting && !reduce;
+    const pointMat = new THREE.PointsMaterial({
+      color: 0xc4b5fd,
+      size: GLOW_SIZE,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
+    const pointCloud = new THREE.Points(pointGeo, pointMat);
+    scene.add(pointCloud);
+
+    /* ── line segments ── */
+    const MAX_LINKS = NODE_COUNT * NODE_COUNT;
+    const linePositions = new Float32Array(MAX_LINKS * 6);
+    const lineColors = new Float32Array(MAX_LINKS * 6);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute("position", new THREE.BufferAttribute(linePositions, 3));
+    lineGeo.setAttribute("color", new THREE.BufferAttribute(lineColors, 3));
+
+    const lineMat = new THREE.LineSegmentsMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const lineSegs = new THREE.LineSegments(lineGeo, lineMat);
+    scene.add(lineSegs);
+
+    /* ── secondary faint halo layer ── */
+    const haloMat = new THREE.PointsMaterial({
+      color: 0xa78bfa,
+      size: GLOW_SIZE * 2.8,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.22,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const haloCloud = new THREE.Points(pointGeo, haloMat);
+    scene.add(haloCloud);
+
+    /* ── resize ── */
+    let W = 0;
+    let H = 0;
+
+    function resize() {
+      W = el.clientWidth;
+      H = el.clientHeight;
+      renderer.setSize(W, H);
+      camera.right = W;
+      camera.top = H;
+      camera.updateProjectionMatrix();
+      buildNodes(W, H);
+    }
 
     resize();
-    if (reduce) {
-      frame(); // single static render
-    } else {
-      io.observe(cv);
-      raf = requestAnimationFrame(loop);
+
+    /* ── mouse ── */
+    const mouse = { x: -99999, y: -99999 };
+    function onMove(e: MouseEvent) {
+      const r = el.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
     }
-    window.addEventListener("resize", resize);
+    function onLeave() {
+      mouse.x = -99999;
+      mouse.y = -99999;
+    }
+
+    /* ── animate ── */
+    let raf = 0;
+    let active = true;
+
+    const io = new IntersectionObserver(([entry]) => {
+      active = entry.isIntersecting;
+    });
+    io.observe(el);
+
+    function frame() {
+      raf = requestAnimationFrame(frame);
+      if (!active) return;
+
+      /* update node positions */
+      for (const n of nodes) {
+        // mouse pull
+        const mdx = mouse.x - n.x;
+        const mdy = mouse.y - n.y;
+        const md2 = mdx * mdx + mdy * mdy;
+        if (md2 < MOUSE_RANGE * MOUSE_RANGE) {
+          n.x += mdx * MOUSE_PULL;
+          n.y += mdy * MOUSE_PULL;
+        }
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < 0 || n.x > W) n.vx *= -1;
+        if (n.y < 0 || n.y > H) n.vy *= -1;
+      }
+
+      /* write point positions */
+      for (let i = 0; i < nodes.length; i++) {
+        ptPositions[i * 3] = nodes[i].x;
+        ptPositions[i * 3 + 1] = nodes[i].y;
+        ptPositions[i * 3 + 2] = 0;
+      }
+      // Zero out unused slots
+      for (let i = nodes.length; i < NODE_COUNT; i++) {
+        ptPositions[i * 3] = ptPositions[i * 3 + 1] = ptPositions[i * 3 + 2] = 0;
+      }
+      pointGeo.attributes.position.needsUpdate = true;
+
+      /* build line segments */
+      let li = 0;
+      for (let a = 0; a < nodes.length; a++) {
+        for (let b = a + 1; b < nodes.length; b++) {
+          const dx = nodes[a].x - nodes[b].x;
+          const dy = nodes[a].y - nodes[b].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < MAX_LINK_DIST) {
+            const t = 1 - dist / MAX_LINK_DIST;
+            const r = 0.54 * t;  // violet R
+            const g = 0.39 * t;  // violet G
+            const bv = 0.98 * t; // violet B
+            linePositions[li * 6 + 0] = nodes[a].x;
+            linePositions[li * 6 + 1] = nodes[a].y;
+            linePositions[li * 6 + 2] = 0;
+            linePositions[li * 6 + 3] = nodes[b].x;
+            linePositions[li * 6 + 4] = nodes[b].y;
+            linePositions[li * 6 + 5] = 0;
+            lineColors[li * 6 + 0] = r;
+            lineColors[li * 6 + 1] = g;
+            lineColors[li * 6 + 2] = bv;
+            lineColors[li * 6 + 3] = r;
+            lineColors[li * 6 + 4] = g;
+            lineColors[li * 6 + 5] = bv;
+            li++;
+            if (li >= MAX_LINKS) break;
+          }
+        }
+        if (li >= MAX_LINKS) break;
+      }
+      lineGeo.setDrawRange(0, li * 2);
+      lineGeo.attributes.position.needsUpdate = true;
+      lineGeo.attributes.color.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+
+    frame();
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(el);
     window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseleave", onLeave);
+    el.addEventListener("mouseleave", onLeave);
 
     return () => {
       cancelAnimationFrame(raf);
       io.disconnect();
-      window.removeEventListener("resize", resize);
+      ro.disconnect();
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseleave", onLeave);
+      el.removeEventListener("mouseleave", onLeave);
+      renderer.dispose();
+      if (renderer.domElement.parentNode === el) {
+        el.removeChild(renderer.domElement);
+      }
     };
   }, []);
 
-  return <canvas ref={ref} aria-hidden className={className} />;
+  return <div ref={mountRef} aria-hidden className={className} />;
 }

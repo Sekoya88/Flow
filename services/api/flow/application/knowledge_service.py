@@ -10,22 +10,61 @@ from flow.infrastructure.persistence.repo import FlowRepository
 
 logger = get_logger(__name__)
 
+_CHUNK_HARD_CAP = 500
+_MAX_TOKENS = 400
+_OVERLAP_TOKENS = 60  # ~15% overlap
 
-def chunk_text(body: str, max_chars: int = 1400) -> list[str]:
-    parts = [p.strip() for p in body.split("\n\n") if p.strip()]
-    if not parts:
-        return [body.strip()[:max_chars]] if body.strip() else []
-    chunks: list[str] = []
-    buf = ""
-    for p in parts:
-        if len(buf) + len(p) + 2 > max_chars and buf:
-            chunks.append(buf.strip())
-            buf = p
-        else:
-            buf = (buf + "\n\n" + p).strip() if buf else p
-    if buf:
-        chunks.append(buf.strip())
-    return chunks[:80]
+
+def chunk_text(body: str, max_tokens: int = _MAX_TOKENS, overlap_tokens: int = _OVERLAP_TOKENS) -> list[str]:
+    """Token-aware chunker with sliding overlap.
+
+    Uses tiktoken cl100k_base (same tokenizer as text-embedding-3-*). Falls back
+    to the old char-split when tiktoken is unavailable so ingest never hard-fails.
+    """
+    try:
+        import tiktoken
+
+        enc = tiktoken.get_encoding("cl100k_base")
+        tokens = enc.encode(body)
+        if not tokens:
+            return []
+
+        chunks: list[str] = []
+        start = 0
+        while start < len(tokens):
+            end = min(start + max_tokens, len(tokens))
+            text = enc.decode(tokens[start:end]).strip()
+            if text:
+                chunks.append(text)
+            if end >= len(tokens):
+                break
+            start = end - overlap_tokens
+
+        if len(chunks) > _CHUNK_HARD_CAP:
+            logger.warning(
+                "knowledge.chunk_truncated",
+                original=len(chunks),
+                kept=_CHUNK_HARD_CAP,
+            )
+            chunks = chunks[:_CHUNK_HARD_CAP]
+        return chunks
+
+    except Exception:
+        # Fallback: original paragraph split
+        parts = [p.strip() for p in body.split("\n\n") if p.strip()]
+        if not parts:
+            return [body.strip()[:1400]] if body.strip() else []
+        result: list[str] = []
+        buf = ""
+        for p in parts:
+            if len(buf) + len(p) + 2 > 1400 and buf:
+                result.append(buf.strip())
+                buf = p
+            else:
+                buf = (buf + "\n\n" + p).strip() if buf else p
+        if buf:
+            result.append(buf.strip())
+        return result[:_CHUNK_HARD_CAP]
 
 
 async def ingest_document(
