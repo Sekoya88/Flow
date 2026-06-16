@@ -156,7 +156,7 @@ function SourceDetailDrawer({
                     {agents.length > 0 ? (
                       pickAgentForChunk === c.id ? (
                         <Select
-                          onValueChange={(agentId) => void promote(c.id, agentId)}
+                          onValueChange={(agentId) => agentId && void promote(c.id, agentId as string)}
                           disabled={promotingChunk === c.id}
                         >
                           <SelectTrigger className="h-6 w-[140px] text-[10px]">
