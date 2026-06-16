@@ -374,7 +374,9 @@ async def run_deer_execution(
                 from flow.infrastructure.llm import embeddings as _emb_svc
 
                 _ep_emb = (await _emb_svc.embed_texts(api_key=settings.openai_api_key, texts=[summary]))[0]
-            await repo.insert_episodic_memory(workspace_id, agent_id, user_id, execution_id, summary, _ep_emb)
+            await repo.insert_episodic_memory(
+                workspace_id, agent_id, user_id, summary, _ep_emb, execution_id=execution_id
+            )
         except Exception:
             pass
 

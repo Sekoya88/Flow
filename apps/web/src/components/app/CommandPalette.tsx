@@ -9,6 +9,7 @@ import {
   Command as CommandIcon,
   CornerDownLeft,
   GitBranch,
+  HelpCircle,
   LayoutDashboard,
   Lightbulb,
   MessageSquarePlus,
@@ -40,6 +41,7 @@ const ITEMS: PaletteEntry[] = [
   { id: "proposals", label: "Proposals", href: "/proposals", icon: Lightbulb, section: "Navigate", keywords: "suggestions" },
   { id: "schedules", label: "Schedules", hint: "Cron-driven runs", href: "/schedules", icon: GitBranch, section: "Navigate", keywords: "cron jobs" },
   { id: "evals", label: "Evals", hint: "Golden set benchmarks", href: "/evals", icon: Target, section: "Navigate", keywords: "benchmark golden eval" },
+  { id: "guide", label: "Guide", hint: "How to use Flow", href: "/guide", icon: HelpCircle, section: "Navigate", keywords: "help docs onboarding reference" },
   { id: "profile", label: "Profile & preferences", hint: "Facets, CV import, decay", href: "/settings/profile", icon: Settings, section: "Settings", keywords: "preferences settings facets cv" },
   { id: "onboarding", label: "Finish onboarding", hint: "Run the setup wizard", href: "/onboarding/profile", icon: Sparkles, section: "Settings", keywords: "wizard setup" },
 ];

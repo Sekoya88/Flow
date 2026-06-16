@@ -209,6 +209,21 @@ async def list_chunks(
     return {"chunks": [{"id": str(r["id"]), "index": r["chunk_index"], "content": r["content"]} for r in rows]}
 
 
+@router.post("/chunks/{chunk_id}/promote", status_code=status.HTTP_201_CREATED)
+async def promote_chunk(
+    chunk_id: int,
+    workspace_id: Annotated[UUID, Body()],
+    agent_id: Annotated[UUID, Body()],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    repo: Annotated[FlowRepository, Depends(get_repo)],
+) -> dict:
+    await _assert_workspace(user_id, workspace_id, repo)
+    memory_id = await repo.promote_chunk_to_memory(workspace_id, agent_id, user_id, chunk_id)
+    if memory_id is None:
+        raise HTTPException(status_code=404, detail="chunk not found in this workspace")
+    return {"memory_id": str(memory_id)}
+
+
 @router.get("")
 async def list_knowledge(
     workspace_id: UUID,

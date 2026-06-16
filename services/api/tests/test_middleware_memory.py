@@ -68,6 +68,46 @@ async def test_before_agent_noop_when_store_empty():
 
 
 @pytest.mark.asyncio
+async def test_before_agent_includes_recent_sessions_when_episodic_rows_exist():
+    from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
+    store = _make_store(facts=[], patterns=[])
+    embed = AsyncMock(return_value=[0.1, 0.2])
+    pool = MagicMock()
+
+    fake_repo = MagicMock()
+    fake_repo.search_episodic_memories = AsyncMock(
+        return_value=[{"content": "Q: prior question\n\nA: prior answer"}]
+    )
+
+    with patch(
+        "flow.infrastructure.persistence.repo.FlowRepository",
+        return_value=fake_repo,
+    ):
+        mw = FlowMemoryMiddleware(store=store, llm=None, embed=embed, pool=pool)
+        runtime = _make_runtime()
+        state = {"messages": [HumanMessage(content="follow-up question")]}
+        result = await mw.before_agent(state, runtime)
+
+    fake_repo.search_episodic_memories.assert_awaited_once()
+    assert isinstance(result["messages"][0], SystemMessage)
+    assert "Recent sessions" in result["messages"][0].content
+    assert "prior answer" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_before_agent_skips_recent_sessions_when_no_pool():
+    from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
+
+    store = _make_store(facts=["some fact"])
+    mw = FlowMemoryMiddleware(store=store, llm=None, embed=None, pool=None)
+    runtime = _make_runtime()
+    state = {"messages": [HumanMessage(content="hello")]}
+    result = await mw.before_agent(state, runtime)
+    assert "Recent sessions" not in result["messages"][0].content
+
+
+@pytest.mark.asyncio
 async def test_after_agent_stores_extracted_facts():
     from flow.infrastructure.llm.middleware.memory import FlowMemoryMiddleware
 

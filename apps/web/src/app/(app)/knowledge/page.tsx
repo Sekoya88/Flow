@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BookOpen, BookOpenCheck, FileUp, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, BookOpen, BookOpenCheck, BrainCircuit, FileUp, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -27,6 +34,8 @@ import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type Me = { workspaces: { id: string }[] };
+
+type AgentRow = { id: string; name: string; template: string };
 
 type SourceRow = {
   id: string;
@@ -53,15 +62,19 @@ function statusVariant(s: string | undefined): "default" | "secondary" | "destru
 function SourceDetailDrawer({
   source,
   wsId,
+  agents,
   onClose,
 }: {
   source: SourceRow | null;
   wsId: string;
+  agents: AgentRow[];
   onClose: () => void;
 }) {
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pickAgentForChunk, setPickAgentForChunk] = useState<string | null>(null);
+  const [promotingChunk, setPromotingChunk] = useState<string | null>(null);
 
   useEffect(() => {
     if (!source) return;
@@ -75,6 +88,22 @@ function SourceDetailDrawer({
       .catch((e) => setErr(e instanceof ApiError ? `${e.status}: ${e.body}` : String(e)))
       .finally(() => setLoading(false));
   }, [source, wsId]);
+
+  async function promote(chunkId: string, agentId: string) {
+    setPromotingChunk(chunkId);
+    try {
+      await apiFetch(`/api/v1/knowledge/chunks/${chunkId}/promote`, {
+        method: "POST",
+        json: { workspace_id: wsId, agent_id: agentId },
+      });
+      toast.success("Added to agent memory");
+      setPickAgentForChunk(null);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? `Promote failed (${e.status})` : "Promote failed");
+    } finally {
+      setPromotingChunk(null);
+    }
+  }
 
   return (
     <Sheet open={source !== null} onOpenChange={(o) => !o && onClose()}>
@@ -120,9 +149,44 @@ function SourceDetailDrawer({
                   key={c.id}
                   className="rounded-lg border border-flow-800 bg-muted/10 px-3 py-2.5"
                 >
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                    Chunk {c.index + 1}
-                  </p>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                      Chunk {c.index + 1}
+                    </p>
+                    {agents.length > 0 ? (
+                      pickAgentForChunk === c.id ? (
+                        <Select
+                          onValueChange={(agentId) => void promote(c.id, agentId)}
+                          disabled={promotingChunk === c.id}
+                        >
+                          <SelectTrigger className="h-6 w-[140px] text-[10px]">
+                            <SelectValue placeholder="Pick agent…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {agents.map((a) => (
+                              <SelectItem key={a.id} value={a.id} className="text-xs">
+                                {a.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPickAgentForChunk(c.id)}
+                          disabled={promotingChunk === c.id}
+                          className="flex shrink-0 items-center gap-1 rounded-md border border-flow-violet/30 bg-flow-violet/10 px-2 py-0.5 text-[10px] font-medium text-flow-violet transition-colors hover:bg-flow-violet/20 disabled:opacity-50"
+                        >
+                          {promotingChunk === c.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <BrainCircuit className="h-3 w-3" />
+                          )}
+                          Use in agent memory
+                        </button>
+                      )
+                    ) : null}
+                  </div>
                   <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80">
                     {c.content}
                   </p>
@@ -141,6 +205,7 @@ export default function KnowledgePage() {
   const routerRef = useRef(router);
   const fileRef = useRef<HTMLInputElement>(null);
   const [wsId, setWsId] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
   const [title, setTitle] = useState("Notes");
   const [body, setBody] = useState("");
   const [sources, setSources] = useState<SourceRow[]>([]);
@@ -209,6 +274,9 @@ export default function KnowledgePage() {
         }
         setWsId(w.id);
         void loadSources(w.id);
+        apiFetch<{ agents: AgentRow[] }>(`/api/v1/workspaces/${w.id}/agents`)
+          .then((r) => setAgents(r.agents))
+          .catch(() => undefined);
       })
       .catch((e) => {
         setListErr(e instanceof ApiError ? `${e.status}: ${e.body}` : "Could not load workspace.");
@@ -317,6 +385,7 @@ export default function KnowledgePage() {
         <SourceDetailDrawer
           source={selectedSource}
           wsId={wsId}
+          agents={agents}
           onClose={() => setSelectedSource(null)}
         />
       )}

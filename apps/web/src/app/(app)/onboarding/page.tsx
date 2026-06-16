@@ -188,9 +188,12 @@ export default function OnboardingPage() {
 
             {msg ? <p className="text-destructive text-sm">{msg}</p> : null}
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-2">
               <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-muted-foreground">
                 Back
+              </Button>
+              <Button variant="link" size="sm" onClick={() => router.push("/guide")} className="text-flow-violet">
+                See full guide
               </Button>
               <Button variant="outline" size="sm" className="ml-auto" onClick={() => router.push("/run")}>
                 Skip — go to Run

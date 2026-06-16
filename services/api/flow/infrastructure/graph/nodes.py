@@ -755,6 +755,14 @@ Output ONLY valid JSON:
                 result: dict = {"reflection": data, "prediction": prediction}
                 if metacog_state:
                     result["metacog_state"] = metacog_state
+
+                # Bounded self-correction loop: a low grade feeds the critique
+                # back into the plan so `worker` can address it on re-entry.
+                retry_count = state.get("retry_count", 0)
+                if grade <= 2 and retry_count < 2:
+                    issue = data.get("issue") or "answer quality was rated low"
+                    result["plan"] = f"{plan}\n\n[Reflector critique — revise the answer]: {issue}"
+                    result["retry_count"] = retry_count + 1
                 return result
             except Exception as exc:
                 _node_logger.debug("reflector failed: %s", exc)
@@ -1492,6 +1500,13 @@ def gate_approved(state: FlowGraphState) -> str:
     return "approved" if state.get("approved") else "waiting"
 
 
+def should_retry_after_reflection(state: FlowGraphState) -> str:
+    reflection = state.get("reflection") or {}
+    if reflection.get("grade", 5) <= 2 and state.get("retry_count", 0) < 2:
+        return "worker"
+    return "END"
+
+
 async def _tool_update_skill(ctx: GraphContext, repo: FlowRepository, skill_name: str, content: str) -> str:
     """Create or update an agent skill. Returns confirmation."""
     try:
@@ -1509,4 +1524,5 @@ async def _tool_update_skill(ctx: GraphContext, repo: FlowRepository, skill_name
 CONDITION_REGISTRY: dict[str, Any] = {
     "should_continue_research": should_continue_research,
     "gate_approved": gate_approved,
+    "should_retry_after_reflection": should_retry_after_reflection,
 }

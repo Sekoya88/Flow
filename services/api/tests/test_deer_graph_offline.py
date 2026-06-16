@@ -52,3 +52,42 @@ def test_react_agent_template_exists():
     spec = TEMPLATES["react-agent"]
     assert spec.template == "react-agent"
     assert spec.entry == "planner"
+
+
+def test_should_retry_after_reflection_retries_on_low_grade():
+    """Low grade + under retry cap -> loop back to worker."""
+    from flow.infrastructure.graph.nodes import should_retry_after_reflection
+
+    state = {"reflection": {"grade": 1}, "retry_count": 0}
+    assert should_retry_after_reflection(state) == "worker"
+
+
+def test_should_retry_after_reflection_stops_on_high_grade():
+    """High grade -> terminate, no retry."""
+    from flow.infrastructure.graph.nodes import should_retry_after_reflection
+
+    state = {"reflection": {"grade": 5}, "retry_count": 0}
+    assert should_retry_after_reflection(state) == "END"
+
+
+def test_should_retry_after_reflection_stops_at_retry_cap():
+    """Low grade but retry_count already at cap -> terminate (no infinite loop)."""
+    from flow.infrastructure.graph.nodes import should_retry_after_reflection
+
+    state = {"reflection": {"grade": 1}, "retry_count": 2}
+    assert should_retry_after_reflection(state) == "END"
+
+
+def test_linear3_and_deer_flow_wire_reflector_retry_loop():
+    """linear-3 and deer_flow templates route reflector through the retry condition."""
+    from flow.infrastructure.graph.spec import TEMPLATES
+
+    for name in ("linear-3", "deer_flow"):
+        spec = TEMPLATES[name]
+        retry_edges = [e for e in spec.conditional_edges if e.source == "reflector"]
+        assert retry_edges, f"{name}: no conditional edge from reflector"
+        edge = retry_edges[0]
+        assert edge.condition == "should_retry_after_reflection"
+        assert edge.mapping.get("worker") == "worker"
+        assert edge.mapping.get("END") == "END"
+        assert ("reflector", "END") not in spec.edges

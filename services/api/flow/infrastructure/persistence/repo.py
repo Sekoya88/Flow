@@ -408,6 +408,27 @@ class FlowRepository:
             limit,
         )
 
+    async def promote_chunk_to_memory(
+        self, workspace_id: UUID, agent_id: UUID, user_id: UUID, chunk_id: int
+    ) -> UUID | None:  # chunk_id refers to knowledge_chunks.id (serial int)
+        """Copy a knowledge chunk's content+embedding into agent_memories so it's
+        recallable via the long_term_memory tool, not just the retrieve tool."""
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO agent_memories (workspace_id, agent_id, user_id, content, embedding)
+            SELECT $1, $2, $3, kc.content, kc.embedding
+            FROM knowledge_chunks kc
+            JOIN knowledge_sources ks ON ks.id = kc.source_id
+            WHERE kc.id = $4 AND ks.workspace_id = $1
+            RETURNING id
+            """,
+            workspace_id,
+            agent_id,
+            user_id,
+            chunk_id,
+        )
+        return row["id"] if row else None
+
     # ── Typed user preferences ────────────────────────────────────────────
 
     async def load_profile(
@@ -851,6 +872,31 @@ class FlowRepository:
             ORDER BY created_at DESC
             LIMIT $4
             """,
+            workspace_id,
+            agent_id,
+            user_id,
+            limit,
+        )
+
+    async def search_episodic_memories(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        user_id: UUID,
+        embedding: list[float],
+        limit: int = 3,
+    ) -> list[asyncpg.Record]:
+        """Semantic search over past-session summaries — cross-session reflection."""
+        return await self._pool.fetch(
+            """
+            SELECT content, created_at, embedding <=> $1::vector AS dist
+            FROM episodic_memories
+            WHERE workspace_id = $2 AND agent_id = $3 AND user_id = $4
+                AND embedding IS NOT NULL AND content NOT LIKE '[PREDICTION]%'
+            ORDER BY embedding <=> $1::vector
+            LIMIT $5
+            """,
+            _vec_literal(embedding),
             workspace_id,
             agent_id,
             user_id,

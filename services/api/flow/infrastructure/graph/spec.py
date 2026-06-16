@@ -85,7 +85,13 @@ TEMPLATES: dict[str, GraphSpec] = {
             ("planner", "worker"),
             ("worker", "synthesizer"),
             ("synthesizer", "reflector"),
-            ("reflector", "END"),
+        ],
+        conditional_edges=[
+            ConditionalEdge(
+                source="reflector",
+                condition="should_retry_after_reflection",
+                mapping={"worker": "worker", "END": "END"},
+            )
         ],
         entry="planner",
     ),
@@ -96,7 +102,13 @@ TEMPLATES: dict[str, GraphSpec] = {
             ("planner", "worker"),
             ("worker", "synthesizer"),
             ("synthesizer", "reflector"),
-            ("reflector", "END"),
+        ],
+        conditional_edges=[
+            ConditionalEdge(
+                source="reflector",
+                condition="should_retry_after_reflection",
+                mapping={"worker": "worker", "END": "END"},
+            )
         ],
         entry="planner",
     ),

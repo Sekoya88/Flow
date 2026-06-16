@@ -7,6 +7,7 @@ import {
   BookOpen,
   Brain,
   CalendarClock,
+  HelpCircle,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -63,6 +64,7 @@ const primaryNav = [
   { href: "/executions", label: "Executions", icon: History },
   { href: "/logs", label: "Logs", icon: Terminal },
   { href: "/research", label: "Research", icon: Newspaper },
+  { href: "/guide", label: "Guide", icon: HelpCircle },
   { href: "/onboarding", label: "Start", icon: BookOpen },
 ] as const;
 
