@@ -129,7 +129,7 @@ function SourceDetailDrawer({
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-1">
+        <ScrollArea className="min-h-0 flex-1 px-1">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

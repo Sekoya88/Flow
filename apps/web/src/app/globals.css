@@ -1,7 +1,7 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 /* Base UI emits data-orientation="..." — these variants map the shorthand used by ui/ primitives (tabs, slider, separator, scroll-area). Without them data-horizontal:/data-vertical: never match. */
@@ -147,6 +147,20 @@
   --ring:               var(--flow-violet);
   --sidebar-primary:    var(--flow-violet);
   --sidebar-ring:       var(--flow-violet);
+}
+
+/* Aurora light — the flat near-white background read as "too white"; layer
+   soft violet/blue/pink blobs (fixed, so they stay put while pages scroll)
+   wherever bg-background is used, so every page gets a cohesive backdrop. */
+:root[data-theme="light"] .bg-background,
+.light .bg-background {
+  background-color: var(--flow-950);
+  background-image:
+    radial-gradient(ellipse 900px 560px at 12% -8%, rgba(124, 58, 237, 0.16), transparent 60%),
+    radial-gradient(ellipse 820px 520px at 88% 0%, rgba(56, 189, 248, 0.14), transparent 60%),
+    radial-gradient(ellipse 760px 600px at 50% 110%, rgba(217, 70, 239, 0.10), transparent 60%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 /* Scrollbar: inverted scale makes --flow-700 (#d4d4cc) too light to see on white */

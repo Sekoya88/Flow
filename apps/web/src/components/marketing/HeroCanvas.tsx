@@ -3,10 +3,10 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-const NODE_COUNT = 110;
-const MAX_LINK_DIST = 160;
-const SPEED = 0.2;
-const GLOW_SIZE = 7;
+const NODE_COUNT = 60;
+const MAX_LINK_DIST = 130;
+const SPEED = 0.15;
+const GLOW_SIZE = 5;
 const MOUSE_PULL = 0.0016;
 const MOUSE_RANGE = 260;
 
@@ -51,7 +51,7 @@ export function HeroCanvas({ className }: { className?: string }) {
       size: GLOW_SIZE,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 1,
+      opacity: 0.6,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -69,7 +69,7 @@ export function HeroCanvas({ className }: { className?: string }) {
     const lineMat = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 1,
+      opacity: 0.5,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -79,10 +79,10 @@ export function HeroCanvas({ className }: { className?: string }) {
     /* ── secondary faint halo layer ── */
     const haloMat = new THREE.PointsMaterial({
       color: 0xc084fc,
-      size: GLOW_SIZE * 3.5,
+      size: GLOW_SIZE * 3,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });

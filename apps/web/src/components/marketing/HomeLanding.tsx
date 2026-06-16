@@ -36,15 +36,13 @@ export function HomeLanding() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-flow-950">
       {/* ── WebGL backdrop ── */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[900px] overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[640px] overflow-hidden [mask-image:linear-gradient(to_bottom,black,black_60%,transparent)]"
+      >
         <HeroCanvas className="h-full w-full" />
-        {/* bloom orbs — bigger + brighter than before */}
-        <div className="absolute left-1/2 top-[-12%] h-[640px] w-[1000px] -translate-x-1/2 rounded-full bg-flow-violet/30 blur-[160px]" />
-        <div className="absolute left-[10%] top-[25%] h-[360px] w-[480px] rounded-full bg-fuchsia-600/18 blur-[120px]" />
-        <div className="absolute right-[5%] top-[10%] h-[320px] w-[440px] rounded-full bg-indigo-500/15 blur-[100px]" />
-        <div className="absolute right-[30%] top-[50%] h-[200px] w-[300px] rounded-full bg-violet-700/20 blur-[80px]" />
-        <div className="scanlines absolute inset-0 opacity-[0.03]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-flow-950/30 to-flow-950" />
+        <div className="absolute left-1/2 top-[-12%] h-[560px] w-[880px] -translate-x-1/2 rounded-full bg-flow-violet/24 blur-[160px]" />
+        <div className="absolute right-[5%] top-[5%] h-[280px] w-[380px] rounded-full bg-indigo-500/12 blur-[110px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-flow-950/40 to-flow-950" />
       </div>
 
       <div className="relative z-10 flex flex-1 flex-col">
@@ -57,19 +55,16 @@ export function HomeLanding() {
             {/* LEFT: copy */}
             <div className="flex flex-col justify-center">
               {/* live badge */}
-              <div className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-flow-violet/40 bg-flow-violet/12 px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-flow-violet shadow-[0_0_20px_rgba(139,92,246,0.25)]">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-flow-violet shadow-[0_0_6px_#8b5cf6]" />
+              <div className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-flow-violet/40 bg-flow-violet/12 px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-flow-violet">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-flow-violet" />
                 Flow Workspace
               </div>
 
               {/* headline */}
               <h1 className="font-mono text-5xl font-bold leading-[1.05] tracking-[-0.03em] text-flow-50 lg:text-7xl">
                 The cognitive<br />layer for your{" "}
-                <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-flow-violet via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
-                    agents.
-                  </span>
-                  <span className="absolute -inset-x-2 inset-y-0 -z-10 blur-2xl bg-gradient-to-r from-flow-violet/30 via-fuchsia-500/20 to-transparent" />
+                <span className="bg-gradient-to-r from-flow-violet via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
+                  agents.
                 </span>
               </h1>
 
@@ -84,17 +79,16 @@ export function HomeLanding() {
               {/* stats */}
               <div className="mt-10 grid grid-cols-3 gap-3">
                 {[
-                  { val: "< 120ms", lbl: "TTFB Stream", glow: "shadow-[0_0_30px_rgba(139,92,246,0.2)]" },
-                  { val: "O(1)", lbl: "Memory Recall", glow: "shadow-[0_0_30px_rgba(217,70,239,0.15)]" },
-                  { val: "100%", lbl: "Type Safe", glow: "shadow-[0_0_30px_rgba(99,102,241,0.15)]" },
+                  { val: "< 120ms", lbl: "TTFB Stream" },
+                  { val: "O(1)", lbl: "Memory Recall" },
+                  { val: "100%", lbl: "Type Safe" },
                 ].map((stat) => (
                   <div
                     key={stat.lbl}
-                    className={`relative overflow-hidden rounded-[8px] border border-flow-700/60 bg-gradient-to-br from-flow-900 to-flow-950 p-4 ${stat.glow}`}
+                    className="rounded-[8px] border border-flow-700/60 bg-gradient-to-br from-flow-900 to-flow-950 p-4"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-flow-violet/5 to-transparent" />
-                    <div className="relative font-mono text-2xl font-bold text-flow-50">{stat.val}</div>
-                    <div className="relative mt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-flow-500">
+                    <div className="font-mono text-2xl font-bold text-flow-50">{stat.val}</div>
+                    <div className="mt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-flow-500">
                       {stat.lbl}
                     </div>
                   </div>
@@ -103,7 +97,7 @@ export function HomeLanding() {
             </div>
 
             {/* RIGHT: live trace panel */}
-            <div className="relative flex flex-col gap-0 rounded-[10px] border border-flow-700/50 bg-gradient-to-br from-flow-900 via-flow-900 to-flow-950 shadow-[0_0_60px_rgba(139,92,246,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="relative flex flex-col gap-0 rounded-[10px] border border-flow-700/50 bg-gradient-to-br from-flow-900 via-flow-900 to-flow-950 shadow-[0_0_40px_rgba(139,92,246,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
               {/* top chrome bar */}
               <div className="flex items-center justify-between border-b border-flow-800 px-4 py-3">
                 <div className="flex items-center gap-2">
