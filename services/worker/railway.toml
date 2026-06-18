@@ -1,0 +1,7 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "../api/Dockerfile"
+
+[deploy]
+startCommand = "uv run arq flow.infrastructure.queue.worker.WorkerSettings"
+restartPolicyType = "ALWAYS"

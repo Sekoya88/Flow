@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KeyRound, Plug, Users, UserCog } from "lucide-react";
+import { KeyRound, Plug, Users, UserCog, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const settingsNav = [
@@ -10,6 +10,7 @@ const settingsNav = [
   { href: "/settings/security", label: "Security", icon: KeyRound },
   { href: "/settings/workspace", label: "Workspace", icon: Users },
   { href: "/settings/mcp", label: "MCP Servers", icon: Plug },
+  { href: "/settings/integrations", label: "Integrations", icon: MessageCircle },
 ] as const;
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

@@ -41,6 +41,7 @@ from flow.interfaces.http.routes import (
     golden_sets,
     graph,
     health,
+    integrations,
     kg,
     knowledge,
     local,
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(health.router)
+    app.include_router(integrations.router)  # public webhook endpoints first (no auth)
     app.include_router(local.router)  # no auth — desktop app discovery
     app.include_router(auth.router)
     app.include_router(analytics.router)
