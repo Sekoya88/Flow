@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from contextlib import asynccontextmanager
 
@@ -77,7 +78,10 @@ async def lifespan(app: FastAPI):
     setup_tracing(otlp_endpoint=settings.otel_endpoint)
     setup_sentry(dsn=settings.sentry_dsn)
 
-    run_migrations()
+    try:
+        await asyncio.wait_for(asyncio.to_thread(run_migrations), timeout=30.0)
+    except (asyncio.TimeoutError, RuntimeError) as exc:
+        logger.warning("migrations.skipped", error=str(exc))
     pool = await create_pool(settings)
     app.state.pool = pool
 
@@ -100,7 +104,10 @@ async def lifespan(app: FastAPI):
     stream_hub = ExecutionStreamHub(redis_url=settings.redis_url)
     app.state.stream_hub = stream_hub
 
-    await get_arq_pool()
+    try:
+        await asyncio.wait_for(get_arq_pool(), timeout=15.0)
+    except (asyncio.TimeoutError, Exception) as exc:
+        logger.warning("arq.pool_init_skipped", error=str(exc))
 
     logger.info("lifespan.started")
     try:
