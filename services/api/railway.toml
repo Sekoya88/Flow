@@ -2,8 +2,12 @@
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
+# NOTE: this file is shared by the `api` AND `worker` Railway services — both use
+# root dir services/api so the Docker build context (COPY flow/migrations) resolves.
+# Healthcheck is therefore NOT set here (arq worker serves no HTTP); the api service's
+# /health check is configured at the dashboard level instead. startCommand likewise
+# differs per service via dashboard override (api -> Dockerfile CMD start-api.sh,
+# worker -> start-worker.sh).
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
