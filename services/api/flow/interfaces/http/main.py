@@ -78,47 +78,66 @@ async def lifespan(app: FastAPI):
     setup_tracing(otlp_endpoint=settings.otel_endpoint)
     setup_sentry(dsn=settings.sentry_dsn)
 
-    try:
-        await asyncio.wait_for(asyncio.to_thread(run_migrations), timeout=30.0)
-    except (asyncio.TimeoutError, RuntimeError) as exc:
-        logger.warning("migrations.skipped", error=str(exc))
-    pool = await create_pool(settings)
-    app.state.pool = pool
+    async def _init() -> None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(run_migrations), timeout=30.0)
+        except (asyncio.TimeoutError, RuntimeError) as exc:
+            logger.warning("migrations.skipped", error=str(exc))
 
-    checkpoint_pool = build_checkpoint_pool(settings.database_url)
-    await checkpoint_pool.open()
-    checkpointer = AsyncPostgresSaver(checkpoint_pool)
-    await checkpointer.setup()
-    app.state.checkpoint_pool = checkpoint_pool
-    app.state.checkpointer = checkpointer
+        try:
+            pool = await asyncio.wait_for(create_pool(settings), timeout=30.0)
+        except Exception as exc:
+            logger.warning("db.pool_failed", error=str(exc))
+            return
+        app.state.pool = pool
 
-    from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+        try:
+            checkpoint_pool = build_checkpoint_pool(settings.database_url)
+            await asyncio.wait_for(checkpoint_pool.open(), timeout=15.0)
+            checkpointer = AsyncPostgresSaver(checkpoint_pool)
+            await asyncio.wait_for(checkpointer.setup(), timeout=15.0)
+            app.state.checkpoint_pool = checkpoint_pool
+            app.state.checkpointer = checkpointer
+        except Exception as exc:
+            logger.warning("checkpoint.pool_failed", error=str(exc))
 
-    memory_store_pool = build_memory_store_pool(settings.database_url)
-    await memory_store_pool.open()
-    memory_store = create_memory_store(memory_store_pool)
-    await memory_store.setup()
-    app.state.memory_store_pool = memory_store_pool
-    app.state.memory_store = memory_store
+        try:
+            from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+            memory_store_pool = build_memory_store_pool(settings.database_url)
+            await asyncio.wait_for(memory_store_pool.open(), timeout=15.0)
+            memory_store = create_memory_store(memory_store_pool)
+            await asyncio.wait_for(memory_store.setup(), timeout=15.0)
+            app.state.memory_store_pool = memory_store_pool
+            app.state.memory_store = memory_store
+        except Exception as exc:
+            logger.warning("memory_store.pool_failed", error=str(exc))
 
-    stream_hub = ExecutionStreamHub(redis_url=settings.redis_url)
-    app.state.stream_hub = stream_hub
+        stream_hub = ExecutionStreamHub(redis_url=settings.redis_url)
+        app.state.stream_hub = stream_hub
 
-    try:
-        await asyncio.wait_for(get_arq_pool(), timeout=15.0)
-    except (asyncio.TimeoutError, Exception) as exc:
-        logger.warning("arq.pool_init_skipped", error=str(exc))
+        try:
+            await asyncio.wait_for(get_arq_pool(), timeout=15.0)
+        except (asyncio.TimeoutError, Exception) as exc:
+            logger.warning("arq.pool_init_skipped", error=str(exc))
 
+        logger.info("lifespan.initialized")
+
+    _init_task = asyncio.create_task(_init())
     logger.info("lifespan.started")
     try:
         yield
     finally:
+        if not _init_task.done():
+            _init_task.cancel()
         await close_arq_pool()
-        await stream_hub.close()
+        if hasattr(app.state, "stream_hub"):
+            await app.state.stream_hub.close()
         if hasattr(app.state, "memory_store_pool"):
             await app.state.memory_store_pool.close()
-        await checkpoint_pool.close()  # type: ignore[misc]
-        await close_pool(pool)
+        if hasattr(app.state, "checkpoint_pool"):
+            await app.state.checkpoint_pool.close()  # type: ignore[misc]
+        if hasattr(app.state, "pool"):
+            await close_pool(app.state.pool)
         logger.info("lifespan.stopped")
 
 
