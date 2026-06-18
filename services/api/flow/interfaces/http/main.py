@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
     async def _init() -> None:
         try:
             await asyncio.wait_for(asyncio.to_thread(run_migrations), timeout=30.0)
-        except (asyncio.TimeoutError, RuntimeError) as exc:
+        except (TimeoutError, RuntimeError) as exc:
             logger.warning("migrations.skipped", error=str(exc))
 
         try:
@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI):
 
         try:
             from flow.infrastructure.db.store import build_memory_store_pool, create_memory_store
+
             memory_store_pool = build_memory_store_pool(settings.database_url)
             await asyncio.wait_for(memory_store_pool.open(), timeout=15.0)
             memory_store = create_memory_store(memory_store_pool)
@@ -117,7 +118,7 @@ async def lifespan(app: FastAPI):
 
         try:
             await asyncio.wait_for(get_arq_pool(), timeout=15.0)
-        except (asyncio.TimeoutError, Exception) as exc:
+        except (TimeoutError, Exception) as exc:
             logger.warning("arq.pool_init_skipped", error=str(exc))
 
         logger.info("lifespan.initialized")

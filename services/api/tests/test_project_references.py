@@ -30,7 +30,7 @@ def test_paper_reference_md_has_frontmatter_and_sections() -> None:
         }
     )
     assert md.startswith("---\n")
-    assert 'title: "A \'Quoted\' Title"' in md
+    assert "title: \"A 'Quoted' Title\"" in md
     assert "relevance_score: 0.83" in md
     assert "## Abstract" in md
     assert "- one" in md and "- two" in md

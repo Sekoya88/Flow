@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -36,7 +36,7 @@ def _make_bot_row(**overrides) -> dict:
         "bot_token": _BOT_TOKEN,
         "bot_username": _BOT_USERNAME,
         "webhook_secret": _WEBHOOK_SECRET,
-        "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2026, 1, 1, tzinfo=UTC),
     }
     return {**base, **overrides}
 
@@ -70,7 +70,7 @@ def _make_pool(
                 "id": _BOT_ID,
                 "agent_id": _AGENT_ID,
                 "bot_username": _BOT_USERNAME,
-                "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
                 "agent_name": "Test Agent",
             }
         ]
@@ -101,8 +101,7 @@ async def test_register_bot_success(app):
     app.dependency_overrides[get_pool] = lambda: pool
 
     with (
-        patch("flow.interfaces.http.routes.integrations.get_me", new_callable=AsyncMock)
-        as mock_get_me,
+        patch("flow.interfaces.http.routes.integrations.get_me", new_callable=AsyncMock) as mock_get_me,
         patch(
             "flow.interfaces.http.routes.integrations.register_webhook",
             new_callable=AsyncMock,
@@ -177,9 +176,7 @@ async def test_register_bot_non_member(app):
 @pytest.mark.asyncio
 async def test_list_bots(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.get(
-            f"/api/v1/integrations/telegram?workspace_id={_WS_ID}", headers=_auth()
-        )
+        r = await c.get(f"/api/v1/integrations/telegram?workspace_id={_WS_ID}", headers=_auth())
 
     assert r.status_code == 200
     data = r.json()
@@ -194,9 +191,7 @@ async def test_list_bots_empty(app):
     app.dependency_overrides[get_pool] = lambda: pool
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.get(
-            f"/api/v1/integrations/telegram?workspace_id={_WS_ID}", headers=_auth()
-        )
+        r = await c.get(f"/api/v1/integrations/telegram?workspace_id={_WS_ID}", headers=_auth())
 
     assert r.status_code == 200
     assert r.json() == []

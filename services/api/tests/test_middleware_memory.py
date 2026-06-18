@@ -76,9 +76,7 @@ async def test_before_agent_includes_recent_sessions_when_episodic_rows_exist():
     pool = MagicMock()
 
     fake_repo = MagicMock()
-    fake_repo.search_episodic_memories = AsyncMock(
-        return_value=[{"content": "Q: prior question\n\nA: prior answer"}]
-    )
+    fake_repo.search_episodic_memories = AsyncMock(return_value=[{"content": "Q: prior question\n\nA: prior answer"}])
 
     with patch(
         "flow.infrastructure.persistence.repo.FlowRepository",

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def _chunk(text: str, **kw):
     from flow.application.knowledge_service import chunk_text
+
     return chunk_text(text, **kw)
 
 
@@ -42,6 +41,7 @@ def test_overlap_produces_shared_content():
 
 def test_hard_cap_respected():
     from flow.application.knowledge_service import _CHUNK_HARD_CAP
+
     # Generate text that would produce > _CHUNK_HARD_CAP chunks at small size
     huge = " ".join([f"w{i}" for i in range(_CHUNK_HARD_CAP * 10)])
     result = _chunk(huge, max_tokens=5, overlap_tokens=1)

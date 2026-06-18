@@ -3,6 +3,7 @@
 Public endpoints (webhook receivers) are verified by a per-bot secret token,
 not by JWT — Telegram POSTs from its own servers, not from our frontend.
 """
+
 from __future__ import annotations
 
 import asyncio

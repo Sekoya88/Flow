@@ -25,9 +25,7 @@ def _stable_key(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:32]
 
 
-def _format_memory_block(
-    facts: list, patterns: list, summaries: list | None = None, recent_sessions: list | None = None
-) -> str:
+def _format_memory_block(facts: list, patterns: list, summaries: list | None = None, recent_sessions: list | None = None) -> str:
     lines = ["[Memory from previous runs]"]
     if recent_sessions:
         lines.append("Recent sessions (cross-session reflection):")
@@ -152,9 +150,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
 
                     emb = await self._embed(query)
                     if emb:
-                        rows = await _Repo(self._pool).search_episodic_memories(
-                            runtime.workspace_id, runtime.agent_id, runtime.user_id, emb, limit=3
-                        )
+                        rows = await _Repo(self._pool).search_episodic_memories(runtime.workspace_id, runtime.agent_id, runtime.user_id, emb, limit=3)
                         recent_sessions = [{"content": r["content"]} for r in rows]
                 except Exception as exc:
                     logger.warning("memory.before_agent.episodic_search_failed", error=str(exc))
@@ -209,9 +205,7 @@ class FlowMemoryMiddleware(AgentMiddleware):
                     try:
                         from flow.infrastructure.persistence.repo import FlowRepository as _Repo
 
-                        await _Repo(self._pool).insert_memory(
-                            runtime.workspace_id, runtime.agent_id, runtime.user_id, fact, emb
-                        )
+                        await _Repo(self._pool).insert_memory(runtime.workspace_id, runtime.agent_id, runtime.user_id, fact, emb)
                     except Exception:
                         pass
         except Exception as exc:

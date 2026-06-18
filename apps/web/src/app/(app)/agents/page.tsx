@@ -61,17 +61,17 @@ function StatusDot({ status }: { status: string | null }) {
   return <div className="h-2 w-2 rounded-full bg-flow-700" />;
 }
 
+function formatTimeAgo(lastRunAt: string): string {
+  const diff = Date.now() - new Date(lastRunAt).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function CockpitRow({ a, onClick }: { a: CockpitAgent; onClick: () => void }) {
-  const timeAgo = a.last_run_at
-    ? (() => {
-        const diff = Date.now() - new Date(a.last_run_at).getTime();
-        const m = Math.floor(diff / 60000);
-        if (m < 60) return `${m}m ago`;
-        const h = Math.floor(m / 60);
-        if (h < 24) return `${h}h ago`;
-        return `${Math.floor(h / 24)}d ago`;
-      })()
-    : "—";
+  const timeAgo = a.last_run_at ? formatTimeAgo(a.last_run_at) : "—";
 
   return (
     <button

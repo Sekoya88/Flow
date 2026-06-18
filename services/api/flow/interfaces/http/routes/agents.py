@@ -167,18 +167,20 @@ async def cockpit(
         run = run_map.get(aid)
         tools_cfg = (a["config"] or {}).get("tools") or {}
         enabled_tools = [k for k, v in tools_cfg.items() if v] if isinstance(tools_cfg, dict) else []
-        result.append({
-            "id": str(aid),
-            "name": _display_name(a["name"], a["template"]),
-            "template": a["template"],
-            "config": a["config"],
-            "total_runs": int(run["total_runs"]) if run else 0,
-            "last_run_at": run["last_run_at"].isoformat() if run and run["last_run_at"] else None,
-            "last_status": run["last_status"] if run else None,
-            "episodic_memory_count": mem_map.get(aid, 0),
-            "skills_count": skill_map.get(aid, 0),
-            "enabled_tools": enabled_tools,
-        })
+        result.append(
+            {
+                "id": str(aid),
+                "name": _display_name(a["name"], a["template"]),
+                "template": a["template"],
+                "config": a["config"],
+                "total_runs": int(run["total_runs"]) if run else 0,
+                "last_run_at": run["last_run_at"].isoformat() if run and run["last_run_at"] else None,
+                "last_status": run["last_status"] if run else None,
+                "episodic_memory_count": mem_map.get(aid, 0),
+                "skills_count": skill_map.get(aid, 0),
+                "enabled_tools": enabled_tools,
+            }
+        )
     return {"agents": result}
 
 
