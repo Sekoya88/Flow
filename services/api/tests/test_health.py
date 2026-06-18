@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
@@ -30,6 +32,16 @@ def test_health_with_db(database_url: str, monkeypatch):
 
     app = create_app()
     with TestClient(app) as client:
-        r = client.get("/health")
-    assert r.status_code == 200
-    assert r.json()["db"] is True
+        # The DB pool initialises in a background task — lifespan yields immediately
+        # so the platform healthcheck passes — so db readiness is eventually
+        # consistent. Poll until the pool connects (or time out).
+        deadline = time.monotonic() + 15
+        body: dict = {}
+        while time.monotonic() < deadline:
+            r = client.get("/health")
+            assert r.status_code == 200
+            body = r.json()
+            if body.get("db") is True:
+                break
+            time.sleep(0.25)
+    assert body.get("db") is True

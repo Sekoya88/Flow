@@ -12,7 +12,7 @@ def test_low_score_inserts_negative():
     repo = MagicMock()
     repo.insert_agent_negative = AsyncMock(return_value=uuid.uuid4())
 
-    asyncio.get_event_loop().run_until_complete(
+    asyncio.run(
         _maybe_insert_negative(
             repo=repo,
             execution_id=uuid.uuid4(),
@@ -32,7 +32,7 @@ def test_high_score_skips_negative():
     repo = MagicMock()
     repo.insert_agent_negative = AsyncMock()
 
-    asyncio.get_event_loop().run_until_complete(
+    asyncio.run(
         _maybe_insert_negative(
             repo=repo,
             execution_id=uuid.uuid4(),
