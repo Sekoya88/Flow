@@ -3,7 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "uv run alembic upgrade head && uv run uvicorn flow.interfaces.http.main:app --host 0.0.0.0 --port $PORT"
+releaseCommand = "/app/.venv/bin/alembic upgrade head"
+startCommand = "exec /app/.venv/bin/uvicorn flow.interfaces.http.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
