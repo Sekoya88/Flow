@@ -53,10 +53,15 @@ class SkillLoader:
         *,
         execution_id: UUID | None = None,
         max_skills: int = 5,
+        use_bandit: bool = True,
     ) -> list[MatchedSkill]:
         """Load active skills, match against query, return ranked list.
 
-        Skills are ranked by: trigger match (boolean) then by score DESC.
+        Candidates are first filtered by trigger match. The surviving set is then
+        ordered either by the per-skill RL bandit (Thompson Sampling over the
+        learned Beta posteriors, when ``use_bandit``) or by static ``score`` DESC.
+        The bandit closes the reward loop: grades written by the reflector now
+        decide which skills actually load.
         """
         try:
             skills = await self._repo.list_active_skills(agent_id, workspace_id)
@@ -101,8 +106,30 @@ class SkillLoader:
             except Exception:
                 pass  # observability is best-effort
 
-        # Rank by score DESC, cap at max_skills
+        # Static fallback ordering: score DESC.
         matched.sort(key=lambda m: m.score, reverse=True)
+
+        # Bandit ordering: let the learned Beta posteriors pick which skills load,
+        # so the reflector's reward signal actually drives selection. Best-effort —
+        # any failure (no arms, DB hiccup) falls back to the score sort above.
+        if use_bandit and matched:
+            try:
+                from flow.application.rl_bandit import SkillBandit
+
+                bandit = SkillBandit(self._repo._pool)
+                ordered_ids = await bandit.select_skills(
+                    agent_id,
+                    [m.skill_id for m in matched],
+                    k=max_skills,
+                )
+                if ordered_ids:
+                    by_id = {m.skill_id: m for m in matched}
+                    selected = [by_id[sid] for sid in ordered_ids if sid in by_id]
+                    tail = [m for m in matched if m.skill_id not in set(ordered_ids)]
+                    matched = selected + tail
+            except Exception:
+                logger.debug("skill_loader.bandit_select_failed", exc_info=True)
+
         return matched[:max_skills]
 
     def format_xml(self, skills: list[MatchedSkill]) -> str:

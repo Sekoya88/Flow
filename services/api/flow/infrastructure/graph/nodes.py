@@ -138,6 +138,29 @@ def _resolved_tools(cfg: dict[str, Any]) -> dict[str, bool]:
     return out
 
 
+# Loop-engineering / metacognition feedback loops. Each closed loop is gated
+# here so an agent can opt out, but every flag defaults ON — the value lands on
+# existing agents without per-agent config changes.
+DEFAULT_LOOPS: dict[str, Any] = {
+    "bandit_selection": True,  # A — bandit picks which skills load
+    "progress_guard": True,  # C — regression guard + oscillation break
+    "feed_mistakes_forward": True,  # D — reflector issues -> agent_negatives
+    "max_tool_iters": 8,
+    "max_retries": 2,
+}
+
+
+def _loops_cfg(ctx: GraphContext) -> dict[str, Any]:
+    """Resolve loop-engineering flags from agent_config, defaulting all-on."""
+    raw = (ctx.agent_config or {}).get("loops")
+    raw = raw if isinstance(raw, dict) else {}
+    out = {**DEFAULT_LOOPS}
+    for k in DEFAULT_LOOPS:
+        if k in raw:
+            out[k] = raw[k]
+    return out
+
+
 def _get_llm(ctx: GraphContext):
     from flow.infrastructure.llm.providers import get_chat_model
 
@@ -273,6 +296,7 @@ def make_planner(ctx: GraphContext):
                     workspace_id=ctx.workspace_id,
                     query=user_text,
                     execution_id=ctx.execution_id,
+                    use_bandit=bool(_loops_cfg(ctx)["bandit_selection"]),
                 )
                 if matched:
                     skills_block = loader.format_xml(matched)
@@ -290,6 +314,19 @@ def make_planner(ctx: GraphContext):
                     prediction_hint = f"\n\n[METACOGNITION] Previous run predicted this topic: {last_pred}"
             except Exception:
                 pass
+
+            # D: surface recurring mistakes so the planner plans around them,
+            # rather than only reacting in the worker's "mistakes to avoid" block.
+            negatives_hint = ""
+            if bool(_loops_cfg(ctx)["feed_mistakes_forward"]):
+                try:
+                    neg_rows = await repo.list_agent_negatives(ctx.workspace_id, ctx.agent_id, limit=3)
+                    neg_items = [str(r["content"]) for r in neg_rows]
+                    if neg_items:
+                        joined = "\n".join(f"- {n}" for n in neg_items)
+                        negatives_hint = f"\n\n[KNOWN RECURRING ISSUES — plan to avoid these]:\n{joined}"
+                except Exception:
+                    pass
 
             # Cross-thread facts are injected by FlowMemoryMiddleware.before_agent as
             # SystemMessages (see the injected-context fold below) — no inline read here.
@@ -309,6 +346,8 @@ def make_planner(ctx: GraphContext):
                     system += f"\n\n{skills_block}"
                 if prediction_hint:
                     system += prediction_hint
+                if negatives_hint:
+                    system += negatives_hint
 
                 # Fold middleware-injected context (persona, typed profile, memory facts)
                 # into the system prompt. Applied last so it survives the pattern_block
@@ -378,6 +417,13 @@ def make_worker(ctx: GraphContext):
             pref_block = "\n".join(pref_lines) or "(no user preferences)"
             neg_block = "\n".join(f"- {n}" for n in neg_bits) or "(none)"
 
+            # Carry-forward from a rejected retry: show the worker its prior attempt
+            # so it revises rather than redoing the work from scratch (loop engineering).
+            prior_answer = state.get("prior_answer") or ""
+            retry_block = (
+                f"\n\nYour previous attempt was rejected — revise it, do not repeat it verbatim:\n{str(prior_answer)[:1500]}" if prior_answer else ""
+            )
+
             llm = _get_llm(ctx)
             if llm is None:
                 body = f"RAG:\n{numbered_snippets}\n\nMemories:\n{mem_block}\n\nUser prefs:\n{pref_block}\n\nPlan:\n{plan}"
@@ -403,7 +449,7 @@ def make_worker(ctx: GraphContext):
                         content=(
                             f"User message:\n{user_text}\n\nPlan:\n{plan}\n\n"
                             f"Preferences:\n{pref_block}\n\nRetrieved knowledge (cite as [N]):\n{numbered_snippets}\n\n"
-                            f"Long-term memories:\n{mem_block}"
+                            f"Long-term memories:\n{mem_block}{retry_block}"
                         )
                     ),
                 ]
@@ -751,18 +797,71 @@ Output ONLY valid JSON:
                 except Exception:
                     pass  # bandit updates are best-effort
 
+                loops = _loops_cfg(ctx)
+                issue_text = (data.get("issue") or "").strip()
+
+                # === D: feed recurring mistakes forward (cross-run learning) ===
+                # A low-graded run's issue becomes an agent negative so the NEXT
+                # run's worker surfaces it via the existing "mistakes to avoid"
+                # block. Deduped against recent reflector negatives to avoid spam.
+                if bool(loops["feed_mistakes_forward"]) and grade <= 2 and issue_text:
+                    try:
+                        existing = await repo.list_agent_negatives(ctx.workspace_id, ctx.agent_id, limit=10)
+                        norm = issue_text.lower()[:200]
+                        dup = any(
+                            (norm in str(r["content"]).lower() or str(r["content"]).lower()[:200] in norm)
+                            for r in existing
+                            if r.get("source") == "reflector"
+                        )
+                        if not dup:
+                            await repo.insert_agent_negative(
+                                ctx.workspace_id,
+                                ctx.agent_id,
+                                content=issue_text[:500],
+                                source="reflector",
+                            )
+                            _node_logger.info("reflector.negative_recorded", grade=grade)
+                    except Exception:
+                        _node_logger.debug("reflector.feed_mistake_failed", exc_info=True)
+
                 _node_logger.info("node.done", node="reflector", grade=grade, duration_ms=int((time.monotonic() - _t0) * 1000))
                 result: dict = {"reflection": data, "prediction": prediction}
                 if metacog_state:
                     result["metacog_state"] = metacog_state
 
-                # Bounded self-correction loop: a low grade feeds the critique
-                # back into the plan so `worker` can address it on re-entry.
                 retry_count = state.get("retry_count", 0)
-                if grade <= 2 and retry_count < 2:
-                    issue = data.get("issue") or "answer quality was rated low"
-                    result["plan"] = f"{plan}\n\n[Reflector critique — revise the answer]: {issue}"
-                    result["retry_count"] = retry_count + 1
+                max_retries = int(loops["max_retries"])
+                answer_str = str(answer)
+
+                if bool(loops["progress_guard"]):
+                    # === C1: progress-aware self-correction ===
+                    # Track the best answer across retries and refuse to keep
+                    # spinning once a retry regresses below the best grade seen.
+                    prev_best_grade = int(state.get("best_grade", 0) or 0)
+                    prev_best_answer = state.get("best_answer", "") or ""
+                    if grade >= prev_best_grade:
+                        new_best_grade, new_best_answer = grade, answer_str
+                    else:
+                        new_best_grade, new_best_answer = prev_best_grade, prev_best_answer
+                    result["best_grade"] = new_best_grade
+                    result["best_answer"] = new_best_answer
+
+                    regressed = grade < prev_best_grade
+                    if grade <= 2 and retry_count < max_retries and not regressed:
+                        issue = issue_text or "answer quality was rated low"
+                        result["plan"] = f"{plan}\n\n[Reflector critique — revise the answer]: {issue}"
+                        result["retry_count"] = retry_count + 1
+                        # Carry the rejected answer so the worker revises rather than redoes.
+                        result["prior_answer"] = answer_str
+                    elif new_best_grade > grade:
+                        # Terminating with an earlier attempt that scored higher — surface it.
+                        result["answer"] = new_best_answer
+                else:
+                    # Legacy bounded loop (progress guard disabled).
+                    if grade <= 2 and retry_count < max_retries:
+                        issue = issue_text or "answer quality was rated low"
+                        result["plan"] = f"{plan}\n\n[Reflector critique — revise the answer]: {issue}"
+                        result["retry_count"] = retry_count + 1
                 return result
             except Exception as exc:
                 _node_logger.debug("reflector failed: %s", exc)
@@ -1436,21 +1535,60 @@ def make_tool_agent(ctx: GraphContext):
 
             llm_with_tools = llm.bind_tools(lc_tools) if lc_tools else llm
 
-            for _ in range(8):  # max ReAct iterations
+            loops = _loops_cfg(ctx)
+            max_iters = int(loops["max_tool_iters"])
+            guard = bool(loops["progress_guard"])
+            seen_sigs: set[str] = set()
+            consecutive_error_iters = 0
+
+            for _i in range(max_iters):  # max ReAct iterations
                 response = await llm_with_tools.ainvoke(msgs)
                 msgs.append(response)
                 tool_calls = getattr(response, "tool_calls", None) or []
                 if not tool_calls:
                     break
+
+                # Oscillation guard: if every tool call this turn repeats a
+                # signature we've already executed, the agent is stuck — stop
+                # instead of burning the remaining iterations on the same call.
+                sigs = [f"{tc['name']}({tc['args']!r})" for tc in tool_calls]
+                if guard and sigs and all(s in seen_sigs for s in sigs):
+                    _publish_agent_and_exec(
+                        ctx,
+                        {"type": "loop_short_circuit", "reason": "tool_oscillation", "iteration": _i},
+                        persist=False,
+                    )
+                    break
+                seen_sigs.update(sigs)
+
+                iter_had_success = False
                 for tc in tool_calls:
                     tool_name = tc["name"]
                     tool_input = tc["args"]
                     tool_obj = next((t for t in lc_tools if t.name == tool_name), None)
                     try:
-                        result = await tool_obj.arun(tool_input) if tool_obj else f"Tool '{tool_name}' not available"
+                        if tool_obj:
+                            result = await tool_obj.arun(tool_input)
+                            iter_had_success = True
+                        else:
+                            result = f"Tool '{tool_name}' not available"
                     except Exception as exc:
                         result = f"Error: {exc}"
                     msgs.append(ToolMessage(content=str(result)[:4000], tool_call_id=tc["id"]))
+
+                # No-progress guard: two straight turns yielding only errors /
+                # unavailable tools means we're not advancing — break out.
+                if guard and not iter_had_success:
+                    consecutive_error_iters += 1
+                    if consecutive_error_iters >= 2:
+                        _publish_agent_and_exec(
+                            ctx,
+                            {"type": "loop_short_circuit", "reason": "repeated_tool_errors", "iteration": _i},
+                            persist=False,
+                        )
+                        break
+                else:
+                    consecutive_error_iters = 0
 
             last_content = str(getattr(msgs[-1], "content", "") or "")
             _node_logger.info("node.done", node="tool_agent", duration_ms=int((time.monotonic() - _t0) * 1000))

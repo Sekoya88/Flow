@@ -32,6 +32,11 @@ class FlowGraphState(TypedDict, total=False):
     prediction: str  # JEPA-style: reflector predicts next likely query/topic
     retry_count: int  # bounded self-correction loop: reflector -> worker retries
 
+    # Progress-aware loop control (loop engineering)
+    best_answer: str  # highest-graded answer seen across retries
+    best_grade: int  # grade of best_answer; retry stops once quality regresses
+    prior_answer: str  # last rejected answer, fed to worker so it doesn't redo work
+
     # Phase 1 — Skills Loader
     active_skills: list[dict]  # matched skills for this execution (serialized MatchedSkill)
 
