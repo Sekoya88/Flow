@@ -12,6 +12,7 @@ from flow.application.execution_runner import run_deer_execution
 from flow.application.golden_evaluator import auto_eval_tick, auto_safety_eval_tick, skill_decay_tick
 from flow.application.persona_freshness import persona_freshness_tick
 from flow.application.scheduler import scheduler_tick
+from flow.application.self_harness.orchestrator import self_harness_tick
 from flow.infrastructure.db.pool import close_pool, create_pool
 from flow.infrastructure.db.psycopg_pool import build_checkpoint_pool
 from flow.infrastructure.execution_streams import ExecutionStreamHub
@@ -561,6 +562,7 @@ class WorkerSettings:
         arq.cron(skill_decay_tick, hour=4, minute=0, run_at_startup=False),
         arq.cron(persona_freshness_tick, hour=3, minute=30, run_at_startup=False),
         arq.cron(auto_safety_eval_tick, hour=4, minute=30, run_at_startup=False),
+        arq.cron(self_harness_tick, hour=5, minute=30, run_at_startup=False),
         arq.cron(research_digest_tick, hour=8, minute=0, run_at_startup=False),
         arq.cron(skill_training_tick, hour=5, minute=0, run_at_startup=False),
         arq.cron(memory_compaction_tick, hour=2, minute=0, run_at_startup=False),
